@@ -5,7 +5,7 @@ Personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) configura
 ## Install
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/archibate/dotfiles-claude/main/setup.sh)
+curl -fsSL https://raw.githubusercontent.com/archibate/dotfiles-claude/main/setup.sh | bash
 ```
 
 Then add shell integration to your rc file:

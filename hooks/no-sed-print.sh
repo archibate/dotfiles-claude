@@ -19,8 +19,8 @@ fi
 # We want to catch: '12p', "12p", 12p, '12,13p', "12,13!p", etc.
 # We do NOT want to catch: 's/foo/bar/p' (substitution), '/pattern/p' (regex)
 # Only match sed at command position (start of line or after && ; ||), not inside strings
-if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p['"'"'"]?\s+[^\s|;&>]' ||
-   echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+p['"'"'"]?\s+[^\s|;&>]'; then
+if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p['"'"'"]?\s+[^\s|;&>]+\s*$' ||
+   echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+p['"'"'"]?\s+[^\s|;&>]+\s*$'; then
 
     # Extract the line numbers for helpful suggestion
     range=$(echo "$command" | grep -oP '\bsed\s+-n\s+\K['"'"'"]?\d+(?:[,.!]\d+)?p['"'"'"]?' | head -1 | tr -d "'\"" || true)

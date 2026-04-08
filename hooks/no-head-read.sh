@@ -17,7 +17,7 @@ fi
 # Detect head with line count reading a file: head -N file, head -n N file, head --lines=N file
 # Patterns: head -80, head -n 80, head --lines=80, head -n80
 # Only match head at command position (start of line or after && ; ||), not inside strings
-if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*head\s+(-\d+|-n\s*\d+|--lines[= ]\d+)\s+[^\s|;&>]'; then
+if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*head\s+(-\d+|-n\s*\d+|--lines[= ]\d+)\s+[^\s|;&>]+\s*$'; then
 
     # Extract line count
     limit=$(echo "$command" | grep -oP '\bhead\s+\K(-\d+|-n\s*\d+|--lines[= ]\d+)' | head -1 | grep -oP '\d+' || true)

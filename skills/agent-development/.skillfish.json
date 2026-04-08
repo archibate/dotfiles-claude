@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "agent-development",
+  "owner": "anthropics",
+  "repo": "claude-code",
+  "path": "plugins/plugin-dev/skills/agent-development",
+  "branch": "main",
+  "sha": "55323e4656435c2c3d829630c472639e6b600f34",
+  "source": "manual"
+}

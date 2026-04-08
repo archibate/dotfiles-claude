@@ -1,0 +1,32 @@
+backups
+cache
+debug
+downloads
+file-history
+history.jsonl
+ide
+keybindings.json
+paste-cache
+plans
+plugins
+projects
+session-env
+sessions
+shell-snapshots
+stats-cache.json
+statsig
+tasks
+telemetry
+temp
+todos
+usage-data
+.credentials.json
+*.bak
+*.bak2
+# /*
+# !/.gitignore
+# !/agents/*
+# !/skills/*
+# !/hooks/*
+# !/settings.json
+# !/CLAUDE.md

@@ -1,0 +1,57 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+input=$(cat)
+command=$(echo "$input" | jq -r '.tool_input.command // ""')
+
+# Skip if empty
+if [ -z "$command" ]; then
+    exit 0
+fi
+
+# Bypass marker
+if echo "$command" | grep -qF 'BYPASS_SED_PRINT_CHECK'; then
+    exit 0
+fi
+
+# Detect sed -n with numeric line printing on a file (e.g., sed -n '12,13p' file)
+# Pattern: sed -n followed by a number or number range ending in p, then a filename
+# We want to catch: '12p', "12p", 12p, '12,13p', "12,13!p", etc.
+# We do NOT want to catch: 's/foo/bar/p' (substitution), '/pattern/p' (regex)
+# Only match sed at command position (start of line or after && ; ||), not inside strings
+if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p['"'"'"]?\s+[^\s|;&>]' ||
+   echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+p['"'"'"]?\s+[^\s|;&>]'; then
+
+    # Extract the line numbers for helpful suggestion
+    range=$(echo "$command" | grep -oP '\bsed\s+-n\s+\K['"'"'"]?\d+(?:[,.!]\d+)?p['"'"'"]?' | head -1 | tr -d "'\"" || true)
+    file=$(echo "$command" | grep -oP '\bsed\s+-n\s+['"'"'"]?\d+(?:[,.!]\d+)?p['"'"'"]?\s+\K\S+' | head -1 || true)
+
+    # Parse range to calculate offset/limit (1-indexed to 0-indexed offset)
+    offset=""
+    limit=""
+    if [ -n "$range" ]; then
+        # Single line: 12p -> offset=11, limit=1
+        if echo "$range" | grep -qP '^\d+p$'; then
+            line_num=$(echo "$range" | grep -oP '^\d+')
+            offset=$((line_num - 1))
+            limit=1
+        # Range: 12,13p -> offset=11, limit=2
+        elif echo "$range" | grep -qP '^\d+,\d+p$'; then
+            start=$(echo "$range" | grep -oP '^\d+')
+            end=$(echo "$range" | grep -oP ',\d+' | tr -d ',')
+            offset=$((start - 1))
+            limit=$((end - start + 1))
+        fi
+    fi
+
+    printf 'Use Read tool with offset and limit instead of sed -n for reading specific lines.\n' >&2
+    if [ -n "$file" ] && [ -n "$offset" ] && [ -n "$limit" ]; then
+        printf '  Read(file_path="%s", offset=%d, limit=%d)\n' "$file" "$offset" "$limit" >&2
+    else
+        printf '  Read(file_path="<path>", offset=<start_line-1>, limit=<num_lines>)\n' >&2
+    fi
+    printf 'If you must use sed -n for line printing, add comment `BYPASS_SED_PRINT_CHECK` to the first line of command.\n' >&2
+    exit 2
+fi
+
+exit 0

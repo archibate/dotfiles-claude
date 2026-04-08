@@ -1,6 +1,6 @@
 ---
 name: anti-defensive
-description: Review common AI slops of defensive programming patterns, avoid silent errors. TRIGGER when reviewing code for defensive anti-patterns, writing fail-fast code, or auditing error handling quality.
+description: Identify and fix over-defensive code patterns — unnecessary try/except, silent error swallowing, redundant None checks, dead fallback branches. TRIGGER when reviewing code quality, auditing error handling, or user asks to "clean up error handling", "remove defensive bloat", "fail fast".
 ---
 
 # Anti-Defensive Programming Guide

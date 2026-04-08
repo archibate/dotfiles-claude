@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Common utilities for OpenSCAD tools
 
 # Find OpenSCAD executable

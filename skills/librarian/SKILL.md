@@ -1,6 +1,6 @@
 ---
 name: librarian
-description: Cache and refresh remote git repositories under ~/.cache/checkouts/<host>/<org>/<repo> so future references can reuse a local copy. Use this skill when the user points you to a remote git repository as reference or you encountered a remote git repo through other means.
+description: Clone or reuse a cached local checkout of a remote git repository. TRIGGER when need to read, search, or reference source code from a GitHub/GitLab/Bitbucket repo — whether the user provides a URL, mentions "owner/repo", or you encounter a remote repo during research. Manages cached clones under ~/.cache/checkouts/ with automatic fetch and fast-forward.
 ---
 
 Use this skill when the user points you to a remote git repository (GitHub/GitLab/Bitbucket URLs, `git@...`, or `owner/repo` shorthand).
@@ -23,15 +23,15 @@ Example:
 ## Command
 
 ```bash
-bash checkout.sh <repo> --path-only
+${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh <repo> --path-only
 ```
 
 Examples:
 
 ```bash
-bash checkout.sh mitsuhiko/minijinja --path-only
-bash checkout.sh github.com/mitsuhiko/minijinja --path-only
-bash checkout.sh https://github.com/mitsuhiko/minijinja --path-only
+${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh mitsuhiko/minijinja --path-only
+${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh github.com/mitsuhiko/minijinja --path-only
+${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh https://github.com/mitsuhiko/minijinja --path-only
 ```
 
 The script will:
@@ -47,7 +47,7 @@ The script will:
 - Force immediate refresh with:
 
 ```bash
-bash checkout.sh <repo> --force-update --path-only
+${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh <repo> --force-update --path-only
 ```
 
 ## Recommended workflow

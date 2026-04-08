@@ -1,13 +1,15 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["bilibili-api-python", "aiohttp"]
+# ///
 """
 bilibili-api Quickstart Example
 
 Demonstrates basic video info retrieval using both async and sync patterns.
 
 Usage:
-    uv run python quickstart.py
-    # or
-    python quickstart.py
+    ${CLAUDE_PLUGIN_ROOT}/scripts/quickstart.py
 """
 
 import asyncio

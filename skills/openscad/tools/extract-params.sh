@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Extract customizable parameters from an OpenSCAD file
 # Usage: extract-params.sh input.scad [--json]
 #

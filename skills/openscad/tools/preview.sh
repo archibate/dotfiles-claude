@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Generate a preview PNG from an OpenSCAD file
 # Usage: preview.sh input.scad output.png [options]
 #

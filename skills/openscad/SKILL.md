@@ -21,28 +21,28 @@ This skill provides several tools in the `tools/` directory:
 ### Preview Generation
 ```bash
 # Generate a single preview image
-./tools/preview.sh model.scad output.png [--camera=x,y,z,tx,ty,tz,dist] [--size=800x600]
+${CLAUDE_PLUGIN_ROOT}/tools/preview.sh model.scad output.png [--camera=x,y,z,tx,ty,tz,dist] [--size=800x600]
 
 # Generate multi-angle preview (front, back, left, right, top, iso)
-./tools/multi-preview.sh model.scad output_dir/
+${CLAUDE_PLUGIN_ROOT}/tools/multi-preview.sh model.scad output_dir/
 ```
 
 ### STL Export
 ```bash
 # Export to STL for 3D printing
-./tools/export-stl.sh model.scad output.stl [-D 'param=value']
+${CLAUDE_PLUGIN_ROOT}/tools/export-stl.sh model.scad output.stl [-D 'param=value']
 ```
 
 ### Parameter Extraction
 ```bash
 # Extract customizable parameters from an OpenSCAD file
-./tools/extract-params.sh model.scad
+${CLAUDE_PLUGIN_ROOT}/tools/extract-params.sh model.scad
 ```
 
 ### Validation
 ```bash
 # Check for syntax errors and warnings
-./tools/validate.sh model.scad
+${CLAUDE_PLUGIN_ROOT}/tools/validate.sh model.scad
 ```
 
 ## Visual Validation (Required)
@@ -110,23 +110,23 @@ Parameter comment format:
 
 ### 2. Validate the Model
 ```bash
-./tools/validate.sh model.scad
+${CLAUDE_PLUGIN_ROOT}/tools/validate.sh model.scad
 ```
 
 ### 3. Generate Previews
 
 Generate preview images to visually validate the model:
 ```bash
-./tools/multi-preview.sh model.scad ./previews/
+${CLAUDE_PLUGIN_ROOT}/tools/multi-preview.sh model.scad ./previews/
 ```
 
 This creates PNG images from multiple angles. Use the `read` tool to view them.
 
 ### 4. Export to STL
 ```bash
-./tools/export-stl.sh model.scad output.stl
+${CLAUDE_PLUGIN_ROOT}/tools/export-stl.sh model.scad output.stl
 # With custom parameters:
-./tools/export-stl.sh model.scad output.stl -D 'width=60' -D 'height=40'
+${CLAUDE_PLUGIN_ROOT}/tools/export-stl.sh model.scad output.stl -D 'width=60' -D 'height=40'
 ```
 
 ## Camera Positions
@@ -162,10 +162,10 @@ Consider creating a `model.json` with metadata:
 # 1. Create the model (write .scad file)
 
 # 2. Validate syntax
-./tools/validate.sh box.scad
+${CLAUDE_PLUGIN_ROOT}/tools/validate.sh box.scad
 
 # 3. Generate multi-angle previews
-./tools/multi-preview.sh box.scad ./previews/
+${CLAUDE_PLUGIN_ROOT}/tools/multi-preview.sh box.scad ./previews/
 
 # 4. IMPORTANT: View and validate ALL preview images
 #    Use the read tool on each PNG file to visually inspect:
@@ -179,13 +179,13 @@ Consider creating a `model.json` with metadata:
 #    If anything looks wrong, go back to step 1 and fix it!
 
 # 5. Extract and review parameters
-./tools/extract-params.sh box.scad
+${CLAUDE_PLUGIN_ROOT}/tools/extract-params.sh box.scad
 
 # 6. Export STL with default parameters
-./tools/export-stl.sh box.scad box.stl
+${CLAUDE_PLUGIN_ROOT}/tools/export-stl.sh box.scad box.stl
 
 # 7. Export STL with custom parameters
-./tools/export-stl.sh box.scad box_large.stl -D 'width=80' -D 'height=60'
+${CLAUDE_PLUGIN_ROOT}/tools/export-stl.sh box.scad box_large.stl -D 'width=80' -D 'height=60'
 ```
 
 **Remember**: Never skip the visual validation step. Many issues (wrong dimensions, boolean operation errors, inverted geometry) are only visible when you actually look at the rendered model.

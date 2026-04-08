@@ -2,6 +2,7 @@
 name: agent-crew
 description: Multi-specialist agent crew for complex, cross-cutting tasks. Activates when work spans multiple disciplines (product scoping, design, research, engineering, operations), when requirements are ambiguous and need structured breakdown, or when the user asks for planning/architecture before implementation. Orchestrates specialist roles with structured handoffs and subagent-driven development. Also triggers on "plan this", "break this down", "crew", "agents", or any task that would clearly benefit from divide-and-conquer.
 compatibility: Claude Code
+disable-model-invocation: true
 ---
 
 # Agent Crew

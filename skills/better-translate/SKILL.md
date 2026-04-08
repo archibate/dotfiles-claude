@@ -1,12 +1,6 @@
 ---
 name: better-translate
-description: >
-  Best practices for AI-driven English-to-Chinese translation.
-  This skill should be used when the user asks to "translate to Chinese",
-  "update the Chinese translation", "improve Chinese translation",
-  "fix translation quality", "review Chinese translation", or when
-  translating any English text into Chinese. Also applies when polishing
-  an existing Chinese translation of English content.
+description: Produce natural Chinese translations free of translationese. TRIGGER when translating English to Chinese, user says "translate to Chinese", "翻译", "翻译成中文", "improve Chinese translation", "fix translation quality", or when writing/polishing any Chinese translation of English content.
 ---
 
 # English-to-Chinese Translation

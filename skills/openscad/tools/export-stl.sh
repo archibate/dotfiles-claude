@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Export OpenSCAD file to STL
 # Usage: export-stl.sh input.scad output.stl [-D 'var=value' ...]
 

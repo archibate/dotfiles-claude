@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Render OpenSCAD with parameters from a JSON file
 # Usage: render-with-params.sh input.scad params.json output.stl|output.png
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Generate preview images from multiple angles
 # Usage: multi-preview.sh input.scad output_dir/ [-D 'var=value']
 

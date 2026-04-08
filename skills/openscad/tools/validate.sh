@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Validate an OpenSCAD file for syntax errors
 # Usage: validate.sh input.scad
 

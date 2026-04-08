@@ -9,9 +9,9 @@ Transcribe an audio file (wav/mp3/ogg...) to text using Qwen ASR. No configurati
 
 ## Usage
 ```shell
-uv run scripts/main.py -f audio.wav
+${CLAUDE_PLUGIN_ROOT}/scripts/main.py -f audio.wav
 
-cat audio.mp3 | uv run scripts/main.py > transcript.txt
+cat audio.mp3 | ${CLAUDE_PLUGIN_ROOT}/scripts/main.py > transcript.txt
 
-curl https://example.com/audio.ogg | uv run scripts/main.py
+curl https://example.com/audio.ogg | ${CLAUDE_PLUGIN_ROOT}/scripts/main.py
 ```

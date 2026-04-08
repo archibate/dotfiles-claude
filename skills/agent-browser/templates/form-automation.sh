@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Template: Form Automation Workflow
 # Purpose: Fill and submit web forms with validation
 # Usage: ./form-automation.sh <form-url>

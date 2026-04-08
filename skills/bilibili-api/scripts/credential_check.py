@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["bilibili-api-python", "aiohttp"]
+# ///
 """
 bilibili-api Credential Check Script
 
@@ -8,7 +12,7 @@ Usage:
     export BILI_SESSDATA="your_sessdata"
     export BILI_JCT="your_bili_jct"
     export BILI_BUVID3="your_buvid3"
-    uv run python credential_check.py
+    ${CLAUDE_PLUGIN_ROOT}/scripts/credential_check.py
 """
 
 import os

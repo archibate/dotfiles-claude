@@ -22,7 +22,6 @@ todos
 usage-data
 .credentials.json
 *.bak
-*.bak2
 # /*
 # !/.gitignore
 # !/agents/*

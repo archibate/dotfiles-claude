@@ -59,7 +59,7 @@ Before starting long-running Python tasks run for >2 minutes (e.g. data pipeline
 When working on a multi-step task, maintain a TodoWrite checklist tracking progress. When an unrelated interruption arises (e.g. debugging a side issue, answering an ad-hoc question), before switching context:
 1. Update the todo list to mark current progress and note what's pending
 2. Handle the interruption
-3. After resolving, check the todo list and explicitly summarize "回到主线" with the next step, so the user can quickly regain context
+3. After resolving, check the todo list and explicitly summarize "back to main topic" with the next step, so the user can quickly regain context
 
 ---
 

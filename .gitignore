@@ -23,6 +23,7 @@
 /usage-data
 /.credentials.json
 /*.bak
+/mcp-needs-auth-cache.json
 # /*
 # !/.gitignore
 # !/agents/*

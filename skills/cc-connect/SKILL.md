@@ -9,6 +9,7 @@ description: >
   "notify me of progress"; or when starting a multi-step pipeline that runs >30 min.
   Do NOT TRIGGER when not inside a cc-connect session (`CC_PROJECT` set)
 version: 0.1.0
+compabibility: cc-connect
 ---
 
 # cc-connect: Send Images, Files, and Notifications

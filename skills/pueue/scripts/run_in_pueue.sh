@@ -33,18 +33,8 @@ fi
 #    Replace / with - and strip leading -
 group_name="$(pwd | sed 's|/|-|g; s|^-||')"
 
-# 2. Ensure pueue daemon is running (with memory cap via cgroup)
-if ! pueue status &>/dev/null; then
-    mem_cap="${PUEUE_MEMORY_MAX:-$(awk '/MemTotal/{printf "%d\n", $2/2}' /proc/meminfo)K}"
-    echo "🔄 Starting pueue daemon (MemoryMax=$mem_cap)..."
-    systemd-run --user --unit=pueued-limited -p MemoryMax="$mem_cap" /home/ubuntu/.local/bin/pueued
-    sleep 1
-    if ! pueue status &>/dev/null; then
-        echo "❌ Failed to start pueue daemon" >&2
-        exit 1
-    fi
-    echo "✅ Daemon started under systemd with MemoryMax=$mem_cap"
-fi
+# 2. Ensure pueue daemon is running
+source "$(dirname "${BASH_SOURCE[0]}")/ensure_daemon.sh"
 
 # 3. Create project group if it doesn't exist (or update parallel limit)
 if ! pueue group --json 2>/dev/null | jq -e --arg g "$group_name" '.[$g]' &>/dev/null; then

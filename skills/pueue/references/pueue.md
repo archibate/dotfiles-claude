@@ -141,7 +141,7 @@ pueue status --json | jq ".tasks.\"$id\".result"
 
 ## Key Pitfalls
 
-- Always pass the full command as a single quoted string: `pueue add 'cmd --flag'` — never `pueue add -- cmd --flag`
+- Always quote the full command as a single string: `pueue add -- 'cmd --flag'` — without quotes (e.g., `pueue add -- cmd --flag`) pueue may parse `--flag` as its own option
 - Never poll `pueue status` in a loop waiting for completion — use `pueue follow <id>` in background and wait for `<task-notification>`
 - Always use `-g` with project name to avoid name pollution
 - Python tasks MUST use `-u` flag or `PYTHONUNBUFFERED=1` prefix for real-time output (otherwise appears stuck): `pueue add 'PYTHONUNBUFFERED=1 uv run src/train.py'`

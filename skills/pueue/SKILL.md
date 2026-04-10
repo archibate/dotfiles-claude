@@ -25,6 +25,8 @@ compatibility: Claude Code
 
 ## Workflow
 
+Before start, go through the pre-launch checklist as described in the `/preflight-check` skill.
+
 Start tasks with `${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh '...'` in background (`run_in_background: true`) — do not poll after this, just stop and wait.
 
 When task completes, you will receive `<task-notification>` from it.
@@ -84,7 +86,7 @@ System:
 <task-notification>Background command "..." completed (exit code 0)</task-notification>
 
 Assistant:
-[analysis the log and training metric]
+[analyze the log and training metrics]
 Training complete, here are the metrics:
 ...
 

@@ -16,6 +16,23 @@ Pre-launch checklist to prevent OOM kills, wasted compute, and daytime disruptio
 
 Project-specific data tables (cost lookup, I/O dependencies) should be maintained in a file like `references/task-costs.md` in the project root. If the project has no such file, initialize one from the template at `${CLAUDE_PLUGIN_ROOT}/examples/task-costs.md`.
 
+## When to Use
+
+- Before launching any task via `pueue add` or background shell jobs
+- Before starting parallel workers, sweeps, grid searches, or hyperparameter optimization
+- Before running data pipelines, ETL jobs, or batch processing on large datasets
+- Before any computation estimated to take >10 minutes or use >2 GB memory
+- When stacking a new task while other heavy tasks are already running
+- When resuming or re-launching a previously OOM-killed task
+- When running an unfamiliar script or tool for the first time at scale
+
+## When NOT to Use
+
+- Quick interactive commands (e.g., `git status`, `ruff check`, `uv run pytest` on a small suite)
+- One-off file reads, edits, or searches that complete in seconds
+- Tasks with well-known, negligible resource footprint (linting, formatting, single-file compilation)
+- When the task has already been classified as Light in the project's Cost Lookup Table and no other heavy tasks are running
+
 ## Steps
 
 ### 1. Classify Task Cost
@@ -58,16 +75,28 @@ Check for running tasks (e.g., `pueue status`) and compare I/O dependencies usin
 
 If the task is not in the I/O table, **assume it may conflict with anything** until verified. Check the script source for file reads/writes and CLI `--help` for I/O flags, then add to the table.
 
-### 2. Check Timing and Server Load
+### 2. Check Server Resource Headroom
 
-Run `free -m` and check task queue status to assess current state.
+Measure current resource usage before adding load:
 
-- **Other sessions running heavy tasks?** → Do NOT stack. Wait or schedule for later.
-- **Daytime (user active)?** → Avoid heavy tasks. Prefer light/moderate only.
-- **Swap usage >50%?** → Server is already under pressure. Do not add load.
-- **Night/idle server?** → Safe to launch heavy tasks.
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/resource_snapshot.sh
+```
 
-**Rule:** Heavy tasks run at night or when the server is confirmed idle. Never assume — always check.
+Assess current usage and decide:
+
+| Current CPU/Mem Usage | Action |
+|---|---|
+| <40% | Proceed freely |
+| 40–80% | Proceed, but estimate whether the planned task would push past 80% |
+| 80–90% | Caution — only add Light tasks. Wait for running tasks to finish before launching Moderate/Heavy |
+| >90% | Block — wait for the rush to pass, or suggest scheduling for later |
+
+**Decision rule:** Estimate post-launch usage = current usage + planned task's cost (from the Cost Lookup Table). If that sum would push CPU or memory into a higher threshold band, do not launch — wait or reduce parallelism.
+
+**Be conservative on cost estimates.** Tasks often use more resources than expected, especially under load. For unknown tasks (not yet documented in the Cost Lookup Table), assume worst-case memory and treat as Heavy until measured via Step 1a. It is far cheaper to wait unnecessarily than to OOM-kill a multi-hour job.
+
+- **Swap usage >50%?** → Server is already under memory pressure. Do not add load regardless of the threshold table above.
 
 ### 3. Smoke Test First
 
@@ -98,7 +127,7 @@ When launching heavy tasks:
 - **Know per-worker memory** — multiply by N workers and compare to available RAM.
 - **Minimize data loading** — load only the columns/rows needed, not the entire dataset.
 - **Set up monitoring** (cron or follow) for tasks >1 hour.
-- **Plan for OOM restarts** — use shared state (databases, checkpoints) so killed workers don't lose all progress.
+- **Plan for OOM restarts** — use shared state (databases, checkpoints) so killed workers don't lose all progress. If a task is OOM-killed, follow `${CLAUDE_PLUGIN_ROOT}/references/post-oom-triage.md` before retrying.
 
 ### 6. Verify Assumptions Periodically
 

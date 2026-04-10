@@ -92,8 +92,8 @@ Present a summary list of all codenames and titles to the user.
 ### 4. Pick-Discuss-Fix Cycle
 
 After creating the todo list, and after each resolved issue, recommend **exactly 3
-next issues**. Format: `**codename** — issue title` (a brief recall of *what* the
-issue is, not the fix direction). If fewer than 3 remain, show all remaining.
+next issues**. Format: `**codename** [severity] — issue title` (a brief recall of
+*what* the issue is, not the fix direction). If fewer than 3 remain, show all remaining.
 
 Then wait for the user to pick. The user will respond with:
 

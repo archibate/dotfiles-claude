@@ -99,28 +99,25 @@ Then wait for the user to pick. The user will respond with:
 
 - **A codename** (e.g., "P1") → fix it
 - **"discuss X"** → explain your plan, wait for approval before fixing
-- **"skip X"** → not worth fixing; mark as skipped, move on
-- **"delete X"** → issue is not real; mark as deleted, move on
-- **"investigate X"** → research the issue, then recommend fix or delete
+- **"skip X"** → not fixing; mark as skipped, move on
+- **"investigate X"** → research the issue, then recommend fix or skip
 
 **Per-issue flow:**
 1. Mark task `in_progress`
 2. If discussion requested, explain the approach and wait for confirmation
 3. Execute the fix
-4. Mark task `completed` if fixed. For skipped or deleted issues, set
-   `metadata: {resolution: "skipped"}` or `{resolution: "deleted"}` before
-   marking the task `deleted`
+4. Mark task `completed` if fixed, `deleted` if skipped
 5. Recommend next 3
 
 **Rules:**
 - Never fix without reading the relevant code first
 - After each fix, show the next 3 — do not dump the full remaining list
 - If the user's feedback during discussion changes the fix approach, adapt
-- If investigation reveals the issue is not real, recommend deleting it
+- If investigation reveals the issue is not real, recommend skipping it
 
 ### 5. Wrap Up
 
-When all issues are resolved, deleted, or skipped:
+When all issues are resolved or skipped:
 
-1. Show a final tally table: issue codename, resolution (fixed/skipped/deleted)
+1. Show a final tally table: issue codename, resolution (fixed/skipped)
 2. Offer to commit if there are changes

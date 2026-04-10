@@ -57,8 +57,11 @@ if echo "$command" | grep -qE '\bgit\s+commit\b'; then
     exit 0
 fi
 
-# Explicit bypass marker
+# Explicit bypass markers
 if echo "$command" | grep -qF 'BYPASS_HEREDOC_RESTRICTION'; then
+    exit 0
+fi
+if echo "$command" | grep -qF 'BYPASS_INLINE_SCRIPT_RESTRICTION'; then
     exit 0
 fi
 

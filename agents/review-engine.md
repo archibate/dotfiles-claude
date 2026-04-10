@@ -66,7 +66,30 @@ Apply these checks systematically to every region under review:
 **Rule**: Do NOT conclude "no bugs" until every check has been performed.
 Think through each check explicitly before writing any conclusion.
 
-### 4. Output
+### 4. Second-pass triage
+
+Before outputting, re-examine each finding from Step 3:
+
+For EACH candidate issue, ask:
+1. **Can this actually trigger?** — Trace the realistic callers and inputs.
+   If the bug requires input that no plausible caller would produce, note this.
+2. **What is the real-world impact?** — A crash in a hot path is high; an edge
+   case in code with no realistic trigger path is low.
+3. **Is this speculative?** — If you added the issue because it "could" happen
+   but found no concrete path that triggers it, downgrade its severity.
+
+**Actions:**
+- **Keep at current severity** if you can describe a concrete trigger path in
+  one sentence.
+- **Downgrade** issues that are theoretically correct but practically
+  unreachable — move to low severity.
+- **Drop** only if, on re-examination, the issue is outright wrong (your
+  initial analysis was mistaken).
+
+**Rule**: Never drop an issue just because it is unlikely. Downgrade instead —
+let the consumer decide whether to fix low-severity findings.
+
+### 5. Output
 
 Output ONLY a findings table:
 
@@ -75,13 +98,10 @@ Output ONLY a findings table:
 |---|----------|-----------|-----|------------|---------------|
 ```
 
-Severity levels:
-- **bug**: Incorrect behavior (wrong output, crash, off-by-one)
-- **semantic**: Code works but meaning is wrong (inverted sign, misleading name)
-- **nit**: Style, doc ordering, naming inconsistency
+Severity levels: **high**, **moderate**, **low** — judge by actual impact, not issue type.
 
 End with exactly one summary line:
-`N bug(s), M semantic issue(s), K nit(s) across L files.`
+`N high, M moderate, K low across L files.`
 
 If no bugs found after all checks:
 `No bugs found. Verified: [list checks performed].`

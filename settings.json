@@ -5,7 +5,6 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_NO_FLICKER": "1"
   },
-  "teammateMode": "auto",
   "permissions": {
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
@@ -129,9 +128,9 @@
       }
     }
   },
-  "language": "English",
   "effortLevel": "high",
   "voiceEnabled": true,
   "autoMemoryEnabled": false,
-  "autoDreamEnabled": false
+  "autoDreamEnabled": false,
+  "teammateMode": "auto"
 }

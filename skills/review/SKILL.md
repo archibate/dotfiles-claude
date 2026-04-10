@@ -1,6 +1,6 @@
 ---
-name: guided-review
-description: Review code/docs and fix issues one-by-one with codename tracking and guided next-3 recommendations.
+name: review
+description: Review code, docs, or uncommitted changes for bugs with verification-based methodology, then optionally fix issues one-by-one with codename tracking.
 allowed-tools:
   - Read
   - Grep
@@ -14,17 +14,19 @@ allowed-tools:
   - TaskList
   - Agent
 when_to_use: >
-  Use when the user says "review and fix", "guided review", "review X and fix issues",
-  or wants an interactive review-then-fix cycle on code, config, docs, or skills.
+  Use when the user says "review", "review changes", "review diff", "check my changes",
+  "any bugs?", "look for bugs", "review and fix", "review X and fix issues", or after
+  completing a major code modification. Proactively offer to run after large multi-file
+  edits. This is the single entry point for all code review workflows.
 argument-hint: "[target file, directory, or description]"
 arguments:
   - target
 ---
 
-# Guided Review
+# Review
 
-Review code or docs, create a codename-indexed issue list, then fix issues one-by-one
-with the user choosing what to tackle next from a short recommendation of ~3 items.
+Review code or docs via the review-engine agent, present a codename-indexed issue list,
+then let the user choose which issues to fix interactively.
 
 ## Inputs
 
@@ -50,10 +52,16 @@ For small scopes (a few files), read them directly. For large scopes (a director
 with many files), use an Explore subagent to survey the codebase and return a
 summary of key files and potential issues, then read specific files as needed.
 
-### 2. Review and Produce Issue List
+### 2. Review via review-engine
 
-Write a structured review. Group issues by file or component. Assign each issue a
-**short codename** with a category prefix derived from the file/component name:
+Launch the `review-engine` agent with the resolved scope from Step 1:
+
+- If scope is uncommitted changes: prompt the engine with target = `"git diff"`
+- If scope is specific files/directory: prompt the engine with the file paths
+
+The engine returns a findings table. Convert each row into a codename-tracked
+issue. Assign **short codenames** with a category prefix derived from the
+file/component name:
 
 - `P1`, `P2` for issues in a file/component starting with P
 - `A1`, `A2` for auth-related issues
@@ -61,13 +69,14 @@ Write a structured review. Group issues by file or component. Assign each issue 
 - If two components share a first letter, use a 2-letter acronym to
   disambiguate (e.g., `Pi1` for pipeline, `Gh1` for github)
 
-Format each issue with: codename, one-line title, and a brief description of the
-problem and suggested fix direction.
+For each issue: codename, one-line title (from the engine's "Bug" column), and
+a brief description combining the engine's "Root Cause" and "Suggested Fix".
 
 **Rules:**
 - Keep codenames short (1-2 letter prefix + number)
 - Group by component, not by severity
-- Include both the problem and a concrete fix direction for each issue
+- If the engine returns "No bugs found", tell the user and offer to end or
+  broaden the scope
 
 ### 3. Create Todo List
 

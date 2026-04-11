@@ -6,9 +6,11 @@ Measured resource costs and data dependencies for pipeline tasks. Referenced by 
 
 Measured costs for known tasks. **Costs are per-instance** — see batch rules below. Update this table when actual measurements differ from estimates.
 
-| Task | Category | Runtime | Memory | Notes |
-|---|---|---|---|---|
-| _example task_ | Light | ~1 min | <1 GB | _description_ |
+| Task | Category | Runtime | Memory | Ext. Resources | Notes |
+|---|---|---|---|---|---|
+| _example task_ | Light | ~1 min | <1 GB | | _description_ |
+| _example GPU task_ | Heavy | ~30 min | ~4 GB | GPU (10 GB VRAM) | _description_ |
+| _example DB task_ | Moderate | ~15 min | ~2 GB | ClickHouse | _description_ |
 
 ### Batch / Parallel Multiplier
 

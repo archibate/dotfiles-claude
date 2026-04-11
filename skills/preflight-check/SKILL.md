@@ -46,10 +46,16 @@ Look up the task in the project's **Cost Lookup Table** and determine its catego
 | Heavy | >1 hr | >5 GB/worker | Full checklist (Steps 2-5) |
 | Unknown | ? | ? | Probe first (Step 1a) |
 
+**Classification rule:** If runtime and memory point to different categories, take the **higher** one. A task that runs for 2 min but uses 5 GB is Moderate (memory), not Light.
+
+**GPU tasks:** If the task offloads to GPU (PyTorch, TensorFlow, cuDF, CUDA kernels, etc.), also classify by VRAM: <2 GB Light, 2-8 GB Moderate, >8 GB/worker Heavy. VRAM has no swap fallback — an OOM on GPU kills the process instantly with no warning.
+
 For batches of N instances, compute aggregate cost:
 - **Aggregate runtime** = per_instance_runtime × count / parallelism
 - **Aggregate memory** = per_instance_memory × parallelism
 - Any batch with aggregate runtime >1 hr or memory >10 GB is Heavy.
+
+**Note:** Runtime does not always scale as 1/parallelism. I/O-bound tasks (disk, network, shared locks) suffer contention under parallel execution, reducing the speedup. Assume parallelism buys at most 50-70% of ideal speedup unless measured otherwise. Be conservative in time estimates.
 
 ### 1a. Probe Unknown Tasks
 
@@ -98,6 +104,12 @@ Assess current usage and decide:
 
 - **Swap usage >50%?** → Server is already under memory pressure. Do not add load regardless of the threshold table above.
 
+**If the task uses GPU**, also check GPU headroom:
+```bash
+nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits
+```
+Apply the same threshold logic: if GPU utilization >80% or free VRAM cannot fit the task's estimated VRAM, do not launch.
+
 ### 3. Smoke Test First
 
 For any sweep or optimization (hyperparameter search, grid search, parallel workers):
@@ -124,7 +136,7 @@ The fastest path to a result is always preferred. Only run expensive steps when 
 When launching heavy tasks:
 
 - **Set parallelism conservatively** — start with fewer workers than the max. 2 workers is safer than 3 if memory is tight.
-- **Know per-worker memory** — multiply by N workers and compare to available RAM.
+- **Know per-worker memory** — multiply by N workers and compare to available RAM (and VRAM for GPU tasks).
 - **Minimize data loading** — load only the columns/rows needed, not the entire dataset.
 - **Set up monitoring** (cron or follow) for tasks >1 hour.
 - **Plan for OOM restarts** — use shared state (databases, checkpoints) so killed workers don't lose all progress. If a task is OOM-killed, follow `${CLAUDE_PLUGIN_ROOT}/references/post-oom-triage.md` before retrying.

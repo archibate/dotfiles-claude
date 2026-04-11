@@ -90,6 +90,21 @@ Assistant:
 Training complete, here are the metrics:
 ...
 
+## Pitfalls
+
+### `pueue status` showing Success does NOT guarantee the task succeeded
+
+Some task runners (e.g., `just`) do not propagate subprocess exit codes. A `just` recipe whose inner command fails with exit 1 may still exit 0 itself, causing pueue to report `Success`.
+
+**Always verify task completion by checking actual outputs**, not just pueue status:
+- Check `pueue log <id>` for error messages in stdout/stderr
+- Verify expected output files exist (e.g., `ls dataset/raw/*/feature.csv`)
+- For batch tasks, spot-check a few results rather than trusting the status of all
+
+### `pueue clean` removes finished task logs
+
+`pueue clean` (or automatic cleanup) permanently removes logs of completed tasks. If you need to verify results later, check output files or save logs before cleaning.
+
 ## Skill Files
 
 - `${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh` — wraps pueue add with auto daemon start, per-project grouping, and follow

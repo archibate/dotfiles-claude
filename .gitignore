@@ -25,6 +25,7 @@
 /*.bak
 /mcp-needs-auth-cache.json
 /transcripts
+/image-cache
 # /*
 # !/.gitignore
 # !/agents/*

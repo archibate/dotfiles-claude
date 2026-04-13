@@ -6,7 +6,7 @@ description: >
   Not intended for direct user invocation.
 model: inherit
 color: cyan
-tools: ["Bash(git diff:*)", "Bash(git status:*)", "Bash(git log:*)", "Read", "Grep", "Glob"]
+tools: ["Bash(git diff:*)", "Bash(git status:*)", "Bash(git log:*)", "Bash(git show:*)", "Read", "Grep", "Glob"]
 ---
 
 # Review Engine

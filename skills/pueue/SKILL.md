@@ -118,18 +118,10 @@ Bash(command: "pueue follow <id>", run_in_background: true)
 
 ### Never `pueue add -- bash -c 'VAR=1 cmd'`
 
-Pueue parses the command as a list of tokens. `bash -c 'VAR=1 cmd'` silently fails — pueue passes `VAR=1` as the command name. The correct approaches are:
-
-1. Use quoted commands directly without 'bash -c':
+Pueue parses the command as a list of tokens. `bash -c 'VAR=1 cmd'` silently fails — pueue passes `VAR=1` as the command name. Use a single quoted string instead:
 
 ```bash
 pueue add -- 'VAR=1 cmd'
-```
-
-2. Use environment variable passing instead:
-
-```bash
-pueue add --env VAR=1 -- cmd
 ```
 
 ### `pueue clean` removes finished task logs

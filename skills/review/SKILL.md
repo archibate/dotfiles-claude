@@ -48,7 +48,7 @@ next issues**. Format: `**codename** [severity] — issue title` (a brief recall
 Then wait for the user to pick. The user will respond with:
 
 - **A codename** (e.g., "P1") → fix it
-- **"discuss X"** → explain your plan, wait for approval before fixing
+- **"discuss X"** or **"explain X"** → explain the bug, the fix plan, and downstream impact (what would need re-running/rebuilding if fixed). Wait for approval before fixing.
 - **"skip X"** → not fixing; mark as skipped, move on
 - **"investigate X"** → research the issue, then recommend fix or skip
 
@@ -56,8 +56,10 @@ Then wait for the user to pick. The user will respond with:
 1. Mark task `in_progress`
 2. If discussion requested, explain the approach and wait for confirmation
 3. Execute the fix
-4. Mark task `completed` if fixed, `deleted` if skipped
-5. Recommend next 3
+4. **Smoke test**: verify the fix with a quick import check or minimal script that exercises the changed path. If the test reveals the fix is wrong, revise before marking complete.
+5. Mark task `completed` if fixed, `deleted` if skipped
+6. If the fix changes behavior/schema, offer to run the relevant downstream action (test, build, smoke test on real data, etc.). If display-only or pure refactor, just note it and move on.
+7. Recommend next 3
 
 **Rules:**
 - Never fix without reading the relevant code first
@@ -70,4 +72,5 @@ Then wait for the user to pick. The user will respond with:
 When all issues are resolved or skipped:
 
 1. Show a final tally table: issue codename, resolution (fixed/skipped)
-2. Offer to commit if there are changes
+2. Summarize downstream actions required (re-runs, rebuilds, tests, migrations, etc.)
+3. Offer to commit if there are changes

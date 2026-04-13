@@ -50,9 +50,9 @@ For EACH file/change under review, read beyond the immediate scope:
 **Rule**: Never review code in isolation. Always read enough context to
 understand the invariants the code must maintain.
 
-### 3. Verify
+### 3. Select checks
 
-Apply these checks systematically to every region under review:
+Start with the **core checks** (always apply):
 
 | Check | Method |
 |---|---|
@@ -63,12 +63,34 @@ Apply these checks systematically to every region under review:
 | Guard conditions | When a condition is changed/present, enumerate all flag/state combinations and trace each path |
 | Doc-code sync | When docs exist alongside code, verify docs match actual code behavior |
 
-**Rule**: Do NOT conclude "no bugs" until every check has been performed.
-Think through each check explicitly before writing any conclusion.
+Then, based on what the code actually does, add **domain checks** from this menu
+(select every row whose trigger matches — skip rows that don't apply):
 
-### 4. Second-pass triage
+| Domain | Trigger | Check |
+|---|---|---|
+| Security | Handles user input, URLs, paths, SQL, HTML, shell commands | Injection (SQL/XSS/command/path traversal), auth bypass, secrets in source |
+| Error handling | Try/catch, Result types, error returns | Swallowed exceptions, wrong exception types, missing recovery/cleanup |
+| Resource mgmt | Opens files, connections, locks, transactions | Unclosed handles, leaked connections, missing finally/context-manager |
+| Concurrency | Threads, async, shared mutable state, queues | Race conditions, atomicity violations, deadlock potential |
+| Types / contracts | Return values consumed downstream, API boundaries | Wrong return shape, implicit coercions, None where not expected |
+| Null / empty | Collections, optional fields, nullable columns | Missing guards on None/empty/zero-length, silent wrong-default |
+| Performance | Loops, queries, large data structures | N+1 queries, accidental O(n²), unnecessary allocation in hot path |
+| State | Caches, globals, mutable class attrs, accumulators | Stale state across calls, missing reset/cleanup, ordering dependencies |
 
-Before outputting, re-examine each finding from Step 3:
+### 4. Verify
+
+Apply every selected check systematically to every region under review.
+
+After completing the checklist, do one **open-ended sweep**: scan the diff/code
+for anything that would surprise the author but doesn't fit any checklist row.
+Trust your judgment — if something looks wrong, surface it.
+
+**Rule**: Do NOT conclude "no bugs" until every selected check has been performed
+AND the open-ended sweep is done.
+
+### 5. Second-pass triage
+
+Before outputting, re-examine each finding from Steps 3–4:
 
 For EACH candidate issue, ask:
 1. **Can this actually trigger?** — Trace the realistic callers and inputs.
@@ -89,7 +111,7 @@ For EACH candidate issue, ask:
 **Rule**: Never drop an issue just because it is unlikely. Downgrade instead —
 let the consumer decide whether to fix low-severity findings.
 
-### 5. Output
+### 6. Output
 
 Output ONLY a findings table:
 

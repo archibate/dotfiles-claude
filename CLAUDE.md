@@ -15,18 +15,20 @@ Fallback to the legacy tools when not available.
 
 ---
 
-## Agent CLI Tools
+## Available CLI Tools
 
-- `ast-grep` (`sg`)
-- `duckdb`
-- `mlr` (miller)
-- `jc`
-- `gron`
-- `pueue`
-- `gh`
-- `pdftotext`
-- `sqlite3`
-- `hyperfine`
+These are installed and available for use:
+
+- `ast-grep` (`sg`) — structural code search
+- `duckdb` — analytical SQL on files
+- `mlr` (miller) — CSV/JSON record processing
+- `jc` — CLI output to JSON
+- `gron` — flatten JSON for grep
+- `pueue` — background task queue
+- `gh` — GitHub CLI
+- `pdftotext` — PDF text extraction
+- `sqlite3` — SQLite CLI
+- `hyperfine` — command benchmarking
 
 ---
 
@@ -34,9 +36,10 @@ Fallback to the legacy tools when not available.
 
 - Package Manager: `uv`
 - Formatting & Linting: `ruff` and `basedpyright`
+- Background tasks: always `PYTHONUNBUFFERED=1` or `uv run python -u`
 
 ---
 
-## Background Tasks
+## Tool Usage
 
-Before starting long-running Python tasks run for >2 minutes (e.g. data pipeline, training): Load the `pueue` skill
+- **Pueue** — Load the `pueue` skill before running long-running tasks (>2 minutes).

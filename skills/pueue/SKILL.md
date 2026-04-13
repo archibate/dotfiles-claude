@@ -101,13 +101,40 @@ Some task runners (e.g., `just`) do not propagate subprocess exit codes. A `just
 - Verify expected output files exist (e.g., `ls dataset/raw/*/feature.csv`)
 - For batch tasks, spot-check a few results rather than trusting the status of all
 
+### Never use `run_in_pueue.sh` for pueue management commands
+
+`run_in_pueue.sh` is for **work commands** only (python scripts, builds, etc.). Never use it to run pueue's own commands (`pueue wait`, `pueue follow`, `pueue status`, etc.).
+
+The wrapper script adds tasks to the project group and then runs `pueue follow` internally. If you submit `pueue wait <id>` via the wrapper, the wait task occupies a group slot while blocking on the target task — if the group has limited parallelism, this deadlocks (the wait task holds the slot, the target task can never start).
+
+To wait for or follow a task, use Bash directly:
+```
+Bash(command: "pueue follow <id>", run_in_background: true)
+```
+
+### Never `pueue add -- bash -c 'VAR=1 cmd'`
+
+Pueue parses the command as a list of tokens. `bash -c 'VAR=1 cmd'` silently fails — pueue passes `VAR=1` as the command name. The correct approaches are:
+
+1. Use quoted commands directly without 'bash -c':
+
+```bash
+pueue add -- 'VAR=1 cmd'
+```
+
+2. Use environment variable passing instead:
+
+```bash
+pueue add --env VAR=1 -- cmd
+```
+
 ### `pueue clean` removes finished task logs
 
 `pueue clean` (or automatic cleanup) permanently removes logs of completed tasks. If you need to verify results later, check output files or save logs before cleaning.
 
 ## Skill Files
 
-- `${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh` — wraps pueue add with auto daemon start, per-project grouping, and follow
+- `scripts/run_in_pueue.sh` — wraps pueue add with auto daemon start, per-project grouping, and follow
 - `scripts/list_pueue_tasks.sh` — list existing pueue tasks and their status
 - `references/pueue.md` — comprehensive pueue CLI usage documentation
 - `references/internally-multi-task-pattern.md` — pattern for when a command internally spawns pueue sub-tasks (orchestrator → workers); requires a second `pueue wait` step to get notified when workers complete

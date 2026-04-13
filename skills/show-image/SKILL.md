@@ -22,6 +22,9 @@ Use this skill when:
 1. User ask to view image in their terminal.
 2. Assistant want to show user some image.
 
+Do not use this skill when:
+1. User is not inside Kitty terminal.
+
 ### Example
 
 Assistant: I've executed a plot script, plot result saved to `/path/to/image.png`.

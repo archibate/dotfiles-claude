@@ -37,9 +37,3 @@ These are installed and available for use:
 - Package Manager: `uv`
 - Formatting & Linting: `ruff` and `basedpyright`
 - Background tasks: always `PYTHONUNBUFFERED=1` or `uv run python -u`
-
----
-
-## Tool Usage
-
-- **Pueue** — Load the `pueue` skill before running long-running tasks (>2 minutes).

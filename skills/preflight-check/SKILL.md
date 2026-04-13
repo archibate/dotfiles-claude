@@ -8,6 +8,7 @@ allowed-tools:
 when_to_use: >
   Use BEFORE launching any long-running task via pueue, background workers, parallel jobs,
   or any computation estimated >10 minutes.
+compatibility: Claude Code
 ---
 
 # Preflight Check

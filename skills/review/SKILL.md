@@ -39,6 +39,13 @@ Determine scope and launch the appropriate agent(s). Tell the agent the target
 Assign each finding a short codename (1-2 letter prefix + number) and create
 a `TaskCreate` for each. Present the summary list to the user.
 
+### 2b. Quick Wins
+
+Mark issues that are mechanical, behavior-preserving, and need no design decisions
+with `*` on the severity column (e.g., `high*`). Add a footnote:
+`*quick-win: can be batch-fixed without behavior changes`. Then offer to fix all
+quick-wins before entering the interactive cycle.
+
 ### 3. Pick-Discuss-Fix Cycle
 
 After creating the todo list, and after each resolved issue, recommend **exactly 3

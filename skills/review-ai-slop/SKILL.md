@@ -1,11 +1,9 @@
 ---
 name: review-ai-slop
-disable-model-invocation: true
-user-invocable: true
 description: >
   Review code for AI slop patterns. TRIGGER when user says "review for AI slop",
   "check for AI patterns", "clean up AI code", "audit AI-generated code",
-  or "review AI slop".
+  or "fix AI slop".
 ---
 
 # AI Slop Review Checklist
@@ -34,55 +32,42 @@ Load the **`anti-defensive`** skill and apply all 10 patterns:
 
 ---
 
-## B. Over-Engineering
+## B. Band-aid Patches
 
 | Pattern | Flag When |
 |---------|-----------|
-| **Premature abstraction** | Factory/strategy/abstract base class for a single implementation. "In case we need it later." |
-| **Unnecessary wrappers** | `get_config()` that just calls `os.environ.get()`. Utility functions invoked only once. |
-| **Over-modularization** | Simple logic split across many files when one suffices. Deep directory nesting for small codebase. |
+| **Special-case if** | Adding an `if` branch to handle a specific input/edge case instead of fixing the underlying logic. Growing chains of `elif` that should be a lookup or restructured algorithm. |
+| **Hardcoded workaround** | Magic values, special strings, or index offsets inserted to fix one symptom. The "why" is unclear without the bug report. |
+| **Copy-paste with tweaks** | Duplicating a function/block with minor modifications instead of parameterizing or refactoring the original. |
 
 ---
 
-## C. Unnecessary Infrastructure
+## C. Dead Code & Leftovers
 
 | Pattern | Flag When |
 |---------|-----------|
-| **Retry logic everywhere** | Exponential backoff on local function calls or non-transient operations. |
-| **Config/env var overuse** | Every constant configurable via env var, even ones that should never change (math constants, format strings). |
-| **Unnecessary async** | asyncio/threading on CPU-bound or already-fast operations (<10ms). |
-| **Feature flags for no reason** | Boolean toggles controlling behavior that has no reason to vary. |
+| **Commented-out old code** | Previous implementation left as comments (`# old approach: ...`) instead of deleted. Git history exists for a reason. |
+| **Orphaned imports** | `import` statements left behind after the code that used them was removed or rewritten. |
+| **Unused functions/variables** | Functions, classes, or variables that are no longer called after AI refactored surrounding code but forgot to clean up. |
 
 ---
 
-## D. Code Bloat
+## D. Consistency
 
 | Pattern | Flag When |
 |---------|-----------|
-| **Excessive logging** | `logger.info` on every function entry/exit. Logging parameter values and return values of internal functions. |
-| **Magic number extraction** | `MAX_SIZE = 100` when `100` is obvious from context. Constants that add no clarity. |
-| **Trivial docstrings** | `def add(a, b): """Add a and b."""` — docstring restates function name. |
-| **Unnecessary data classes** | dataclass/TypedDict created for one-off use instead of just using a dict or tuple. |
+| **API/module mismatch** | Modified code uses a different library for the same operation than surrounding code (e.g. `math.sqrt` when the file uses `np.sqrt`, `os.path` when the file uses `pathlib`). |
+| **Style drift** | New code uses `.format()` or `%` when the file uses f-strings, `print` when the file uses `logging`, `dict()` when the file uses `{}`, etc. |
+| **Deprecated API in new code** | Added code uses a deprecated API (e.g. `df.append`) when the rest of the file already uses the modern replacement (`pd.concat`). |
 
 ---
 
-## E. Testing Slop
+## E. Forced Consolidation
 
 | Pattern | Flag When |
 |---------|-----------|
-| **Tests that test nothing** | Asserting a function exists or returns the right type, not that it returns correct values. Tests with no assertions. |
-| **Over-mocking** | Mocking so heavily the test only validates the mock, not the real logic. Mocking what you're trying to test. |
-
----
-
-## F. Other Patterns
-
-| Pattern | Flag When |
-|---------|-----------|
-| **Callback/event overuse** | Event emitters, hook systems, or pub/sub for simple linear flows. |
-| **Runtime type checking** | `isinstance` checks inside functions that duplicate what type hints + static analysis already handle. |
-| **Hallucinated imports** | Using APIs from wrong library version. Importing packages that don't exist. |
-| **Boilerplate generators** | Code that exists to satisfy a template rather than solve a problem. Empty `__init__.py` with docstrings. |
+| **Flag-driven function** | Two loosely related behaviors jammed into one function controlled by a boolean/enum parameter. The function has distinct code paths with little shared logic — should be two functions. |
+| **Kitchen-sink module** | Unrelated features grouped into one file/class because they touch the same data, not because they belong together. Violates single responsibility for the sake of fewer files. |
 
 ---
 
@@ -91,9 +76,8 @@ Load the **`anti-defensive`** skill and apply all 10 patterns:
 | Category | Count | Source |
 |----------|-------|--------|
 | A. Defensive Programming | 10 | `anti-defensive` skill |
-| B. Over-Engineering | 3 | This skill |
-| C. Unnecessary Infrastructure | 4 | This skill |
-| D. Code Bloat | 4 | This skill |
-| E. Testing Slop | 2 | This skill |
-| F. Other | 4 | This skill |
-| **Total** | **27** | |
+| B. Band-aid Patches | 3 | This skill |
+| C. Dead Code & Leftovers | 3 | This skill |
+| D. Consistency | 3 | This skill |
+| E. Forced Consolidation | 2 | This skill |
+| **Total** | **21** | |

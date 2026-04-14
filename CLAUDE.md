@@ -39,7 +39,7 @@ These are installed and available for use:
 - Do NOT skip analysis to "go straight to the point" — reasoning tokens improve conclusion quality.
 - Conciseness applies to the conclusion, not the reasoning chain.
 - When fixing code, fix the actual root cause even if it means touching adjacent code (types, comments, related functions). Do not artificially constrain the diff.
-- Do not ask for confirmation on actions I've already authorized via permissions or CLAUDE.md. Only confirm for genuinely ambiguous or destructive operations.
+- Do not ask for confirmation on actions cheap and revertible. Only confirm for genuinely ambiguous or destructive operations.
 
 ---
 

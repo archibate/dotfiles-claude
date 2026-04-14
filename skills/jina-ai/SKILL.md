@@ -1,6 +1,6 @@
 ---
 name: jina-ai
-description: Web reading, search, academic research, NLP, screenshots, and PDF extraction via Jina AI mcpcall. TRIGGER when need to read a URL, search the web, find academic papers (arXiv/SSRN), classify text, rerank documents, deduplicate content, capture screenshots, or extract PDF figures.
+description: Web reading, search, academic research, NLP, screenshots, and PDF extraction via Jina AI mcpcall. TRIGGER when need to read a URL, search the web, find academic papers (arXiv/SSRN), or extract PDF figures.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

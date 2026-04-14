@@ -44,6 +44,8 @@ These are installed and available for use:
 - **No Backward Compatibility Hacks** — When an artifact is stale or a format changes, regenerate it instead of adding fallback/compatibility shims in code. Dirty patches to accommodate stale artifacts waste time and hide bugs.
 - **Do the Correct Thing, Not the Minimal Thing** — When an upstream artifact is stale or broken, fix the source and regenerate. Do not add code workarounds to avoid re-running the obvious fix. Do not ask permission for a short step that is clearly required.
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.
+- **Explore Model** — Explore defaults to Haiku, not inherited from the main agent. Always spawn Explore subagents with `model: "sonnet"` to balance hallucination risk and cost.
+- **Verify Explore Results** — After receiving Explore subagent results, verify key claims (file paths, function signatures, line numbers) with a direct Read or Grep before acting on them. Do not trust Explore output blindly.
 
 ---
 

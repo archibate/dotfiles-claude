@@ -11,7 +11,10 @@ allowed-tools:
   - Glob
   - Edit
   - Write
-  - Bash
+  - Bash(git diff:*)
+  - Bash(git status:*)
+  - Bash(git log:*)
+  - Bash(git show:*)
   - TaskCreate
   - TaskUpdate
   - TaskGet

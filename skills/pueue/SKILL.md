@@ -6,7 +6,9 @@ description: >
   computation-intensive task, or background task — or when the user says
   "use pueue" or "run in background". This is a process gate, not a reference doc.
 allowed-tools:
-  - Bash
+  - Bash(pueue:*)
+  - Bash(*run_in_pueue*:*)
+  - Bash(*list_pueue*:*)
   - Read
 hooks:
   PreToolUse:

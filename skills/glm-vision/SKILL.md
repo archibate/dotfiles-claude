@@ -3,6 +3,8 @@ name: glm-vision
 description: This skill should be used when the user sends an image and asks to "analyze this image", "describe this picture", "what's in this image", or any request requiring visual understanding of images. Provides image analysis using Zhipu GLM-4.6V multimodal model.
 version: 0.1.0
 disable-model-invocation: true
+allowed-tools:
+  - Bash(*analyze_image*:*)
 ---
 
 # GLM Vision - 图片分析技能

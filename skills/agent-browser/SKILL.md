@@ -5,7 +5,9 @@ description: >
   with a web page programmatically — filling forms, clicking buttons, taking screenshots,
   testing web apps, reviewing frontend UI/UX aesthetics, or any task requiring browser
   automation.
-allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
+allowed-tools:
+  - Bash(npx agent-browser:*)
+  - Bash(agent-browser:*)
 ---
 
 # Browser Automation with agent-browser

@@ -6,7 +6,13 @@ description: >
   long-running task via pueue, background workers, parallel jobs, or any computation
   estimated >10 minutes.
 allowed-tools:
-  - Bash
+  - Bash(free:*)
+  - Bash(df:*)
+  - Bash(nproc:*)
+  - Bash(nvidia-smi:*)
+  - Bash(ps aux:*)
+  - Bash(pueue status:*)
+  - Bash(*resource_snapshot*:*)
   - Read
   - Grep
 compatibility: Claude Code

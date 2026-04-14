@@ -2,6 +2,8 @@
 name: qwen-asr
 description: Transcribe audio files using Qwen ASR. Use when the user sends voice messages and wants them converted to text.
 disable-model-invocation: true
+allowed-tools:
+  - Bash(*qwen-asr*main.py*:*)
 ---
 
 # Qwen ASR

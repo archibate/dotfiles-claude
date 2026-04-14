@@ -65,6 +65,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/no-worktree-team.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [],

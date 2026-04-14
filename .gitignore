@@ -26,6 +26,7 @@
 /mcp-needs-auth-cache.json
 /transcripts
 /image-cache
+/teams
 # /*
 # !/.gitignore
 # !/agents/*

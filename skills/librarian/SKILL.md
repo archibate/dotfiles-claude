@@ -1,6 +1,10 @@
 ---
 name: librarian
-description: Clone or reuse a cached local checkout of a remote git repository. TRIGGER when need to read, search, or reference source code from a GitHub/GitLab/Bitbucket repo — whether the user provides a URL, mentions "owner/repo", or you encounter a remote repo during research. Manages cached clones under ~/.cache/checkouts/ with automatic fetch and fast-forward.
+description: >
+  Clone or reuse a cached local checkout of a remote git repository. This skill should be
+  used before reading, searching, or referencing source code from a remote repository —
+  including when the user provides a GitHub/GitLab/Bitbucket URL or mentions "owner/repo".
+  Manages cached clones under ~/.cache/checkouts/ with automatic fetch and fast-forward.
 ---
 
 Use this skill when the user points you to a remote git repository (GitHub/GitLab/Bitbucket URLs, `git@...`, or `owner/repo` shorthand).

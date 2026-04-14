@@ -1,7 +1,9 @@
 ---
 name: pueue
-description: Comprehensive guide to pueue, a background task manager.
-when_to_use: Use this skill BEFORE running non-interactive long-running tasks, computation intensive tasks, background tasks, or ANY use of pueue. TRIGGER when user says "use pueue", "run in background", or when about to queue any long-running (>2 min) task.
+description: >
+  Comprehensive guide to pueue, a background task manager. This skill should be used
+  before running any non-interactive long-running task (>2 min), computation-intensive
+  task, or background task — or when the user says "use pueue" or "run in background".
 allowed-tools:
   - Bash
   - Read

@@ -1,6 +1,9 @@
 ---
 name: mcpcall
-description: Guide and template for converting MCP servers into self-contained Claude Code skills with a Python wrapper script. TRIGGER when creating a new MCP skill, wrapping an MCP server as a skill, or need the mcpcall script template.
+description: >
+  Guide and template for converting MCP servers into self-contained Claude Code skills
+  with a Python wrapper script. This skill should be used before creating a new MCP-backed
+  skill or wrapping an MCP server as a self-contained Claude Code skill.
 ---
 
 # mcpcall

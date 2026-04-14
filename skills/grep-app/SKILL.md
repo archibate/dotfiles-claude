@@ -1,6 +1,10 @@
 ---
 name: grep-app
-description: Search real-world code examples from over a million public GitHub repositories via grep.app MCP. TRIGGER when need to find code usage patterns, see how developers use a library/API in practice, find production examples of a specific function or syntax, or search GitHub code at scale.
+description: >
+  Search real-world code examples from over a million public GitHub repositories via
+  grep.app MCP. This skill should be used when needing real-world usage examples of a
+  library, API, or syntax pattern — e.g. to verify idiomatic usage, find production
+  patterns, or discover how others solved a similar problem at scale.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

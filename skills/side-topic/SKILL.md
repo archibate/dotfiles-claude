@@ -1,17 +1,17 @@
 ---
 name: side-topic
-description: Preserve context when switching between main task and unrelated interruptions, then resume seamlessly.
+description: >
+  Preserve context when switching between main task and unrelated interruptions, then
+  resume seamlessly. This skill should be used PROACTIVELY whenever the user introduces
+  an unrelated topic mid-task — e.g. asks an ad-hoc question, requests a quick fix on a
+  different file, or starts debugging a side issue while a multi-step plan is in progress —
+  or when the user explicitly says "side topic", "quick question", "unrelated but",
+  "before I forget", "btw", "oh also", or "back to what we were doing".
 allowed-tools:
   - TaskCreate
   - TaskUpdate
   - TaskGet
   - TaskList
-when_to_use: >
-  Use this skill PROACTIVELY whenever the user introduces an unrelated
-  topic mid-task — e.g. asks an ad-hoc question, requests a quick fix on a different file,
-  or starts debugging a side issue while a multi-step plan is in progress.
-  Also use when the user explicitly says "side topic", "quick question", "unrelated but",
-  "before I forget", "btw", "oh also", or "back to what we were doing".
 ---
 
 # Side Topic — Context Switch Protocol

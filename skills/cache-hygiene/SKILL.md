@@ -1,6 +1,9 @@
 ---
 name: cache-hygiene
-description: Cache keep-alive protocol for background work. TRIGGER after launching a background agent or long-running background task (`run_in_background: true`). Keeps the 5-minute prompt cache warm and prevents wasteful polling.
+description: >
+  Cache keep-alive protocol for background work. This skill should be used after launching
+  a background agent or long-running background task (`run_in_background: true`). Keeps the
+  5-minute prompt cache warm and prevents wasteful polling.
 ---
 
 # Cache Hygiene

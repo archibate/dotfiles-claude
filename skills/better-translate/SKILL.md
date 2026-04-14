@@ -1,6 +1,9 @@
 ---
 name: better-translate
-description: Produce natural Chinese translations free of translationese. TRIGGER when translating English to Chinese, user says "translate to Chinese", "翻译", "翻译成中文", "improve Chinese translation", "fix translation quality", or when writing/polishing any Chinese translation of English content.
+description: >
+  Produce natural Chinese translations free of translationese. This skill should be used
+  before writing or polishing any Chinese translation of English content — including when
+  the user says "translate to Chinese", "翻译", "翻译成中文".
 ---
 
 # English-to-Chinese Translation

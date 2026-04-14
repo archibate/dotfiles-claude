@@ -1,6 +1,10 @@
 ---
 name: review
-description: Review code for bugs or AI slop patterns, then fix issues interactively.
+description: >
+  Review code for bugs or AI slop patterns, then fix issues interactively.
+  This skill should be used after completing a major code modification or large multi-file
+  edits — or when the user says "review", "review changes", "any bugs?", "review AI slop",
+  "clean up AI code".
 allowed-tools:
   - Read
   - Grep
@@ -13,11 +17,6 @@ allowed-tools:
   - TaskGet
   - TaskList
   - Agent
-when_to_use: >
-  Use when the user says "review", "review changes", "review diff", "check my changes",
-  "any bugs?", "look for bugs", "review and fix", "review AI slop", "check for AI patterns",
-  "clean up AI code", or after completing a major code modification. Proactively offer to
-  run after large multi-file edits.
 ---
 
 # Review

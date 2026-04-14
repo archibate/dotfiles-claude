@@ -1,6 +1,6 @@
 ---
 name: just-cli
-description: Documentation for just and justfile. This skill should be used before editing justfile or running just commands. TRIGGER when run just command, or edit justfile; or when about to write any `just ...` shell invocation in Bash, pueue, or scripts.
+description: Documentation for just and justfile. This skill should be used before editing any justfile, running just commands, or writing any `just ...` shell invocation in Bash, pueue, or scripts.
 ---
 
 # Just Command Runner

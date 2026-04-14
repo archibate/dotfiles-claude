@@ -1,6 +1,9 @@
 ---
 name: remotion
-description: Documentation for Remotion - Video creation in React. TRIGGER when working with Remotion code, video composition, React-based video generation, or user mentions "remotion", "video composition", "create animation", "create video".
+description: >
+  Documentation for Remotion — video creation in React. This skill should be used when
+  the user mentions "remotion", "video composition", "create animation", "create video",
+  or before working with Remotion code or React-based video generation.
 metadata:
   tags: remotion, video, react, animation, composition
 ---

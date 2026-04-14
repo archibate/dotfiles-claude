@@ -1,6 +1,10 @@
 ---
 name: deepwiki
-description: AI-powered documentation for GitHub repositories via DeepWiki MCP. TRIGGER when need to understand a GitHub repository, read its documentation topics, ask questions about a repo's codebase, architecture, or usage, or explore how an open-source project works.
+description: >
+  AI-powered documentation for GitHub repositories via DeepWiki MCP. This skill should be
+  used when needing to understand a GitHub repository's architecture, design decisions,
+  or usage — before diving into unfamiliar open-source codebases or answering questions
+  about third-party project internals.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

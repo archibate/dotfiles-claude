@@ -1,6 +1,9 @@
 ---
 name: frontend-design
-description: Design and implement distinctive, production-ready frontend interfaces with strong aesthetic direction. Use when asked to create or restyle web pages, components, or applications (HTML/CSS/JS, React, Vue, etc.).
+description: >
+  Design and implement distinctive, production-ready frontend interfaces with strong
+  aesthetic direction. This skill should be used before creating or restyling web pages,
+  components, or applications (HTML/CSS/JS, React, Vue, etc.).
 ---
 
 # Frontend Design Skill

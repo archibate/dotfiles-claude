@@ -46,6 +46,5 @@ These are installed and available for use:
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.
 - **Explore Model** — Explore defaults to Haiku, not inherited from the main agent. Always spawn Explore subagents with `model: "sonnet"` to balance hallucination risk and cost.
 - **Verify Explore Results** — After receiving Explore subagent results, verify key claims (file paths, function signatures, line numbers) with a direct Read or Grep before acting on them. Do not trust Explore output blindly.
-- **Agent Teams** — Use Agent Teams when a task benefits from parallel independent work with peer communication (e.g., multi-perspective review, parallel feature work across modules). Use subagents for simpler delegation (bounded research, fan-out over independent chunks).
 - **Cache Keep-Alive** — After launching a background agent or task (`run_in_background: true`), load `/cache-hygiene` and follow its keep-alive protocol.
 

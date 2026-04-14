@@ -1,6 +1,9 @@
 ---
 name: zhihu-post
-description: Write, refine, and validate a Chinese technical blog post for Zhihu (知乎). TRIGGER when user says "write a blog post", "写博客", "知乎文章", "zhihu post", "write for zhihu", "blog post in Chinese", or when drafting a long-form Chinese technical article.
+description: >
+  Write, refine, and validate a Chinese technical blog post for Zhihu (知乎). This skill
+  should be used before drafting a long-form Chinese technical article — or when the user
+  says "写博客", "知乎文章", "zhihu post", "write for zhihu".
 ---
 
 # Zhihu Technical Blog Post

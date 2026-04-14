@@ -1,6 +1,12 @@
 ---
 name: context7
-description: Fetch current documentation for libraries, frameworks, SDKs, APIs, and CLI tools via Context7. TRIGGER when user asks about a library, framework, SDK, API, or CLI tool — even well-known ones like React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot. Includes API syntax, configuration, version migration, and library-specific debugging. Prefer this over web search for library docs.
+description: >
+  Fetch current documentation for libraries, frameworks, SDKs, APIs, and CLI tools via
+  Context7. This skill should be used before calling any library API whose exact syntax,
+  configuration, or version-specific behavior is uncertain — even well-known ones like
+  React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot. Covers API syntax,
+  configuration, version migration, and library-specific debugging. Prefer this over web
+  search for library docs.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

@@ -1,6 +1,9 @@
 ---
 name: skillify
-description: Capture this session's repeatable process into a reusable skill. Call at the end of a workflow you want to automate in the future.
+description: >
+  Capture this session's repeatable process into a reusable skill. This skill should be
+  used after completing a multi-step workflow that is likely to be repeated — or when the
+  user says "turn this into a skill", "skillify this", "save this workflow".
 allowed-tools:
   - Read
   - Write
@@ -9,8 +12,6 @@ allowed-tools:
   - Grep
   - AskUserQuestion
   - Bash(mkdir:*)
-when_to_use: >
-    Use when the user wants to turn a completed workflow into a reusable skill. Trigger phrases: "turn this into a skill", "make this reusable", "skillify this", "save this workflow".
 argument-hint: "[description of the process you want to capture]"
 compatibility: Claude Code
 ---
@@ -76,10 +77,11 @@ Use this format:
 ```markdown
 ---
 name: {{skill-name}}
-description: {{one-line description}}
+description: >
+  {{one-line description}}. This skill should be used when
+  {{trigger phrases and auto-invoke conditions}}.
 allowed-tools:
   - {{list of tool permission patterns}}
-when_to_use: {{when Claude should auto-invoke, with trigger phrases and examples}}
 argument-hint: "{{hint showing argument placeholders}}"
 arguments:
   - arg1
@@ -120,7 +122,7 @@ What to do. Be specific and actionable.
 **Frontmatter rules:**
 - `allowed-tools`: Minimum permissions (use patterns like `Bash(gh:*)` not just `Bash`)
 - `context: fork`: Only for self-contained skills that don't need mid-process user input
-- `when_to_use` is CRITICAL — start with "Use when..." and include trigger phrases
+- `description` must include trigger phrases — use the pattern "This skill should be used when..." after the one-line description
 - `arguments` and `argument-hint`: Only include if the skill takes parameters
 
 **Step structure tips:**

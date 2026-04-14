@@ -47,22 +47,5 @@ These are installed and available for use:
 - **Explore Model** — Explore defaults to Haiku, not inherited from the main agent. Always spawn Explore subagents with `model: "sonnet"` to balance hallucination risk and cost.
 - **Verify Explore Results** — After receiving Explore subagent results, verify key claims (file paths, function signatures, line numbers) with a direct Read or Grep before acting on them. Do not trust Explore output blindly.
 - **Agent Teams** — Use Agent Teams when a task benefits from parallel independent work with peer communication (e.g., multi-perspective review, parallel feature work across modules). Use subagents for simpler delegation (bounded research, fan-out over independent chunks).
+- **Cache Keep-Alive** — After launching a background agent or task (`run_in_background: true`), load `/cache-hygiene` and follow its keep-alive protocol.
 
----
-
-## Cache Hygiene
-
-The prompt cache has a 5-minute TTL. A cache miss (re-write) costs 1.25× vs 0.1× for a hit — keeping the cache warm saves ~1.15P per avoided miss.
-
-**Turn discipline:**
-- When a Bash command or agent is auto-backgrounded, briefly acknowledge it and **end your response**. Do not immediately read the output file or poll for completion.
-- Never poll a background task in a loop without ending your response between iterations. Repeated blocking reads (TaskOutput, Read, tail) within a single turn hold the conversation hostage and bust the cache.
-- On `/loop` keep-alive boundaries, it is OK to quickly peek progress of currently running tasks (a single non-blocking read), then end your response. Do not spiral into repeated polling.
-
-**Timeout caps:**
-- Prefer `run_in_background: true` for Bash commands or agents expected to exceed 2 minutes, so the turn unblocks immediately.
-- Never pass `timeout` > 240000 (4 min) to TaskOutput. Use `block: false` for a quick non-blocking peek, or use the default 30s timeout. If the task isn't done, end your response and check again on the next loop boundary.
-
-**Keep-alive loop:**
-- When launching background work expected to idle the main thread for more than 5 minutes, proactively start a keep-alive loop (`/loop 5m Cache keep-alive. If background tasks are running, peek progress briefly (non-blocking). Otherwise reply "ok".`) to keep the cache warm.
-- If a keep-alive loop runs for 10 consecutive iterations with no real user interaction and no background tasks to monitor, stop it (`CronDelete`). As long as there are running background tasks, the loop remains justified.

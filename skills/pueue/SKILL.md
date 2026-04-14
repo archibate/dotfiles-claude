@@ -1,9 +1,10 @@
 ---
 name: pueue
 description: >
-  Comprehensive guide to pueue, a background task manager. This skill should be used
-  before running any non-interactive long-running task (>2 min), computation-intensive
-  task, or background task — or when the user says "use pueue" or "run in background".
+  Guardrails and mandatory workflow for running long-running tasks via pueue.
+  This skill MUST be used before using pueue to run any long-running task (>2 min),
+  computation-intensive task, or background task — or when the user says
+  "use pueue" or "run in background". This is a process gate, not a reference doc.
 allowed-tools:
   - Bash
   - Read

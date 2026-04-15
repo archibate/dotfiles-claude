@@ -17,12 +17,13 @@ if [ "$run_in_bg" != "true" ] && [ -z "$bg_id" ]; then
 fi
 
 session_id=$(echo "$input" | jq -r '.session_id // "unknown"')
-flag="/tmp/.claude-cache-hygiene-${session_id}"
+state_dir="/tmp/.claude-hooks-${session_id}"
+mkdir -p "$state_dir"
 
-if [ -f "$flag" ]; then
+if [ -f "$state_dir/cache-hygiene" ]; then
     exit 0
 fi
 
-touch "$flag"
+touch "$state_dir/cache-hygiene"
 printf '⏳ Background task launched — load /cache-hygiene and follow its keep-alive protocol to keep the 5-min prompt cache warm.\n' >&2
 exit 2

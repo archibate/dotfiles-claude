@@ -35,6 +35,16 @@
 # !/settings.json
 # !/CLAUDE.md
 
+# home project claude state files
+/worktrees
+/scheduled_tasks.lock
+/scheduled_tasks.json
+
+# project claude state files
+.claude/worktrees
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+
 # archibate personal skills
 /skills/adb-wireless
 /skills/bilibili-mp3

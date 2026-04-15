@@ -53,4 +53,5 @@ These are installed and available for use:
 - **Do the Correct Thing, Not the Minimal Thing** — When an upstream artifact is stale or broken, fix the source and regenerate. Do not add code workarounds to avoid re-running the obvious fix. Do not ask permission for a short step that is clearly required.
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.
 - **Bash Output Is Internal** — Bash tool output is returned to the agent, not shown to the user. Never add pipes (`| tail`, `| head`, `| grep`) to make output "cleaner"; run commands directly, extract key data in your text response.
+- **Prior Responses Are Collapsed** — The user only sees the last text response. Prior tool calls and intermediate text responses are collapsed in the UI. Do not assume the user saw earlier messages. Reclaim key findings in your final response, maintain structure and quality.
 

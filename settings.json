@@ -117,30 +117,6 @@
         ]
       }
     ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/clear-review-cooldown.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/fresh-eye-review.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "matcher": "*",
@@ -154,6 +130,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "The Edit tool just succeeded. Check: did the edit break indentation, alignment, or surrounding syntax in the file? If the edit removed or replaced multiple lines, is the result still well-formed (no orphaned braces, missing commas in JSON, broken nesting)? If there is a problem, re-read the file and fix it immediately. If everything looks clean, do nothing.",
+            "timeout": 30
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [
@@ -220,16 +206,6 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/doc-slop-check.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/set-review-flag.sh",
             "timeout": 5
           }
         ]

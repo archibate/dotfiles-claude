@@ -21,7 +21,7 @@ cwd=$(echo "$input" | jq -r '.cwd // "."')
 
 source "$(dirname "$0")/lib/check-python-unbuffered.sh"
 if check_python_unbuffered "$command" "$cwd"; then
-    printf '⚠️ This python task was auto-backgrounded without PYTHONUNBUFFERED=1 or -u. Claude launches processes with stdout connected to a pipe, which causes Python to buffer output instead of flushing in real time — making it look stuck or empty. Consider re-running with: PYTHONUNBUFFERED=1 uv run python script.py\n' >&2
+    printf 'If this is a Python task, stdout is connected to a pipe, so Python buffers output instead of flushing in real time — making it look stuck or empty. Re-run with unbuffered output for easier real-time monitoring: PYTHONUNBUFFERED=1 uv run python script.py\n' >&2
     exit 2
 fi
 

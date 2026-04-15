@@ -15,10 +15,14 @@ The prompt cache has a 5-minute TTL. A cache miss (re-write) costs 1.25x vs 0.1x
 After launching background work, immediately start a keep-alive loop:
 
 ```
-/loop 5m Cache keep-alive. Peek background task progress briefly (non-blocking). Otherwise reply "ok".
+/loop Cache keep-alive.
 ```
 
-Stop the loop (`CronDelete`) if it runs 10 consecutive iterations with no user interaction and no background tasks.
+Each tick:
+1. Peek background task progress (single non-blocking read).
+2. Reply "ok" if nothing to report.
+3. Call ScheduleWakeup with delaySeconds=270 to stay within the 5-min cache TTL. Pass the same prompt verbatim.
+4. Omit ScheduleWakeup to stop if 10 consecutive iterations have no user interaction and no background tasks.
 
 ## Turn Discipline
 

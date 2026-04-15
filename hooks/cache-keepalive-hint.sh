@@ -25,5 +25,5 @@ if [ -f "$state_dir/cache-hygiene" ]; then
 fi
 
 touch "$state_dir/cache-hygiene"
-printf '⏳ Background task launched — load /cache-hygiene and follow its keep-alive protocol to keep the 5-min prompt cache warm.\n' >&2
+printf 'Load /cache-hygiene now and follow its keep-alive protocol. (Background task launched; prompt cache has a 5-min TTL.)\n' >&2
 exit 2

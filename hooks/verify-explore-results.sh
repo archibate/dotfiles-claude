@@ -10,5 +10,5 @@ if [ "$subagent_type" != "Explore" ]; then
     exit 0
 fi
 
-printf '⚠️ Verify Explore results: check key claims (file paths, function signatures, line numbers) with a direct Read or Grep before acting on them.\n' >&2
+printf 'Verify Explore results: check key claims (file paths, function signatures, line numbers) with a direct Read or Grep before acting on them.\n' >&2
 exit 2

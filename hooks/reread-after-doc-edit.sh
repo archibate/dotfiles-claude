@@ -16,5 +16,5 @@ case "$file_path" in
     *) exit 0 ;;
 esac
 
-printf '📝 You just edited %s — re-read the entire file to catch stale content, numbering errors, contradictions, and duplication.\n' "$file_path" >&2
+printf 'Re-read %s in full to catch stale content, numbering errors, contradictions, and duplication.\n' "$file_path" >&2
 exit 2

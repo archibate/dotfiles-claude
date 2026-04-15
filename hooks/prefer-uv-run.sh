@@ -23,6 +23,6 @@ if echo "$command" | grep -qP 'python3?\s+(-V|--version|--help|-c\s)'; then
     exit 0
 fi
 
-printf 'Consider using uv run python instead of python3 directly.\n' >&2
+printf 'Use uv run python instead of python3 directly.\n' >&2
 printf '  python3 script.py  →  uv run python script.py\n' >&2
 exit 2

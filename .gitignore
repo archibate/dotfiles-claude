@@ -35,6 +35,9 @@
 # !/settings.json
 # !/CLAUDE.md
 
+# machine specific settings
+/settings.local.json
+
 # home project claude state files
 /worktrees
 /scheduled_tasks.lock

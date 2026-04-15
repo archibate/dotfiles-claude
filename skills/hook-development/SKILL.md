@@ -174,10 +174,11 @@ Execute after tool completes. Use to react to results, provide feedback, or log.
 }
 ```
 
-**Output behavior:**
-- Exit 0: stdout shown in transcript
-- Exit 2: stderr fed back to Claude
-- systemMessage included in context
+**Output behavior (command hooks):**
+- Exit 0: stdout goes to transcript log only, not fed to Claude
+- Exit 2: stderr fed back to Claude — use this to inject hints/reminders
+- `systemMessage` in stdout JSON does not work for command hooks
+- For PostToolUse, exit 2 is safe (tool already ran); use `printf '...' >&2; exit 2`
 
 ### Stop
 
@@ -278,7 +279,9 @@ Execute when Claude sends notifications. Use to react to user notifications.
 
 ## Hook Output Format
 
-### Standard Output (All Hooks)
+### Standard Output (Prompt-Based Hooks)
+
+Prompt-based hooks return structured JSON:
 
 ```json
 {
@@ -290,13 +293,15 @@ Execute when Claude sends notifications. Use to react to user notifications.
 
 - `continue`: If false, halt processing (default true)
 - `suppressOutput`: Hide output from transcript (default false)
-- `systemMessage`: Message shown to Claude
+- `systemMessage`: Message shown to Claude (prompt-based hooks only)
 
-### Exit Codes
+### Exit Codes (Command Hooks)
 
-- `0` - Success (stdout shown in transcript)
-- `2` - Blocking error (stderr fed back to Claude)
+- `0` - Success (stdout goes to transcript log only, not fed to Claude)
+- `2` - stderr fed back to Claude as a system message
 - Other - Non-blocking error
+
+To message Claude from a command hook, use `printf '...' >&2; exit 2`. stdout JSON with `systemMessage` does not work for command hooks. For PostToolUse, exit 2 is safe (tool already ran).
 
 ## Hook Input Format
 

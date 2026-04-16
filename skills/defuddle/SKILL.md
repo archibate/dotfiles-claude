@@ -1,9 +1,10 @@
 ---
 name: defuddle
 description: >
-  Extract clean markdown from web pages using Defuddle CLI, removing clutter and navigation
-  to save tokens. Use instead of WebFetch when reading articles, docs, or standard web pages.
-  Do NOT use for URLs ending in .md or raw text — those are already clean, use WebFetch directly.
+  Extract clean, complete markdown from web pages using Defuddle CLI, removing navigation and ads.
+  This skill should be used when needing to read a web page's full content — articles, docs,
+  GitHub READMEs, blog posts. Also use when WebFetch returns truncated, summarized, or
+  refused results. Returns original content as-is without summarization.
 allowed-tools:
   - Bash(npx defuddle*:*)
 ---
@@ -33,12 +34,19 @@ npx defuddle parse <url> --property title
 npx defuddle parse <url> --property description
 ```
 
+## Why defuddle over WebFetch
+
+- defuddle returns the **complete original content** as markdown — no summarization, no information loss
+- WebFetch uses a small model that may summarize, refuse, or misinterpret the content
+- defuddle runs locally (no API), WebFetch goes through a remote model
+
 ## When to use
 
 - Articles, blog posts, documentation pages → defuddle
 - GitHub repo pages (get clean README) → defuddle
-- Raw text / .md URLs → WebFetch (already clean)
-- Need AI summary of a page → WebFetch (has built-in model)
+- Need complete, unmodified page content → defuddle
+- Raw text / .md URLs → WebFetch (already clean, no HTML to strip)
+- Need a quick AI-generated summary → WebFetch
 - Search the web → WebSearch (built-in)
 
 ## Notes

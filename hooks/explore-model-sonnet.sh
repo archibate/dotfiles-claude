@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Enforce model: "sonnet" for Explore subagents (CLAUDE.md: "Always spawn Explore subagents with model: sonnet")
+# Silently default model: "sonnet" for Explore subagents when omitted.
 set -euo pipefail
 
 input=$(cat)
@@ -10,9 +10,17 @@ if [ "$subagent_type" != "Explore" ]; then
 fi
 
 model=$(jq -r '.tool_input.model // ""' <<< "$input")
-if [ "$model" != "sonnet" ]; then
-    printf 'BLOCKED: Explore subagents must use model: "sonnet". Add model: "sonnet" to the Agent call.\n' >&2
-    exit 2
+if [ -n "$model" ]; then
+    exit 0
 fi
 
+# Merge model: "sonnet" into the full tool_input and return as updatedInput
+updated=$(jq '.tool_input + {"model": "sonnet"}' <<< "$input")
+jq -n --argjson u "$updated" '{
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "allow",
+    updatedInput: $u
+  }
+}'
 exit 0

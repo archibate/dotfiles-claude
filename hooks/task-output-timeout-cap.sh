@@ -7,8 +7,15 @@ input=$(cat)
 timeout=$(jq -r '.tool_input.timeout // 30000' <<< "$input")
 
 if [ "$timeout" -gt 240000 ] 2>/dev/null; then
-    printf 'TaskOutput timeout %sms exceeds 240s cache-safe cap. Use timeout ≤ 240000, or block=false for a non-blocking peek.\n' "$timeout" >&2
-    exit 2
+    # Silently clamp to 240000
+    updated=$(jq '.tool_input + {"timeout": 240000}' <<< "$input")
+    jq -n --argjson u "$updated" '{
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "allow",
+        updatedInput: $u
+      }
+    }'
 fi
 
 exit 0

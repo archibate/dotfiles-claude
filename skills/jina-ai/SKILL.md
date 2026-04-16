@@ -2,8 +2,9 @@
 name: jina-ai
 description: >
   Region-aware web search, academic papers (arXiv/SSRN), PDF extraction, BibTeX, and image search via Jina AI.
-  This skill should be used when needing to search in specific languages/regions (gl/hl for Japanese, Chinese local community content),
-  find academic papers, extract figures from PDFs, get BibTeX citations, or search for images.
+  This skill should be used when the user says "search in Japanese", "搜中文内容", "find papers on arXiv",
+  "search for images of", "get BibTeX", or when needing to search in specific languages/regions
+  (gl/hl for local community content), find academic papers, extract figures from PDFs, or search for images.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

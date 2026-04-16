@@ -2,8 +2,9 @@
 name: prompt-writing
 description: >
   Guidelines for writing effective prompts across Claude Code — skill descriptions, CLAUDE.md rules,
-  hook prompts, and agent configurations. This skill should be used when creating or reviewing
-  skills, CLAUDE.md rules, hooks, or agent definitions.
+  hook prompts, and agent configurations. This skill should be used when the user says "write a skill",
+  "improve this description", "review CLAUDE.md", "fix the hook prompt", "audit skill docs",
+  or when creating, editing, or reviewing skills, CLAUDE.md rules, hooks, or agent definitions.
 allowed-tools: []
 ---
 
@@ -118,6 +119,16 @@ Always in context — every token costs every conversation.
 ### Decision guidance
 - When multiple tools serve similar purposes, explain when to pick which
 - "Simple searches → self. Deep multi-source investigation → web-researcher agent."
+
+---
+
+## Editing Existing Prompts
+
+### Additive, not replacing
+When improving a prompt, add to it — don't rewrite from scratch. Existing trigger conditions, phrasings, and edge cases were put there for a reason. New content supplements, not replaces.
+
+### Verify before and after
+Before editing a description, note all existing triggers. After editing, verify every original trigger is still present. It's easy to accidentally drop working conditions while adding new ones.
 
 ---
 

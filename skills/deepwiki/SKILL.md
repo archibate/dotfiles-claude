@@ -1,10 +1,10 @@
 ---
 name: deepwiki
 description: >
-  AI-powered documentation for GitHub repositories via DeepWiki MCP. This skill should be
-  used when needing to understand a GitHub repository's architecture, design decisions,
-  or usage — before diving into unfamiliar open-source codebases or answering questions
-  about third-party project internals.
+  Quick AI-generated overview of GitHub repositories via DeepWiki MCP. This skill should be
+  used when the user says "how does this project work", "what's the architecture of this repo",
+  "explain this codebase", or when needing a fast high-level understanding of a repository's
+  architecture and design decisions.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

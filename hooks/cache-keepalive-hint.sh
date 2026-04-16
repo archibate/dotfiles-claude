@@ -1,9 +1,7 @@
 #!/usr/bin/bash
-# PostToolUse hook: remind to load /cache-hygiene after launching background work
-# CLAUDE.md: "After launching a background agent or task (run_in_background: true),
-# load /cache-hygiene and follow its keep-alive protocol."
-# Catches both explicit run_in_background and auto-backgrounded (timeout) tasks.
-# Only fires once per session (flag file prevents repeats).
+# PostToolUse hook: prompt cache keep-alive hint on every background launch.
+# Bash → use Monitor (~270s timeout); Agent → load /cache-hygiene.
+# Fires on every background task (explicit run_in_background or auto-backgrounded).
 set -euo pipefail
 
 input=$(cat)
@@ -16,14 +14,11 @@ if [ "$run_in_bg" != "true" ] && [ -z "$bg_id" ]; then
     exit 0
 fi
 
-session_id=$(echo "$input" | jq -r '.session_id // "unknown"')
-state_dir="/tmp/.claude-hooks-${session_id}"
-mkdir -p "$state_dir"
+tool_name=$(echo "$input" | jq -r '.tool_name // ""')
 
-if [ -f "$state_dir/cache-hygiene" ]; then
-    exit 0
+if [ "$tool_name" = "Bash" ]; then
+    printf 'Background Bash task launched. Arm a Monitor (~270s timeout) filtering for completion + error signatures. This keeps the prompt cache (5-minute TTL) warm.\n' >&2
+else
+    printf 'Background agent launched. Load /cache-hygiene now and follow its keep-alive protocol. This keeps prompt cache (5-minute TTL) warm.\n' >&2
 fi
-
-touch "$state_dir/cache-hygiene"
-printf 'Load /cache-hygiene now and follow its keep-alive protocol. (Background task launched; prompt cache has a 5-min TTL.)\n' >&2
 exit 2

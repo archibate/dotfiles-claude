@@ -1,36 +1,38 @@
 ---
 name: cache-hygiene
 description: >
-  Cache keep-alive protocol for background work. This skill should be used after launching
-  a background agent or long-running background task (`run_in_background: true`). Keeps the
-  5-minute prompt cache warm and prevents wasteful polling.
+  Prompt cache cost optimization. Generates periodic conversation turns to keep the
+  5-minute prompt cache warm during idle gaps. Auto-triggered after launching background
+  agents; also invocable manually (`/cache-hygiene`) when the user will be away. Not
+  needed for Bash background tasks (use Monitor for those — its events keep the cache
+  warm naturally).
 ---
 
 # Cache Hygiene
 
-The prompt cache has a 5-minute TTL. A cache miss (re-write) costs 1.25x vs 0.1x for a hit — keeping the cache warm saves ~1.15P per avoided miss.
+Prompt cache cost optimization protocol. The prompt cache has a 5-minute TTL. A cache miss costs 1.25x vs 0.1x for a hit — keeping the cache warm saves ~1.15P per avoided miss.
+
+## When to Use
+
+- **Auto-triggered** (via hook): after launching a background agent (no stdout stream to monitor).
+- **Manual** (user types `/cache-hygiene`): user signals they will be away. Start the keep-alive loop after ending the current response.
+
+Not needed for Bash background tasks — use Monitor with ~270s timeout instead, its events keep the cache warm naturally.
 
 ## Keep-Alive Protocol
 
-After launching background work, immediately start a keep-alive loop:
+Start a keep-alive loop:
 
 ```
 /loop Cache keep-alive.
 ```
 
 Each tick:
-1. Peek background task progress (single non-blocking read).
-2. Reply "ok" if nothing to report.
-3. Call ScheduleWakeup with delaySeconds=270 to stay within the 5-min cache TTL. Pass the same prompt verbatim.
-4. Omit ScheduleWakeup to stop if 10 consecutive iterations have no user interaction and no background tasks.
+1. Call `ScheduleWakeup` with `delaySeconds=270` to stay within the 5-min cache TTL. Pass the same prompt verbatim.
+2. End your response.
 
-## Turn Discipline
+Stop (omit `ScheduleWakeup`) when the idle period ends — agent completes, user responds, or the wait condition resolves. Also stop after 10 consecutive ticks with no user interaction and no background tasks — beyond that, cumulative keep-alive cost (10 × 0.1P) exceeds the one-time cache miss penalty (1.15P).
 
-- When a Bash command or agent is auto-backgrounded, briefly acknowledge it and **end your response**. Do not immediately read the output file or poll for completion.
-- Never poll a background task in a loop without ending your response between iterations. Repeated blocking reads (TaskOutput, Read, tail) within a single turn hold the conversation hostage and bust the cache.
-- On `/loop` keep-alive boundaries, it is OK to quickly peek progress (a single non-blocking read), then end your response. Do not spiral into repeated polling.
+## Blocking Call Cap
 
-## Timeout Caps
-
-- Prefer `run_in_background: true` for Bash commands or agents expected to exceed 2 minutes, so the turn unblocks immediately.
-- Never pass `timeout` > 240000 (4 min) to TaskOutput. Use `block: false` for a quick non-blocking peek, or use the default 30s timeout. If the task isn't done, end your response and check again on the next loop boundary.
+Never block a single tool call for >4 minutes (Bash `timeout`, `TaskOutput`). The cache TTL ticks during blocking calls — a 4-minute block plus response overhead can bust the 5-minute window. The keep-alive protocol prevents misses *between* turns; this cap prevents misses *within* turns.

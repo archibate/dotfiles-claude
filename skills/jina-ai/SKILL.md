@@ -1,10 +1,9 @@
 ---
 name: jina-ai
 description: >
-  Web reading, search, academic research, NLP, screenshots, and PDF extraction via Jina AI
-  mcpcall. This skill should be used when needing to read a URL, search the web, find
-  academic papers (arXiv/SSRN), or extract PDF figures — whether user-requested or as
-  part of a research step during task execution.
+  Region-aware web search, academic papers (arXiv/SSRN), PDF extraction, BibTeX, and image search via Jina AI.
+  This skill should be used when needing to search in specific languages/regions (gl/hl for Japanese, Chinese local community content),
+  find academic papers, extract figures from PDFs, get BibTeX citations, or search for images.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---
@@ -21,9 +20,9 @@ Requires `JINA_API_KEY` environment variable (get one at [jina.ai/api-key](https
 export JINA_API_KEY=<key>
 ```
 
-## Web Reading
+## Web Reading ⚠️ Unreliable — use defuddle or WebFetch instead
 
-### read_url
+### read_url ❌
 Extract web page content as clean markdown. Supports single URL or array of URLs.
 - `url` (required): URL string or array of URLs
 - `withAllLinks`: extract all hyperlinks as structured data
@@ -34,7 +33,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py read_url url:"https://example.com"
 ${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py read_url url:"https://example.com" withAllLinks:true
 ```
 
-### parallel_read_url
+### parallel_read_url ❌
 Read up to 5 URLs in parallel for batch extraction.
 - `urls` (required): array of `{url, withAllLinks?, withAllImages?}` objects
 - `timeout`: milliseconds (default 30000)
@@ -56,7 +55,7 @@ Search the web for current information. Supports single query or array of querie
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py search_web query:"search terms" num:10
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py search_web query:"A股量化" gl:cn hl:zh-cn
+${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py search_web query:"关键词" gl:cn hl:zh-cn
 ${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py search_web query:"recent news" tbs:qdr:w
 ```
 
@@ -147,7 +146,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py extract_pdf id:2301.12345
 ${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py extract_pdf url:"https://example.com/paper.pdf" type:figure
 ```
 
-### capture_screenshot_url
+### capture_screenshot_url ❌ Use agent-browser instead
 Capture web page screenshots as base64 JPEG.
 - `url` (required): page URL
 - `firstScreenOnly`: `true` for viewport only (faster), `false` for full page
@@ -242,26 +241,24 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py show_api_key
 
 ## Tool Selection Guide
 
-| Scenario | Tool |
-|---|---|
-| Read a single web page | `read_url` |
-| Read multiple pages at once | `parallel_read_url` |
-| General web search | `search_web` |
-| Multi-angle deep research | `expand_query` → `parallel_search_web` |
-| Find images | `search_images` |
-| Find STEM papers | `search_arxiv` |
-| Find social science / finance papers | `search_ssrn` |
-| Get BibTeX citations | `search_bibtex` |
-| Extract figures from a paper | `extract_pdf` |
-| Visual inspection of a page | `capture_screenshot_url` |
-| Categorize text into labels | `classify_text` |
-| Rank documents by relevance | `sort_by_relevance` |
-| Remove duplicate content | `deduplicate_strings` / `deduplicate_images` |
+| Scenario | Tool | Notes |
+|---|---|---|
+| Read a web page | **defuddle** or **WebFetch** | |
+| General web search | **WebSearch** (built-in) | |
+| Region/language-specific search | `search_web` with `gl`/`hl` | e.g. `gl:jp hl:ja` for Japanese results |
+| Find STEM papers | `search_arxiv` | Jina's strength |
+| Find social science / finance papers | `search_ssrn` | Jina's strength |
+| Get BibTeX citations | `search_bibtex` | Jina's strength |
+| Extract figures from a paper | `extract_pdf` | Jina's strength |
+| Find images | `search_images` | |
+| Categorize text into labels | `classify_text` | |
+| Rank documents by relevance | `sort_by_relevance` | |
+| Remove duplicate content | `deduplicate_strings` / `deduplicate_images` | |
 
 ## Tips
 
 - Use `expand_query` before `parallel_search_web` or `parallel_search_arxiv` to generate diverse queries for thorough research.
 - Parallel variants accept up to 5 items — use them for batch work.
 - Set `tbs:qdr:w` to restrict results to the past week for time-sensitive queries.
-- For A-share / Chinese market research, set `gl:cn hl:zh-cn` on search tools.
+- For Chinese-language results, set `gl:cn hl:zh-cn` on search tools.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py --list jina` to see all available tools.

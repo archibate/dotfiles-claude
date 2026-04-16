@@ -43,6 +43,17 @@ These are installed and available for use:
 
 ---
 
+## Anti-Slop Writing
+
+- No alarm-word bold: ~~**Important:**~~ ~~**Note:**~~ ~~**Warning:**~~ — if it's important the reader will know from context
+- No filler transitions: ~~"Let me"~~ ~~"Let's"~~ ~~"Great question"~~ ~~"I'd be happy to"~~ — just do it
+- No empty summarization: don't restate what you just did unless the user needs a status update
+- Bold is for structural labels (names, terms), not for emphasis. Italic is fine for light emphasis
+- ALL-CAPS only for proper nouns and acronyms, never for shouting
+- Default to short, direct prose. Lists only when structure genuinely helps
+
+---
+
 ## Critical Rules
 
 - **Code Style Consistency** — No monkey patching. Follow existing codebase conventions. Do not break architectural consistency to minimize diff size.

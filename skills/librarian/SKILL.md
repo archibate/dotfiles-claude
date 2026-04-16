@@ -2,8 +2,8 @@
 name: librarian
 description: >
   Clone or reuse a cached local checkout of a remote git repository. This skill should be
-  used before reading, searching, or referencing source code from a remote repository —
-  including when the user provides a GitHub/GitLab/Bitbucket URL or mentions "owner/repo".
+  used when you need to list or read source files from GitHub. Provide a GitHub/GitLab/Bitbucket
+  URL in "owner/repo" for reading, searching, or referencing source code from a remote repository.
   Manages cached clones under ~/.cache/checkouts/ with automatic fetch and fast-forward.
 ---
 

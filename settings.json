@@ -133,16 +133,6 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "The Edit tool just succeeded. Check: did the edit break indentation, alignment, or surrounding syntax in the file? If the edit removed or replaced multiple lines, is the result still well-formed (no orphaned braces, missing commas in JSON, broken nesting)? If there is a problem, re-read the file and fix it immediately. If everything looks clean, do nothing.",
-            "timeout": 30
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -197,17 +187,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/reread-after-doc-edit.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/doc-slop-check.sh",
+            "command": "bash ~/.claude/hooks/reread-after-edit.sh",
             "timeout": 5
           }
         ]
@@ -230,7 +210,7 @@
   },
   "enabledPlugins": {
     "pyright-lsp@claude-plugins-official": true,
-    "context7@claude-plugins-official": true,
+    "context7@claude-plugins-official": false,
     "clangd-lsp@claude-plugins-official": true,
     "claude-hud@claude-hud": true,
     "code-simplifier@claude-plugins-official": true,

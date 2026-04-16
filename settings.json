@@ -2,9 +2,9 @@
   "env": {
     "IS_DEMO": "1",
     "CLAUDE_CODE_NO_FLICKER": "1",
-    "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
-    "CLAUDE_CODE_EFFORT_LEVEL": "max",
-    "MAX_THINING_TOKENS": "16000",
+    "_CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
+    "_CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "_MAX_THINING_TOKENS": "16000",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "BASH_MAX_TIMEOUT_MS": "240000",
     "CLAUDE_AUTO_BACKGROUND_TASKS": "1"
@@ -243,14 +243,15 @@
       }
     }
   },
-  "effortLevel": "high",
   "voiceEnabled": true,
   "voice": {
     "enabled": true,
     "mode": "hold"
   },
+  "effortLevel": "xhigh",
   "autoMemoryEnabled": false,
   "autoDreamEnabled": false,
   "voiceEnabled": true,
+  "autoScrollEnabled": false,
   "teammateMode": "auto"
 }

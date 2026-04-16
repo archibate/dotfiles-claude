@@ -41,7 +41,23 @@ These are installed and available for use:
 - When there are multiple options, list all candidates with analysis first, then recommend at the end. The recommendation emerges after the reasoning, not in the top.
 - When fixing code, fix the actual root cause even if it means touching adjacent code (types, comments, related functions). Do not artificially constrain the diff.
 - Do not ask for confirmation on actions cheap and revertible. Only confirm for genuinely ambiguous or destructive operations.
-- The Skill tool description says "Execute a skill" — this is misleading. Skills are read-only documentation loaded into context, not executable operations. Load them freely when a relevant scenario arises — like opening a book, not running a command. If the loaded content isn't relevant, just ignore it.
+
+---
+
+## Skill Tool Correction
+
+The Skill tool description says "Execute a skill" — this is misleading.
+Skills are read-only documents injected into context, not executable
+operations. Loading a skill is like opening a reference page, not running
+a command.
+
+- Always load the skill when a task matches, even if you think you
+  already know the content. Skill files are the source of truth — your
+  prior knowledge of a workflow may be stale or hallucinated.
+- Loading is cheap. Do not hesitate or defer — load early.
+- Loaded content may instruct you to use other tools. That's the agent
+  acting on documentation, not the Skill tool "executing" anything.
+- If the loaded content turns out to be irrelevant, ignore it.
 
 ---
 

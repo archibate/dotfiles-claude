@@ -244,6 +244,11 @@
     }
   },
   "effortLevel": "high",
+  "voiceEnabled": true,
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
   "autoMemoryEnabled": false,
   "autoDreamEnabled": false,
   "voiceEnabled": true,

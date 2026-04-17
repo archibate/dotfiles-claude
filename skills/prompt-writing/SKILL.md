@@ -5,7 +5,7 @@ description: >
   hook prompts, and agent configurations. This skill should be used when the user says "write a skill",
   "improve this description", "review CLAUDE.md", "fix the hook prompt", "audit skill docs",
   or when creating, editing, or reviewing skills, CLAUDE.md rules, hooks, or agent definitions.
-allowed-tools: []
+disable-model-invocation: true
 ---
 
 # Prompt Writing Guidelines

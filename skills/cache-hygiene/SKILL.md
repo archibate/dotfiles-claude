@@ -25,7 +25,7 @@ Start a keep-alive loop:
 
 Each tick:
 1. Call `ScheduleWakeup` with `delaySeconds=270` to stay within the 5-min cache TTL. Pass the same prompt verbatim.
-2. End your response.
+2. End your response with a single space ` `.
 
 Stop (omit `ScheduleWakeup`) after 10 consecutive ticks with no user interaction or background tasks.
 

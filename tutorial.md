@@ -1,8 +1,39 @@
-# C-g: edit prompt in nvim
-
 # C-s: stash prompt
 
 # !: inplace bash command
+
+# C-g: edit prompt in nvim
+
+# /vim mode? I don't use that
+
+# C-r to search history prompt
+
+# full screen mode
+
+`/tui fullscreen` or `CLAUDE_CODE_NO_FLICKER=1`
+
+`PageUp`, `PageDown` or mouse wheel to virtual scroll, superior than terminal built-in.
+
+mouse drag to copy text selection, OSC 52 clipboard protocol (Kitty).
+
+`/` to search, `n` and `N` to navigate.
+
+plus `"autoScrollEnabled": false` in settings.
+
+`/focus` mode, reduce cogonition overhead.
+
+# C-o: view detailed transcript
+
+in this mode:
+- `v` to edit detail transcript in Nvim.
+- `[` to flush transcript to terminal.
+
+# /copy or /copy 1 to copy response
+
+# /btw [question]
+
+/btw for quick side question without adding to main context
+can fork by `f` when interested to continue
 
 # /clear for new tasks, context tokens are not just money, but also attention
 
@@ -20,7 +51,7 @@ if you worry lost permanant, /compact. this makes mind clean with prior knowledg
 
 will rewind code changes, saves context (for both token cost and cogonition overhead)
 
-# `/context` to visualize
+# /context to visualize
 
 # /rename and /color to identify
 
@@ -47,31 +78,6 @@ set up clipboard and passthrough in tmux. if you don't know, you can copy my con
 or ask agent to switch in worktrees before implement.
 
 ask "merge to main worktree" after implementation complete.
-
-# full screen mode
-
-`/tui fullscreen` or `CLAUDE_CODE_NO_FLICKER=1`
-
-`PageUp`, `PageDown` or mouse wheel to virtual scroll, superior than terminal built-in.
-
-mouse drag to copy text selection, OSC 52 clipboard protocol (Kitty).
-
-`/` to search, `n` and `N` to navigate.
-
-plus `"autoScrollEnabled": false` in settings.
-
-`/focus` mode, reduce cogonition overhead.
-
-# C-o: view detailed transcript
-
-in this mode:
-- `v` to edit detail transcript in Nvim.
-- `[` to flush transcript to terminal.
-
-# /btw [question]
-
-/btw for quick side question without adding to main context
-can fork by `f` when interested to continue
 
 # prefer --bypass-permissions
 
@@ -170,3 +176,5 @@ no better than not having one and let claude `Explore` to discover itself on eac
 # `/review` skill and its subagents: bugs and slops
 
 # `/voice` for subscribers, but seems only English
+
+# /config /status /stats /usage

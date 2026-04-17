@@ -27,8 +27,10 @@ Each tick:
 1. Call `ScheduleWakeup` with `delaySeconds=270` to stay within the 5-min cache TTL. Pass the same prompt verbatim.
 2. End your response.
 
-Stop (omit `ScheduleWakeup`) when the idle period ends — agent completes, user responds, or the wait condition resolves. Also stop after 10 consecutive ticks with no user interaction and no background tasks — beyond that, cumulative keep-alive cost (10 × 0.1P) exceeds the one-time cache miss penalty (1.15P).
+Stop (omit `ScheduleWakeup`) after 10 consecutive ticks with no user interaction or background tasks.
+
+> Beyond 10 ticks (45 minutes), cumulative keep-alive cost (10 × 0.1P) exceeds the one-time cache miss penalty (1.15P).
 
 ## Blocking Call Cap
 
-Never block a single tool call for >4 minutes (Bash `timeout`, `TaskOutput`). The cache TTL ticks during blocking calls — a 4-minute block plus response overhead can bust the 5-minute window. The keep-alive protocol prevents misses *between* turns; this cap prevents misses *within* turns.
+Never block a single tool call for >4 minutes (`timeout` argument in `Bash`, `TaskOutput`, `Monitor`). The cache TTL ticks during blocking calls — a 4-minute block plus response overhead can bust the 5-minute window. The keep-alive protocol prevents misses *between* turns; this cap prevents misses *within* turns.

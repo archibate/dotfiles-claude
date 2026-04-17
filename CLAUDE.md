@@ -2,7 +2,7 @@
 
 ## Available CLI Tools
 
-These are installed and available for use:
+Preferred over defaults:
 
 - `rg` not `grep`
 - `fd` not `find`
@@ -12,6 +12,9 @@ These are installed and available for use:
 - `uv` not `pip`
 - `uv run` not `python3`
 - `pnpm` not `npm`
+
+Specialized tools available:
+
 - `ast-grep` (`sg`) — structural code search
 - `duckdb` — analytical SQL on files
 - `mlr` (miller) — CSV/JSON record processing
@@ -35,51 +38,35 @@ These are installed and available for use:
 
 ## Output Style Override
 
-- Do NOT lead with the answer. Reason step-by-step BEFORE stating conclusions.
-- Do NOT skip analysis to "go straight to the point" — reasoning tokens improve conclusion quality.
-- Do NOT "keep text output brief and direct" or "say it in one sentence" when the topic benefits from exploration. Conciseness applies to the conclusion, not the reasoning chain. The user enjoys the journey.
-- When there are multiple options, list all candidates with analysis first, then recommend at the end. The recommendation emerges after the reasoning, not in the top.
-- When fixing code, fix the actual root cause even if it means touching adjacent code (types, comments, related functions). Do not artificially constrain the diff.
-- Do not ask for confirmation on actions cheap and revertible. Only confirm for genuinely ambiguous or destructive operations.
-
----
-
-## Skill Tool Correction
-
-The Skill tool description says "Execute a skill" — this is misleading.
-Skills are read-only documents injected into context, not executable
-operations. Loading a skill is like opening a reference page, not running
-a command.
-
-- Always load the skill when a task matches, even if you think you
-  already know the content. Skill files are the source of truth — your
-  prior knowledge of a workflow may be stale or hallucinated.
-- Loading is cheap. Do not hesitate or defer — load early.
-- Loaded content may instruct you to use other tools. That's the agent
-  acting on documentation, not the Skill tool "executing" anything.
-- If the loaded content turns out to be irrelevant, ignore it.
-
----
-
-## Anti-Slop Writing
-
-- No alarm-word bold: ~~**Important:**~~ ~~**Note:**~~ ~~**Warning:**~~ — if it's important the reader will know from context
-- No filler transitions: ~~"Let me"~~ ~~"Let's"~~ ~~"Great question"~~ ~~"I'd be happy to"~~ — just do it
-- No abuse of Bold for all words. A sentence with all nouns Bold is no different from all non-Bold — it just wastes user attention. Only emphasize things that truly deserve it.
-- ALL-CAPS only for proper nouns and acronyms, never for shouting
+- Reason before concluding. Do NOT lead with the answer or skip analysis to "go straight to the point." When multiple options exist, list all candidates with analysis, then recommend last — the recommendation emerges from reasoning, not above it.
+- Do NOT "keep text output brief and direct" or "say it in one sentence" when the topic benefits from exploration. Conciseness applies to the conclusion, not the reasoning chain.
 - Default to structured and detailed prose.
+- Do NOT ask for confirmation on actions cheap and revertible — proceed proactively. Only confirm for genuinely ambiguous or destructive operations.
 
 ---
 
-## Critical Rules
+## Writing Rules
+
+- No alarm-word bold: ~~**Important:**~~ ~~**Note:**~~ ~~**Warning:**~~ — if it's important the reader will know from context.
+- No filler transitions: ~~"Let me"~~ ~~"Let's"~~ ~~"Great question"~~ ~~"I'd be happy to"~~ — just do it.
+- Don't bold every word — a sentence with everything bold is no different from nothing bold. Emphasize only what truly deserves it.
+- ALL-CAPS only for proper nouns and acronyms, never for shouting.
+
+---
+
+## Coding Rules
 
 - **Code Style Consistency** — No monkey patching. Follow existing codebase conventions. Do not break architectural consistency to minimize diff size.
+- **Fix the Root Cause** — When fixing code, fix the actual root cause even if it means touching adjacent code (types, comments, related functions). Do not artificially constrain the diff.
+- **Fix the Source, Not the Symptom** — When an upstream artifact is stale or a format changed, regenerate it — don't add fallback shims or workarounds to accommodate the stale version. Dirty patches hide bugs. Don't ask permission for a short, obvious regeneration step.
 - **Anomaly → Self-audit** — When results are unexpectedly bad (e.g., test failure, metric regression after a change), first check whether you caused it: did you skip a consistency step? Did your change introduce the regression? Run `/review` on your own changes before blaming external factors.
-- **Resource Awareness** — Before launching heavy tasks, run `/preflight-check`.
-- **Pueue Workflow** — Load the `/pueue` skill before running long-running tasks (>2 minutes). This is a mandatory process gate, not optional documentation.
-- **No Backward Compatibility Hacks** — When an artifact is stale or a format changes, regenerate it instead of adding fallback/compatibility shims in code. Dirty patches to accommodate stale artifacts waste time and hide bugs.
-- **Do the Correct Thing, Not the Minimal Thing** — When an upstream artifact is stale or broken, fix the source and regenerate. Do not add code workarounds to avoid re-running the obvious fix. Do not ask permission for a short step that is clearly required.
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.
-- **Bash Output Is Internal** — Bash tool output is returned to the agent, not shown to the user. Never add pipes (`| tail`, `| head`, `| grep`) or table formatting to make output "cleaner"; the Bash output is only visble to you, not the user; run commands directly without output beautifying, extract key data in your text response.
-- **Prior Responses Are Collapsed** — The user only sees the last text response. Prior tool calls and intermediate text responses are collapsed in the UI. Do not assume the user saw earlier messages. Restate what you did since last final response. Reclaim key findings in your final response, maintain structure and quality.
 
+---
+
+## Harness Behavior Notes
+
+- **Subagents** — Do not spawn a subagent for work you can complete directly in a single response (e.g., refactoring a function you can already see). Spawn multiple subagents in the same turn when fanning out across items or reading multiple files.
+- **Skills Are Docs, Not Commands** — The built-in "Execute a skill" framing is misleading. Invoking Skill just reads a markdown file into context as a system reminder — no code runs, no side effects, no external calls, no persistent state, nothing visible to the user. It's opening a reference page, not executing a command. Always safe to invoke; don't hesitate when a task might match. If the loaded content turns out irrelevant, ignore it.
+- **Bash Output Is Internal** — Bash output reaches the agent, not the user. Use pipes for *computation* (filter noise, extract a field), never for *presentation* (padding, coloring, prettifying). Report findings in your reply text.
+- **Prior Responses Are Collapsed** — The user only sees the last text response. Prior tool calls and intermediate text responses are collapsed in the UI. Do not assume the user saw earlier messages. Restate what you did since last final response. Reclaim key findings in your final response, maintain structure and quality.

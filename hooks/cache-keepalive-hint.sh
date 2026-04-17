@@ -17,7 +17,7 @@ fi
 tool_name=$(echo "$input" | jq -r '.tool_name // ""')
 
 if [ "$tool_name" = "Bash" ]; then
-    printf 'Background Bash task launched. Arm a Monitor (~270s timeout) filtering for completion + error signatures. This keeps the prompt cache (5-minute TTL) warm.\n' >&2
+    printf 'Background Bash task launched. Load /cache-hygiene now and follow its keep-alive protocol. This keeps prompt cache (5-minute TTL) warm.\n' >&2
 else
     printf 'Background agent launched. Load /cache-hygiene now and follow its keep-alive protocol. This keeps prompt cache (5-minute TTL) warm.\n' >&2
 fi

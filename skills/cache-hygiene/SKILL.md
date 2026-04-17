@@ -2,10 +2,8 @@
 name: cache-hygiene
 description: >
   Prompt cache cost optimization. Generates periodic conversation turns to keep the
-  5-minute prompt cache warm during idle gaps. Auto-triggered after launching background
-  agents; also invocable manually (`/cache-hygiene`) when the user will be away. Not
-  needed for Bash background tasks (use Monitor for those — its events keep the cache
-  warm naturally).
+  5-minute prompt cache warm during idle gaps. This skill should be used after
+  launching background tasks (Bash or Agent).
 ---
 
 # Cache Hygiene
@@ -14,10 +12,8 @@ Prompt cache cost optimization protocol. The prompt cache has a 5-minute TTL. A 
 
 ## When to Use
 
-- **Auto-triggered** (via hook): after launching a background agent (no stdout stream to monitor).
+- **Auto-triggered** (via hook): after launching a background task (Bash or Agent).
 - **Manual** (user types `/cache-hygiene`): user signals they will be away. Start the keep-alive loop after ending the current response.
-
-Not needed for Bash background tasks — use Monitor with ~270s timeout instead, its events keep the cache warm naturally.
 
 ## Keep-Alive Protocol
 

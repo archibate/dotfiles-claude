@@ -26,6 +26,10 @@ will rewind code changes, saves context (for both token cost and cogonition over
 
 useful when you have a lot parallel sessions.
 
+# /resume to get back previous conversation
+
+or `claude -r`, and `claude -c`.
+
 # /recap if you forget
 
 # prefer modern Kitty/Ghostty terminal
@@ -35,6 +39,14 @@ with clipboard support, notification support.
 # tmux for multiplexing + persistency
 
 set up clipboard and passthrough in tmux. if you don't know, you can copy my config.
+
+# worktrees
+
+`claude -w name`
+
+or ask agent to switch in worktrees before implement.
+
+ask "merge to main worktree" after implementation complete.
 
 # full screen mode
 

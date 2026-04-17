@@ -129,6 +129,19 @@ Pueue parses the command as a list of tokens. `bash -c 'VAR=1 cmd'` silently fai
 pueue add -- 'VAR=1 cmd'
 ```
 
+### `pueue status` panics on EPIPE (4.0.4)
+
+pueue 4.0.4 does not handle broken-pipe gracefully. Piping its output into an
+early-closing consumer (`head`, `grep -m N`, `sed -n 1,Np`) prints a Rust panic
+traceback to stderr, polluting the agent context. Read-to-EOF consumers
+(`grep`, `cut`, `tail`, `sort`, `wc`) are safe.
+
+### Displayed status ≠ filterable status
+
+`pueue status --help` lists filterable values as `queued|stashed|paused|running|success|failed`,
+but the status column can also render `Killed` (after `pueue kill`). When
+writing status matchers, treat terminal states as `Success|Failed|Killed`.
+
 ### `pueue clean` removes finished task logs
 
 `pueue clean` (or automatic cleanup) permanently removes logs of completed tasks. If you need to verify results later, check output files or save logs before cleaning.

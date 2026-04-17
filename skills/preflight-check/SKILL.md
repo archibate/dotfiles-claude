@@ -3,8 +3,8 @@ name: preflight-check
 description: >
   Resource-aware pre-launch checklist for long-running or heavy tasks — prevents OOM,
   wasted compute, and daytime disruption. This skill should be used before launching any
-  long-running task via pueue, background workers, parallel jobs, or any computation
-  estimated >10 minutes.
+  long-running task, computation-intensive jobs, background workers, parallel jobs,
+  or any task estimated >10 minutes.
 allowed-tools:
   - Bash(free:*)
   - Bash(df:*)

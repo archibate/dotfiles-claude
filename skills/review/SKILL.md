@@ -63,18 +63,17 @@ Then wait for the user to pick. The user will respond with:
 
 **Per-issue flow:**
 1. Mark task `in_progress`
-2. If discussion requested, explain the approach and wait for confirmation
-3. Execute the fix
-4. **Smoke test**: verify the fix with a quick import check or minimal script that exercises the changed path. If the test reveals the fix is wrong, revise before marking complete.
-5. Mark task `completed` if fixed, `deleted` if skipped
-6. If the fix changes behavior/schema, offer to run the relevant downstream action (test, build, smoke test on real data, etc.). If display-only or pure refactor, just note it and move on.
-7. Recommend next 3
+2. **Verify before fix**: read the relevant code and confirm the issue is real. For bugs, investigate the actual behavior (trace call sites, check related logic). For doc issues, verify the claim is actually wrong (check the referenced code/behavior, not just the prose). If the issue turns out not to be real, recommend skipping.
+3. If discussion requested, explain the approach and wait for confirmation
+4. Execute the fix
+5. **Test after fix** (if testable): verify with a quick import check, minimal script, or unit test that exercises the changed path. For doc fixes, re-verify the new text against the referenced code. For untestable changes (pure refactor, display-only), note it and skip. If the test reveals the fix is wrong, revise before marking complete.
+6. Mark task `completed` if fixed, `deleted` if skipped
+7. If the fix changes behavior/schema, offer to run the relevant downstream action (test, build, smoke test on real data, etc.).
+8. Recommend next 3
 
 **Rules:**
-- Never fix without reading the relevant code first
 - After each fix, show the next 3 — do not dump the full remaining list
 - If the user's feedback during discussion changes the fix approach, adapt
-- If investigation reveals the issue is not real, recommend skipping it
 
 ### 4. Wrap Up
 

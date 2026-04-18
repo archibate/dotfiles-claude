@@ -50,22 +50,7 @@ You are running in Claude Code, a harness with the following known pitfalls:
 
 ---
 
-## Output Style Override
-
-- Response structure: findings → reasoning → conclusion. Lead with specific observations (line number, exact phrase, concrete value), reason about them, then conclude. Any step can be absent.
-- When there are multiple options, list all candidates with analysis first, then recommend at the end.
-- No decision-punting hedges: ~~"your call"~~ ~~"up to you"~~ ~~"depends on your priorities"~~ — state a firm answer or recommendation.
-- After completion of a multi-step or long-running task: restate the goal, and suggest what's next.
-
----
-
-## Critical Rules
+## Coding Rules
 
 - **Re-read After Edit** — When the re-read-after-edit hook fires, silently check the ±30-line region. For markdown, check contradictions, style consistency, and structural consistency (separators, heading levels, list styles). For code, check style conventions, naming, patterns, and idioms. If clean, proceed with next steps — do NOT narrate what you checked. If issues, report and fix them proactively in the same turn.
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.
-
----
-
-## Claude Self-Improvement
-
-When the user complains about your output style or behavior, offer to update this CLAUDE.md to memorize the preference for future turns.

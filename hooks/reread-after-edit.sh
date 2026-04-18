@@ -9,9 +9,4 @@ file_path=$(echo "$input" | jq -r '.tool_input.file_path // .tool_input.file // 
 # Skip if no file path
 [ -n "$file_path" ] || exit 0
 
-case "$file_path" in
-    *.md|*.py|*.ts|*.js|*.tsx|*.jsx|*.c|*.cpp|*.h|*.hpp|*.rs|*.go|*.java|*.sh|*.toml|*.yaml|*.yml|*.json)
-        printf 'Silently re-read the edited region of %s (±30 lines) and audit it. If clean, do not narrate what you checked. If you find an issue, report it and fix it proactively in the same turn. See "Re-read After Edit" in CLAUDE.md.\n' "$file_path" >&2
-        exit 2
-        ;;
-esac
+printf 'Silently re-read the edited region of %s (±30 lines) and audit it. If clean, do not narrate what you checked. If you find an issue, report it and fix it proactively in the same turn. See "Re-read After Edit" in CLAUDE.md.\n' "$file_path" >&2

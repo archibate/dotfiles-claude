@@ -29,15 +29,15 @@ Example:
 ## Command
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh <repo> --path-only
+scripts/checkout.sh <repo> --path-only
 ```
 
 Examples:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh mitsuhiko/minijinja --path-only
-${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh github.com/mitsuhiko/minijinja --path-only
-${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh https://github.com/mitsuhiko/minijinja --path-only
+scripts/checkout.sh mitsuhiko/minijinja --path-only
+scripts/checkout.sh github.com/mitsuhiko/minijinja --path-only
+scripts/checkout.sh https://github.com/mitsuhiko/minijinja --path-only
 ```
 
 The script will:
@@ -53,7 +53,7 @@ The script will:
 - Force immediate refresh with:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/checkout.sh <repo> --force-update --path-only
+scripts/checkout.sh <repo> --force-update --path-only
 ```
 
 ## Recommended workflow

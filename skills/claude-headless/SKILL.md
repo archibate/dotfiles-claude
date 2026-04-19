@@ -43,7 +43,7 @@ claude -p "continue the review" --resume <session-id> --output-format json
 | `--max-budget-usd N` | Cost cap |
 | `--json-schema '{...}'` | Structured output extraction |
 
-For complete flag reference, read `${CLAUDE_PLUGIN_ROOT}/references/cli-flags.md`.
+For complete flag reference, read `references/cli-flags.md`.
 
 ## Deep References
 

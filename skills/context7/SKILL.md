@@ -23,7 +23,7 @@ Resolve a package/product name to a Context7 library ID. Call this before `query
 - `query` (required): What the user needs help with — used to rank results by relevance
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py resolve-library-id libraryName:"Next.js" query:"app router setup"
+scripts/mcpcall.py resolve-library-id libraryName:"Next.js" query:"app router setup"
 ```
 
 ## query-docs
@@ -34,5 +34,5 @@ Retrieve documentation and code examples for a resolved library.
 - `query` (required): Specific question — be detailed for better results
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py query-docs libraryId:"/vercel/next.js" query:"how to set up authentication with JWT"
+scripts/mcpcall.py query-docs libraryId:"/vercel/next.js" query:"how to set up authentication with JWT"
 ```

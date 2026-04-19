@@ -27,7 +27,7 @@ fi
 if ! echo "$command" | grep -qF 'BYPASS_FORCE_PUSH_CHECK'; then
     if echo "$command" | grep -qP 'git\s+push\b[^|;&]*(\s--force(-with-lease|-if-includes)?\b|\s-[a-zA-Z]*f\b)'; then
         printf 'Do not use git push --force (or -f). Force-push rewrites remote history and can destroy others'\'' work.\n' >&2
-        printf 'If the user explicitly requested this, add comment `BYPASS_FORCE_PUSH_CHECK` to the first line of command.\n' >&2
+        printf 'If you believe this is a false positive, add comment `BYPASS_FORCE_PUSH_CHECK` to the first line of command.\n' >&2
         exit 2
     fi
 fi

@@ -20,8 +20,8 @@ Get a list of documentation topics for a repository. Use this first to discover 
 - `repoName` (required): GitHub repo in `owner/repo` format
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py read_wiki_structure repoName:"facebook/react"
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py read_wiki_structure repoName:"anthropics/claude-code"
+scripts/mcpcall.py read_wiki_structure repoName:"facebook/react"
+scripts/mcpcall.py read_wiki_structure repoName:"anthropics/claude-code"
 ```
 
 ## read_wiki_contents
@@ -31,8 +31,8 @@ View full documentation about a repository.
 - `repoName` (required): GitHub repo in `owner/repo` format
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py read_wiki_contents repoName:"facebook/react"
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py read_wiki_contents repoName:"pallets/flask"
+scripts/mcpcall.py read_wiki_contents repoName:"facebook/react"
+scripts/mcpcall.py read_wiki_contents repoName:"pallets/flask"
 ```
 
 ## ask_question
@@ -45,14 +45,14 @@ Ask any question about a repository and get an AI-powered, context-grounded resp
 ### Single repo
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py ask_question repoName:"facebook/react" question:"How does the reconciliation algorithm work?"
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py ask_question repoName:"pallets/flask" question:"How are blueprints registered?"
+scripts/mcpcall.py ask_question repoName:"facebook/react" question:"How does the reconciliation algorithm work?"
+scripts/mcpcall.py ask_question repoName:"pallets/flask" question:"How are blueprints registered?"
 ```
 
 ### Cross-repo comparison (up to 10 repos)
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py ask_question --args '{"repoName": ["pallets/flask", "django/django"], "question": "How do these frameworks handle middleware?"}'
+scripts/mcpcall.py ask_question --args '{"repoName": ["pallets/flask", "django/django"], "question": "How do these frameworks handle middleware?"}'
 ```
 
 ## Tool Selection Guide

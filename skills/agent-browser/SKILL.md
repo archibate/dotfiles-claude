@@ -650,7 +650,7 @@ Lightpanda does not support `--extension`, `--profile`, `--state`, or `--allow-f
 | [templates/capture-workflow.sh](templates/capture-workflow.sh)           | Content extraction with screenshots |
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/templates/form-automation.sh https://example.com/form
-${CLAUDE_PLUGIN_ROOT}/templates/authenticated-session.sh https://app.example.com/login
-${CLAUDE_PLUGIN_ROOT}/templates/capture-workflow.sh https://example.com ./output
+templates/form-automation.sh https://example.com/form
+templates/authenticated-session.sh https://app.example.com/login
+templates/capture-workflow.sh https://example.com ./output
 ```

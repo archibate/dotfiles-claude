@@ -20,6 +20,7 @@ word_count=$(echo "$last_text" | wc -w)
 
 jq -n '{
   decision: "block",
+  continue: true,
   reason: "Audit your last text response. See \"Self-Review On Stop\" in ~/.claude/CLAUDE.md.",
   suppressOutput: true
 }'

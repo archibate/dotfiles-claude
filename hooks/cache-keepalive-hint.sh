@@ -17,8 +17,10 @@ fi
 tool_name=$(echo "$input" | jq -r '.tool_name // ""')
 
 if [ "$tool_name" = "Bash" ]; then
-    printf 'Background Bash task launched. Load /cache-hygiene now and follow its keep-alive protocol. This keeps prompt cache (5-minute TTL) warm.\n' >&2
+    msg='Background Bash task launched. Load /cache-hygiene now and follow its keep-alive protocol. This keeps prompt cache (5-minute TTL) warm.'
 else
-    printf 'Background agent launched. Load /cache-hygiene now and follow its keep-alive protocol. This keeps prompt cache (5-minute TTL) warm.\n' >&2
+    msg='Background agent launched. Load /cache-hygiene now and follow its keep-alive protocol. This keeps prompt cache (5-minute TTL) warm.'
 fi
-exit 2
+
+source "$(dirname "$0")/lib/emit.sh"
+emit_post_tool_context "$msg"

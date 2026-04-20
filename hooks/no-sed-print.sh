@@ -44,14 +44,16 @@ if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p[
         fi
     fi
 
-    printf 'Use Read tool with offset and limit instead of sed -n for reading specific lines.\n' >&2
     if [ -n "$file" ] && [ -n "$offset" ] && [ -n "$limit" ]; then
-        printf '  Read(file_path="%s", offset=%d, limit=%d)\n' "$file" "$offset" "$limit" >&2
+        example=$(printf '  Read(file_path="%s", offset=%d, limit=%d)' "$file" "$offset" "$limit")
     else
-        printf '  Read(file_path="<path>", offset=<start_line-1>, limit=<num_lines>)\n' >&2
+        example='  Read(file_path="<path>", offset=<start_line-1>, limit=<num_lines>)'
     fi
-    printf 'If you must use sed -n for line printing, add comment `BYPASS_SED_PRINT_CHECK` to the first line of command.\n' >&2
-    exit 2
+
+    source "$(dirname "$0")/lib/emit.sh"
+    emit_pre_tool_deny "Use Read tool with offset and limit instead of sed -n for reading specific lines.
+${example}
+If you must use sed -n for line printing, add comment \`BYPASS_SED_PRINT_CHECK\` to the first line of command."
 fi
 
 exit 0

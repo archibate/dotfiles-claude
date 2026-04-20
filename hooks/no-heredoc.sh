@@ -125,7 +125,8 @@ case "$interpreter" in
         ;;
 esac
 
-printf '%s >%s lines detected for %s. Use Write tool + temp file instead:\n  %s\nIf you must use inline script, add comment `BYPASS_INLINE_SCRIPT_RESTRICTION` to the first line of command.\n' \
-    "$detection_type" "$max_lines" "$interpreter" "$example" >&2
+printf -v reason '%s >%s lines detected for %s. Use Write tool + temp file instead:\n  %s\nIf you must use inline script, add comment `BYPASS_INLINE_SCRIPT_RESTRICTION` to the first line of command.' \
+    "$detection_type" "$max_lines" "$interpreter" "$example"
 
-exit 2
+source "$(dirname "$0")/lib/emit.sh"
+emit_pre_tool_deny "$reason"

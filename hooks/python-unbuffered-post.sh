@@ -21,8 +21,8 @@ cwd=$(echo "$input" | jq -r '.cwd // "."')
 
 source "$(dirname "$0")/lib/check-python-unbuffered.sh"
 if check_python_unbuffered "$command" "$cwd"; then
-    printf 'If this is a Python task, stdout is connected to a pipe, so Python buffers output instead of flushing in real time — making it look stuck or empty. Re-run with unbuffered output for easier real-time monitoring: PYTHONUNBUFFERED=1 uv run python script.py\n' >&2
-    exit 2
+    source "$(dirname "$0")/lib/emit.sh"
+    emit_post_tool_context 'If this is a Python task, stdout is connected to a pipe, so Python buffers output instead of flushing in real time — making it look stuck or empty. Re-run with unbuffered output for easier real-time monitoring: PYTHONUNBUFFERED=1 uv run python script.py'
 fi
 
 exit 0

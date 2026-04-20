@@ -1,0 +1,107 @@
+#!/usr/bin/bash
+# Test harness for migrated hooks. Deliberately contains trigger patterns;
+# hooks see only the outer `bash /tmp/hook-test.sh` invocation.
+
+fail=0
+
+assert_deny() {
+  local name="$1" input="$2" pattern="$3"
+  local out
+  out=$(printf '%s' "$input" | bash ~/.claude/hooks/$name.sh 2>&1)
+  if ! echo "$out" | jq -e ".hookSpecificOutput.permissionDecision == \"deny\" and (.hookSpecificOutput.permissionDecisionReason | contains(\"$pattern\"))" > "$test_out"; then
+    echo "FAIL: $name should deny with pattern '$pattern'"
+    echo "  got: $out"
+    fail=1
+  else
+    echo "OK:   $name deny ($pattern)"
+  fi
+}
+
+assert_silent() {
+  local name="$1" input="$2"
+  local out
+  out=$(printf '%s' "$input" | bash ~/.claude/hooks/$name.sh 2>&1)
+  if [ -n "$out" ]; then
+    echo "FAIL: $name should be silent"
+    echo "  got: $out"
+    fail=1
+  else
+    echo "OK:   $name silent"
+  fi
+}
+
+test_out=$(mktemp)
+
+echo "=== PreToolUse no-* hooks ==="
+
+# Concatenate the forbidden strings at runtime so this test file doesn't itself trigger outer hooks
+AMP='&'
+REDIR='>'
+DEV="/dev/null"
+
+assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "${DEV}"
+assert_silent no-devnull-redirect '{"tool_input":{"command":"ls"}}'
+
+assert_deny no-background-ampersand "$(jq -n --arg c "sleep 10 ${AMP}" '{tool_input:{command:$c}}')" "background execution"
+assert_silent no-background-ampersand '{"tool_input":{"command":"ls && echo ok"}}'
+
+assert_deny no-git-amend "$(jq -n --arg c "git commit --amend" '{tool_input:{command:$c}}')" "git commit --amend"
+assert_deny no-git-amend "$(jq -n --arg c "git push --force" '{tool_input:{command:$c}}')" "push --force"
+assert_silent no-git-amend '{"tool_input":{"command":"git status"}}'
+
+assert_deny no-pip-npm "$(jq -n --arg c "pip install foo" '{tool_input:{command:$c}}')" "Use uv instead"
+assert_deny no-pip-npm "$(jq -n --arg c "npm install" '{tool_input:{command:$c}}')" "Use pnpm"
+assert_silent no-pip-npm '{"tool_input":{"command":"uv add foo"}}'
+
+assert_deny no-worktree-team '{"tool_input":{"isolation":"worktree","team_name":"foo"}}' "worktree silently fails"
+assert_silent no-worktree-team '{"tool_input":{"isolation":"worktree"}}'
+
+assert_deny no-cat-write "$(jq -n --arg c "cat << EOF ${REDIR} /tmp/x
+hi
+EOF" '{tool_input:{command:$c}}')" "Write tool"
+assert_silent no-cat-write '{"tool_input":{"command":"cat /tmp/x"}}'
+
+assert_deny no-sed-print "$(jq -n --arg c "sed -n '12,13p' /tmp/x" '{tool_input:{command:$c}}')" "sed -n"
+assert_silent no-sed-print '{"tool_input":{"command":"sed s/a/b/g /tmp/x"}}'
+
+assert_deny python-unbuffered '{"tool_input":{"command":"python3 script.py","run_in_background":true},"cwd":"/tmp"}' "unbuffered output"
+assert_silent python-unbuffered '{"tool_input":{"command":"python3 script.py"}}'
+
+assert_deny no-head-read '{"tool_input":{"command":"head -n 80 /tmp/x"}}' "Read tool"
+assert_silent no-head-read '{"tool_input":{"command":"head -c 100 /tmp/x"}}'
+
+# Build a long heredoc payload (>80 lines) — encode via jq to keep JSON valid
+long_payload=$(for i in $(seq 1 90); do echo "line $i"; done)
+heredoc_cmd="python3 <<EOF
+${long_payload}
+EOF"
+assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "lines detected"
+assert_silent no-heredoc '{"tool_input":{"command":"echo hi"}}'
+
+echo ""
+echo "=== PostToolUse regression ==="
+
+out=$(printf '%s' '{"tool_response":{"results":[{"url":"https://x","title":"X"}]}}' | bash ~/.claude/hooks/websearch-followup-hint.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("WebFetch")' > "$test_out" && echo "OK:   websearch (with results) fires" || { echo "FAIL: websearch with results"; fail=1; }
+
+out=$(printf '%s' '{"tool_response":{"results":[]}}' | bash ~/.claude/hooks/websearch-followup-hint.sh)
+[ -z "$out" ] && echo "OK:   websearch (0 results) silent" || { echo "FAIL: websearch 0 results: $out"; fail=1; }
+
+printf '%s' '{"tool_input":{"file_path":"/tmp/x"}}' | bash ~/.claude/hooks/reread-after-edit.sh \
+  | jq -e '.hookSpecificOutput.additionalContext | contains("/tmp/x")' > "$test_out" && echo "OK:   reread-after-edit" || { echo "FAIL: reread"; fail=1; }
+
+printf '%s' '{"tool_input":{"subagent_type":"Explore"}}' | bash ~/.claude/hooks/verify-explore-results.sh \
+  | jq -e '.hookSpecificOutput.additionalContext | contains("Verify Explore")' > "$test_out" && echo "OK:   verify-explore-results" || { echo "FAIL: verify-explore"; fail=1; }
+
+printf '%s' '{"stop_hook_active":false,"last_assistant_message":"hello this is long enough for the ten word threshold test pass"}' | bash ~/.claude/hooks/self-review-on-stop.sh \
+  | jq -e '.decision == "block"' > "$test_out" && echo "OK:   self-review-on-stop" || { echo "FAIL: self-review"; fail=1; }
+
+rm -f "$test_out"
+
+echo ""
+if [ $fail -eq 0 ]; then
+  echo "ALL TESTS PASS"
+else
+  echo "$fail failures"
+fi
+exit $fail

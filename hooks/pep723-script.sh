@@ -23,16 +23,24 @@ fi
 expected_shebang="#!/usr/bin/env -S uv run --script"
 first_line=$(printf '%s' "$content" | head -1)
 
+source "$(dirname "$0")/lib/emit.sh"
+
 # Check 1: shebang must use uv run --script
 if [[ "$first_line" != "$expected_shebang" ]]; then
-    printf 'Fix shebang to `#!/usr/bin/env -S uv run --script` (found: %s) and add a PEP 723 metadata block.\n' "$first_line" >&2
-    exit 2
+    emit_post_tool_context "Fix shebang to \`#!/usr/bin/env -S uv run --script\` (found: ${first_line}) and add a PEP 723 metadata block."
+    exit 0
 fi
 
 # Check 2: PEP 723 metadata block must exist
 if ! printf '%s' "$content" | grep -qF '# /// script'; then
-    printf 'Add PEP 723 inline metadata block after the shebang:\n# /// script\n# requires-python = ">=3.11"\n# dependencies = [\n#   "package-name",\n# ]\n# ///\n' >&2
-    exit 2
+    emit_post_tool_context 'Add PEP 723 inline metadata block after the shebang:
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "package-name",
+# ]
+# ///'
+    exit 0
 fi
 
 exit 0

@@ -12,9 +12,6 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "worktree": {
-    "symlinkDirectories": [".venv", "node_modules"]
-  },
   "hooks": {
     "PreToolUse": [
       {
@@ -230,7 +227,23 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/websearch-followup-hint.sh",
+            "timeout": 5
+          }
+        ]
       }
+    ]
+  },
+  "worktree": {
+    "symlinkDirectories": [
+      ".venv",
+      "node_modules"
     ]
   },
   "statusLine": {
@@ -270,9 +283,9 @@
   "autoMemoryEnabled": false,
   "autoDreamEnabled": false,
   "showThinkingSummaries": true,
+  "skipDangerousModePermissionPrompt": true,
+  "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
   "autoScrollEnabled": false,
-  "teammateMode": "auto",
-  "skipAutoPermissionPrompt": true,
-  "skipDangerousModePermissionPrompt": true
+  "teammateMode": "auto"
 }

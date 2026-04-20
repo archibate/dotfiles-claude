@@ -13,10 +13,10 @@ fi
 # Match: command& or command & but not && (logical AND)
 # Also catches multi-line commands where & appears at end of a line
 if echo "$command" | grep -qE '[^&]&[[:space:]]*$'; then
-    printf 'Do not use & for background execution. Use the run_in_background parameter instead:\n' >&2
-    printf '  Bash(command="...", run_in_background=true)\n' >&2
-    printf 'If you must use &, add comment `BYPASS_BACKGROUND_CHECK` to the first line of command.\n' >&2
-    exit 2
+    source "$(dirname "$0")/lib/emit.sh"
+    emit_pre_tool_deny 'Do not use & for background execution. Use the run_in_background parameter instead:
+  Bash(command="...", run_in_background=true)
+If you must use &, add comment `BYPASS_BACKGROUND_CHECK` to the first line of command.'
 fi
 
 exit 0

@@ -31,10 +31,15 @@ fi
 file_path=$(echo "$command" | grep -oE '>\s*[^<>|& ]+' | head -1 | sed 's/^>\s*//' | tr -d "'" || true)
 
 # Block and suggest Write tool
-printf 'Use Write tool instead of cat heredoc for file writes.\n' >&2
 if [ -n "$file_path" ]; then
-    printf '  Write("%s", <content>)\n' "$file_path" >&2
+    example=$(printf '  Write("%s", <content>)' "$file_path")
+    reason="Use Write tool instead of cat heredoc for file writes.
+${example}
+If you must use cat heredoc, add comment \`BYPASS_CAT_WRITE\` to the first line of command."
+else
+    reason='Use Write tool instead of cat heredoc for file writes.
+If you must use cat heredoc, add comment `BYPASS_CAT_WRITE` to the first line of command.'
 fi
-printf 'If you must use cat heredoc, add comment `BYPASS_CAT_WRITE` to the first line of command.\n' >&2
 
-exit 2
+source "$(dirname "$0")/lib/emit.sh"
+emit_pre_tool_deny "$reason"

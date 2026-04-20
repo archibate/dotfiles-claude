@@ -25,14 +25,16 @@ if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*head\s+(-\d+|-n\s*\d+|--lines[= ]
     # Extract filename (the non-flag argument after head and its flags)
     file=$(echo "$command" | grep -oP '\bhead\s+(-\d+|-n\s*\d+|--lines[= ]\d+)\s+\K[^\s|;&>]+' | head -1 || true)
 
-    printf 'Use Read tool with limit instead of head for reading file lines.\n' >&2
     if [ -n "$file" ] && [ -n "$limit" ]; then
-        printf '  Read(file_path="%s", limit=%s)\n' "$file" "$limit" >&2
+        example=$(printf '  Read(file_path="%s", limit=%s)' "$file" "$limit")
     else
-        printf '  Read(file_path="<path>", limit=<num_lines>)\n' >&2
+        example='  Read(file_path="<path>", limit=<num_lines>)'
     fi
-    printf 'If you must use head, add comment `BYPASS_HEAD_READ_CHECK` to the first line of command.\n' >&2
-    exit 2
+
+    source "$(dirname "$0")/lib/emit.sh"
+    emit_pre_tool_deny "Use Read tool with limit instead of head for reading file lines.
+${example}
+If you must use head, add comment \`BYPASS_HEAD_READ_CHECK\` to the first line of command."
 fi
 
 exit 0

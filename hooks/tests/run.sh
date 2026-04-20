@@ -30,6 +30,19 @@ assert_silent() {
   fi
 }
 
+assert_context() {
+  local name="$1" input="$2" pattern="$3"
+  local out
+  out=$(printf '%s' "$input" | bash ~/.claude/hooks/$name.sh 2>&1)
+  if ! echo "$out" | jq -e ".hookSpecificOutput.additionalContext | contains(\"$pattern\")" > "$test_out"; then
+    echo "FAIL: $name should emit additionalContext containing '$pattern'"
+    echo "  got: $out"
+    fail=1
+  else
+    echo "OK:   $name context ($pattern)"
+  fi
+}
+
 test_out=$(mktemp)
 
 echo "=== PreToolUse no-* hooks ==="
@@ -95,6 +108,33 @@ printf '%s' '{"tool_input":{"subagent_type":"Explore"}}' | bash ~/.claude/hooks/
 
 printf '%s' '{"stop_hook_active":false,"last_assistant_message":"hello this is long enough for the ten word threshold test pass"}' | bash ~/.claude/hooks/self-review-on-stop.sh \
   | jq -e '.decision == "block"' > "$test_out" && echo "OK:   self-review-on-stop" || { echo "FAIL: self-review"; fail=1; }
+
+echo ""
+echo "=== PostToolUse: hooks using emit helper ==="
+
+# cache-keepalive-hint: fires on backgrounded Bash and Agent; silent on foreground
+assert_context cache-keepalive-hint '{"tool_name":"Bash","tool_input":{"run_in_background":true,"command":"sleep 60"}}' "Background Bash"
+assert_context cache-keepalive-hint '{"tool_name":"Agent","tool_input":{"run_in_background":true}}' "Background agent"
+assert_silent cache-keepalive-hint '{"tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{}}'
+
+# prefer-uv-run: fires on bare python3; silent when uv run is already used
+assert_context prefer-uv-run '{"tool_input":{"command":"python3 foo.py"}}' "uv run python"
+assert_silent prefer-uv-run '{"tool_input":{"command":"uv run python foo.py"}}'
+
+# python-unbuffered-post: fires on auto-backgrounded python; silent on no bg
+assert_context python-unbuffered-post '{"tool_input":{"command":"python3 long.py","run_in_background":false},"tool_response":{"backgroundTaskId":"bg-1"},"cwd":"/tmp"}' "PYTHONUNBUFFERED"
+assert_silent python-unbuffered-post '{"tool_input":{"command":"ls"},"tool_response":{}}'
+
+# pep723-script: fires on wrong shebang and on missing PEP 723 block; silent on non-.py
+pep723_wrong=$(jq -n --arg c "#!/usr/bin/python3
+print(1)" '{tool_input:{file_path:"/tmp/x.py",content:$c}}')
+assert_context pep723-script "$pep723_wrong" "Fix shebang"
+
+pep723_missing=$(jq -n --arg c "#!/usr/bin/env -S uv run --script
+print(1)" '{tool_input:{file_path:"/tmp/x.py",content:$c}}')
+assert_context pep723-script "$pep723_missing" "PEP 723"
+
+assert_silent pep723-script '{"tool_input":{"file_path":"/tmp/x.txt","content":"hello"}}'
 
 rm -f "$test_out"
 

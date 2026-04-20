@@ -11,7 +11,7 @@ file_path=$(echo "$input" | jq -r '.tool_input.file_path // .tool_input.file // 
 
 case "$file_path" in
     *.md|*.py|*.ts|*.js|*.tsx|*.jsx|*.c|*.cpp|*.h|*.hpp|*.rs|*.go|*.java|*.sh|*.toml|*.yaml|*.yml|*.json)
-        printf 'Silently re-read the edited region of %s (±30 lines) and audit it. If clean, do not narrate what you checked. If you find an issue, report it and fix it proactively in the same turn. See "Re-read After Edit" in CLAUDE.md.\n' "$file_path" >&2
+        printf 'Silently audit the edited region of %s (±30 lines). See "Re-read After Edit" in ~/.claude/CLAUDE.md.\n' "$file_path" >&2
         exit 2
         ;;
 esac

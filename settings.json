@@ -200,7 +200,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit",
         "hooks": [
           {
             "type": "command",

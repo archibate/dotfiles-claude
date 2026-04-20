@@ -9,5 +9,5 @@ file_path=$(echo "$input" | jq -r '.tool_input.file_path // .tool_input.file // 
 # Skip if no file path
 [ -n "$file_path" ] || exit 0
 
-printf 'Silently audit the edited region of %s (±30 lines). See "Re-read After Edit" in ~/.claude/CLAUDE.md.\n' "$file_path" >&2
+printf 'Silently re-read the edited region of %s (±30 lines) to audit. See "Re-read After Edit" in ~/.claude/CLAUDE.md.\n' "$file_path" >&2
 exit 2

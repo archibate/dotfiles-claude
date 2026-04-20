@@ -25,6 +25,7 @@ Specialized tools available:
 - `pdftotext` — PDF text extraction
 - `sqlite3` — SQLite CLI
 - `hyperfine` — command benchmarking
+- `defuddle` (`npx defuddle`) — web content extraction
 
 ---
 
@@ -61,3 +62,9 @@ You are running in Claude Code, a harness with the following known pitfalls:
 
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.
 - **Investigate Before Concluding** — No factual claims — including why/how explanations — without a backing tool-call observation (Read/Grep/Bash output or file:line citation). Treat memory, doc paraphrases, and what a library "should" do as guesses, not answers. Framings like "Conclusion:", "Verdict:", "Root cause:", "The issue is X", "It turns out that…" emitted without evidence violate this rule. If grepping, reading, or running something would answer it, do that first. If you must speculate, mark it as a hypothesis and verify in the same turn.
+
+---
+
+## Formatting
+
+- **Semantic Emojis** — Use developer-style semantic emojis to improve readability. Examples: ✅ / ❌ / ⏸️ / ⚠️ / 🔄 / 📦 / 🔒 / 🌐 / ⚙️ / 🔗. Proactively use emojis as category label prefixing a list item or table cell.

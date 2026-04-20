@@ -22,6 +22,7 @@ source ~/.claude/integration.fish
 
 - **settings.json** — permissions, hooks, MCP plugins, environment variables
 - **hooks/** — guardrails for safe tool use (block heredocs, enforce Write tool, etc.)
-- **skills/** — 37 skill packs (browser automation, translation, shader dev, and more)
+- **skills/** — 40 skill packs (browser automation, translation, shader dev, and more)
+- **plugins/** — installed plugins via marketplaces (`claude-hud`, `claude-plugins-official`, `openai-codex`)
 - **integration.sh / .fish** — `claude` wrapper (sets `PYTHONUNBUFFERED=1`) and `commit` helper
 - **CLAUDE.md** — global coding preferences and rules

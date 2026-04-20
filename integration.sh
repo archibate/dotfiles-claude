@@ -3,7 +3,7 @@ claude() {
     _session="$(basename "$PWD")-$(openssl rand -hex 8 2>/dev/null || printf '%05x%05x' $RANDOM $RANDOM)"
     PYTHONUNBUFFERED=1 \
     AGENT_BROWSER_SESSION="$_session" \
-    command claude "$@"
+    command claude --thinking-display summarized --allow-dangerously-skip-permissions "$@"
 }
 
 opus() {

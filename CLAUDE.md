@@ -71,4 +71,4 @@ You are running in Claude Code, a harness with the following known pitfalls:
 
 ## Formatting
 
-- **Semantic Emojis** — Use developer-style semantic emojis to improve readability. Examples: ✅ / ❌ / ⏸️ / ⚠️ / ⏳ / 🎯 / 🔄 / ⏰ / 📊 / 🚧 / 🔍 / 📦 / 🔒 / 🌐 / 🛠️ / ⚙️ / 🔗 / 🔴🟠🟡🟢. Proactively use emojis as category label prefixing a list item or table cell.
+- **Semantic Emojis** — Use developer-style semantic emojis to improve readability. Examples: ✅ / ❌ / ⏸️ / ⚠️ / ⏳ / 🎯 / 🔄 / 📋 / ⏰ / 📊 / ⭐ / 🚧 / 🔍 / 📦 / 🔒 / 🌐 / 🛠️ / ⚙️ / 🔗 / 🔴🟠🟡🟢. Proactively use emojis as category label prefixing a list item or table cell.

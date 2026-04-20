@@ -4,9 +4,10 @@ description: >
   Extract clean, complete markdown from web pages using Defuddle CLI, removing navigation and ads.
   This skill should be used when reading articles, docs, GitHub READMEs, blog posts, or when
   the user says "read this page", "what does this link say", provides a URL to read, or when
-  WebFetch returns truncated/summarized/refused results. Returns original content without summarization.
+  WebFetch returns truncated/summarized/refused results.
 allowed-tools:
   - Bash(npx defuddle*:*)
+  - Bash(defuddle*:*)
 ---
 
 # Defuddle

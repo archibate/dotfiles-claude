@@ -12,6 +12,9 @@
     ]
   },
   "enableAllProjectMcpServers": true,
+  "worktree": {
+    "symlinkDirectories": [".venv", "node_modules"]
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -135,24 +138,23 @@
         ]
       }
     ],
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/link-venv.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/self-review-on-stop.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/explanatory-session-start.sh",
             "timeout": 5
           }
         ]
@@ -260,12 +262,17 @@
       }
     }
   },
+  "viewMode": "focus",
   "effortLevel": "xhigh",
+  "awaySummaryEnabled": true,
+  "showClearContextOnPlanAccept": true,
+  "tui": "fullscreen",
   "autoMemoryEnabled": false,
   "autoDreamEnabled": false,
+  "showThinkingSummaries": true,
   "voiceEnabled": true,
   "autoScrollEnabled": false,
   "teammateMode": "auto",
-  "showThinkingSummaries": true,
-  "tui": "fullscreen"
+  "skipAutoPermissionPrompt": true,
+  "skipDangerousModePermissionPrompt": true
 }

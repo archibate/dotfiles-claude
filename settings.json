@@ -266,5 +266,6 @@
   "voiceEnabled": true,
   "autoScrollEnabled": false,
   "teammateMode": "auto",
+  "showThinkingSummaries": true,
   "tui": "fullscreen"
 }

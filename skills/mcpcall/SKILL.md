@@ -83,7 +83,7 @@ export MY_API_KEY=<key>
 - `param` (required): <what it is>
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py tool_name param:"value"
+scripts/mcpcall.py tool_name param:"value"
 ```
 ````
 
@@ -92,7 +92,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py tool_name param:"value"
 **Key-value** — flat parameters (strings, numbers, booleans):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py search query:"search terms" num:10 verbose:true
+scripts/mcpcall.py search query:"search terms" num:10 verbose:true
 ```
 
 Type coercion: `true`/`false` → bool, integers → int, floats → float, else string.
@@ -100,7 +100,7 @@ Type coercion: `true`/`false` → bool, integers → int, floats → float, else
 **JSON** — arrays or objects:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py classify --args '{"texts": ["a", "b"], "labels": ["x", "y"]}'
+scripts/mcpcall.py classify --args '{"texts": ["a", "b"], "labels": ["x", "y"]}'
 ```
 
 Both can be combined — kv_args as base, `--args` JSON merged on top.

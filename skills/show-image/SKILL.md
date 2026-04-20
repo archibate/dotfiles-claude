@@ -10,12 +10,12 @@ allowed-tools:
 
 You are a CLI assistant running in **terminal**, potentially over SSH connections. You have **no access to X display**.
 
-This skill provides a handy `${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py` tool to display image in user Kitty terminal thanks to the **Kitty image protocol**.
+This skill provides a handy `scripts/show_image.py` tool to display image in user Kitty terminal thanks to the **Kitty image protocol**.
 
 ### CLI Usage
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py /path/to/image.png
+scripts/show_image.py /path/to/image.png
 ```
 
 ## Use Case
@@ -33,19 +33,19 @@ Assistant: I've executed a plot script, plot result saved to `/path/to/image.png
 
 User: please show me that image.
 
-Assistant: Use show-image skill -> Run `${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py /path/to/image.png` -> Image appear in user terminal.
+Assistant: Use show-image skill -> Run `scripts/show_image.py /path/to/image.png` -> Image appear in user terminal.
 
 ## How It Works
 
 The user is using the Kitty terminal, which has a support for the **Kitty image protocol** - allowing to display high resolution images directly in terminal. This works even over SSH remote connections.
 
-When `${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py` is called with an image, it automatically creates a new Kitty pane (if not created yet), running a show-image server, to constantly listen to all `${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py` calls, and display the images being passed as arguments.
+When `scripts/show_image.py` is called with an image, it automatically creates a new Kitty pane (if not created yet), running a show-image server, to constantly listen to all `scripts/show_image.py` calls, and display the images being passed as arguments.
 
-The created Kitty pane for image display will be reused for future `${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py` invocations.
+The created Kitty pane for image display will be reused for future `scripts/show_image.py` invocations.
 
-New invocations to `${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py` will stacks up in the image pane. The user is able to scroll up to see previous shown images.
+New invocations to `scripts/show_image.py` will stacks up in the image pane. The user is able to scroll up to see previous shown images.
 
-Images shown previously are not updated automatically, rerun `${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py` when image updated.
+Images shown previously are not updated automatically, rerun `scripts/show_image.py` when image updated.
 
 Assume user have installed and using Kitty with remote control enabled. If they didn't, the script will fail with a clear error message reported.
 
@@ -55,7 +55,7 @@ You are a CLI assistant running in a TUI tool like Claude Code, which have rich 
 
 ## Constrains
 
-- Always use the `${CLAUDE_PLUGIN_ROOT}/scripts/show_image.py` wrapper for showing image
+- Always use the `scripts/show_image.py` wrapper for showing image
 - Do not use `kitty +kitten icat image.png` or `display image.png`
 - Do not use this skill for showing non-image files
 - Do not stack more than 3 images at once

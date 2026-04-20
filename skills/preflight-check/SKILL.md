@@ -22,7 +22,7 @@ compatibility: Claude Code
 
 Pre-launch checklist to prevent OOM kills, wasted compute, and daytime disruption. Run this mentally before every heavy task.
 
-Project-specific data tables (cost lookup, I/O dependencies) should be maintained in a file like `references/task-costs.md` in the project root. If the project has no such file, initialize one from the template at `${CLAUDE_PLUGIN_ROOT}/examples/task-costs.md`.
+Project-specific data tables (cost lookup, I/O dependencies) should be maintained in a file like `references/task-costs.md` in the project root. If the project has no such file, initialize one from the template at `examples/task-costs.md`.
 
 ## When to Use
 
@@ -94,7 +94,7 @@ If the task is not in the I/O table, **assume it may conflict with anything** un
 Measure current resource usage before adding load:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/resource_snapshot.sh
+scripts/resource_snapshot.sh
 ```
 
 Assess current usage and decide:
@@ -147,7 +147,7 @@ When launching heavy tasks:
 - **Know per-worker memory** — multiply by N workers and compare to available RAM (and VRAM for GPU tasks).
 - **Minimize data loading** — load only the columns/rows needed, not the entire dataset.
 - **Set up monitoring** (cron or follow) for tasks >1 hour.
-- **Plan for OOM restarts** — use shared state (databases, checkpoints) so killed workers don't lose all progress. If a task is OOM-killed, follow `${CLAUDE_PLUGIN_ROOT}/references/post-oom-triage.md` before retrying.
+- **Plan for OOM restarts** — use shared state (databases, checkpoints) so killed workers don't lose all progress. If a task is OOM-killed, follow `references/post-oom-triage.md` before retrying.
 
 ### 6. Verify Assumptions Periodically
 

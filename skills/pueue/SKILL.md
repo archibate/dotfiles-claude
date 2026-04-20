@@ -15,7 +15,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "bash ${CLAUDE_PLUGIN_ROOT}/hooks/no-sleep-pueue.sh"
+          command: "bash hooks/no-sleep-pueue.sh"
           timeout: 5
 compatibility: Claude Code
 ---
@@ -36,7 +36,7 @@ compatibility: Claude Code
 
 Before start, go through the pre-launch checklist as described in the `/preflight-check` skill.
 
-Start tasks with `${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh '...'` in background (`run_in_background: true`) — do not poll after this, just stop and wait.
+Start tasks with `scripts/run_in_pueue.sh '...'` in background (`run_in_background: true`) — do not poll after this, just stop and wait.
 
 When task completes, you will receive `<task-notification>` from it.
 
@@ -49,16 +49,16 @@ When task completes, you will receive `<task-notification>` from it.
 
 ```bash
 # Basic usage
-${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh 'uv run python -u train.py'
+scripts/run_in_pueue.sh 'uv run python -u train.py'
 
 # With parallel limit (max 2 concurrent tasks)
-${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh -p 2 -- 'uv run python -u train.py'
+scripts/run_in_pueue.sh -p 2 -- 'uv run python -u train.py'
 
 # With dependency (run after task 3)
-${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh -a 3 -- 'uv run python -u evaluate.py'
+scripts/run_in_pueue.sh -a 3 -- 'uv run python -u evaluate.py'
 
 # Combined
-${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh -p 4 -a 3 -a 5 -- 'uv run python -u analyze.py'
+scripts/run_in_pueue.sh -p 4 -a 3 -a 5 -- 'uv run python -u analyze.py'
 ```
 
 ### How It Works
@@ -84,7 +84,7 @@ Start training in the background.
 
 Assistant:
 ```
-Bash(command: "${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh 'uv run python -u train.py'", run_in_background: true)
+Bash(command: "scripts/run_in_pueue.sh 'uv run python -u train.py'", run_in_background: true)
 ```
 I've started training in background, will notify you once complete.
 [STOP AND WAIT]

@@ -37,13 +37,13 @@ if [ -n "$task_id" ]; then
     printf '  Bash("pueue follow %s", run_in_background: true)\n' "$task_id" >&2
     printf '\n' >&2
     printf 'Or to start a new background task with auto-follow:\n' >&2
-    printf '  Bash("${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh '\''your-command'\''", run_in_background: true)\n' >&2
+    printf '  Bash("[skill-dir]/scripts/run_in_pueue.sh '\''your-command'\''", run_in_background: true)\n' >&2
 else
     printf 'Use pueue follow <id> in background instead:\n' >&2
     printf '  Bash("pueue follow <task_id>", run_in_background: true)\n' >&2
     printf '\n' >&2
     printf 'Or start tasks with auto-follow:\n' >&2
-    printf '  Bash("${CLAUDE_PLUGIN_ROOT}/scripts/run_in_pueue.sh '\''your-command'\''", run_in_background: true)\n' >&2
+    printf '  Bash("[skill-dir]/scripts/run_in_pueue.sh '\''your-command'\''", run_in_background: true)\n' >&2
 fi
 
 printf '\nIf you must sleep+poll, add comment `BYPASS_SLEEP_PUEUE_CHECK` to the first line of command.\n' >&2

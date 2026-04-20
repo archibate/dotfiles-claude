@@ -28,23 +28,23 @@ Find real-world code examples by searching for **literal code patterns** (like g
 ### Basic usage
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py searchGitHub query:"useState("
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py searchGitHub query:"getServerSession" --args '{"language": ["TypeScript", "TSX"]}'
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py searchGitHub query:"CORS(" matchCase:true --args '{"language": ["Python"]}'
+scripts/mcpcall.py searchGitHub query:"useState("
+scripts/mcpcall.py searchGitHub query:"getServerSession" --args '{"language": ["TypeScript", "TSX"]}'
+scripts/mcpcall.py searchGitHub query:"CORS(" matchCase:true --args '{"language": ["Python"]}'
 ```
 
 ### Filter by repo or path
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py searchGitHub query:"createContext" repo:"facebook/react"
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py searchGitHub query:"export default" path:"/route.ts" --args '{"language": ["TypeScript"]}'
+scripts/mcpcall.py searchGitHub query:"createContext" repo:"facebook/react"
+scripts/mcpcall.py searchGitHub query:"export default" path:"/route.ts" --args '{"language": ["TypeScript"]}'
 ```
 
 ### Regex patterns
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py searchGitHub query:"(?s)useEffect\\(\\(\\) => \\{.*removeEventListener" useRegexp:true
-${CLAUDE_PLUGIN_ROOT}/scripts/mcpcall.py searchGitHub query:"(?s)try \\{.*await" useRegexp:true --args '{"language": ["TypeScript"]}'
+scripts/mcpcall.py searchGitHub query:"(?s)useEffect\\(\\(\\) => \\{.*removeEventListener" useRegexp:true
+scripts/mcpcall.py searchGitHub query:"(?s)try \\{.*await" useRegexp:true --args '{"language": ["TypeScript"]}'
 ```
 
 ## Tips

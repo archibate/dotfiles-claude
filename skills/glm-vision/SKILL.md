@@ -63,7 +63,7 @@ export ZHIPU_API_KEY="your-api-key-here"
 ### 方式一：使用辅助脚本（推荐）
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/analyze_image.py \
+scripts/analyze_image.py \
   --image "/path/to/image.jpg" \
   --prompt "请描述这张图片" \
   [--model "glm-4.6v-flash"]
@@ -138,7 +138,7 @@ response = client.chat.completions.create(
 ### 基础图片描述
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/analyze_image.py \
+scripts/analyze_image.py \
   -i "/tmp/screenshot.png" \
   -p "描述这张截图的内容"
 ```
@@ -146,7 +146,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/analyze_image.py \
 ### 详细分析
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/analyze_image.py \
+scripts/analyze_image.py \
   -i "/tmp/photo.jpg" \
   -p "分析这张图片的构图、色彩和主题" \
   --detail
@@ -155,7 +155,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/analyze_image.py \
 ### OCR 文字提取
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/analyze_image.py \
+scripts/analyze_image.py \
   -i "/tmp/document.png" \
   -p "提取图片中的所有文字，保持原有格式"
 ```
@@ -163,7 +163,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/analyze_image.py \
 ### URL 图片分析
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/analyze_image.py \
+scripts/analyze_image.py \
   -i "https://example.com/image.jpg" \
   -p "这张图片展示的是什么？"
 ```

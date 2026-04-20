@@ -106,9 +106,6 @@ assert_silent reread-after-edit '{"tool_input":{}}'
 assert_context verify-explore-results '{"tool_input":{"subagent_type":"Explore"}}' "Verify Explore"
 assert_silent verify-explore-results '{"tool_input":{"subagent_type":"Plan"}}'
 
-printf '%s' '{"stop_hook_active":false,"last_assistant_message":"hello this is long enough for the ten word threshold test pass"}' | bash ~/.claude/hooks/self-review-on-stop.sh \
-  | jq -e '.decision == "block"' > "$test_out" && echo "OK:   self-review-on-stop" || { echo "FAIL: self-review"; fail=1; }
-
 echo ""
 echo "=== PostToolUse: hooks using emit helper ==="
 

@@ -51,13 +51,6 @@ You are running in Claude Code, a harness with the following known pitfalls:
 
 ---
 
-## Hook Responses
-
-- **Re-read After Edit** — When the re-read-after-edit hook fires, silently re-read the ±30-line region around the edit. Check nearby-context consistency: no contradictions with surrounding statements, no style/convention drift (naming, formatting, list styles, heading levels, separators, patterns, idioms). If clean, proceed — do NOT narrate. If issues, fix them proactively in the same turn.
-- **Self-Review On Stop** — When the self-review-on-stop hook fires, silently audit your last text response for contradictions (with prior turns or within the response, including mid-turn course changes), factual errors, unsupported claims, format inconsistency, or missing structure where it would aid clarity. This is your one chance to issue a correction — run verifying tool calls (Read/Grep/Bash) if any claim in the response needs evidence you didn't already gather. If clean, reply with exactly a single space character. If you find a real issue, output the full corrected response prefixed with `👁️ **Corrected Response:**`. ALWAYS restate the full previous response except errors corrected, maintain a same structure. Do NOT narrate or explain the review — including between tool calls. Tool use is allowed for verification; text between tool calls is not.
-
----
-
 ## Coding Discipline
 
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.

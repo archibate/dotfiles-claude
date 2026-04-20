@@ -100,11 +100,11 @@ echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("WebFetch"
 out=$(printf '%s' '{"tool_response":{"results":[]}}' | bash ~/.claude/hooks/websearch-followup-hint.sh)
 [ -z "$out" ] && echo "OK:   websearch (0 results) silent" || { echo "FAIL: websearch 0 results: $out"; fail=1; }
 
-printf '%s' '{"tool_input":{"file_path":"/tmp/x"}}' | bash ~/.claude/hooks/reread-after-edit.sh \
-  | jq -e '.hookSpecificOutput.additionalContext | contains("/tmp/x")' > "$test_out" && echo "OK:   reread-after-edit" || { echo "FAIL: reread"; fail=1; }
+assert_context reread-after-edit '{"tool_input":{"file_path":"/tmp/x"}}' "/tmp/x"
+assert_silent reread-after-edit '{"tool_input":{}}'
 
-printf '%s' '{"tool_input":{"subagent_type":"Explore"}}' | bash ~/.claude/hooks/verify-explore-results.sh \
-  | jq -e '.hookSpecificOutput.additionalContext | contains("Verify Explore")' > "$test_out" && echo "OK:   verify-explore-results" || { echo "FAIL: verify-explore"; fail=1; }
+assert_context verify-explore-results '{"tool_input":{"subagent_type":"Explore"}}' "Verify Explore"
+assert_silent verify-explore-results '{"tool_input":{"subagent_type":"Plan"}}'
 
 printf '%s' '{"stop_hook_active":false,"last_assistant_message":"hello this is long enough for the ten word threshold test pass"}' | bash ~/.claude/hooks/self-review-on-stop.sh \
   | jq -e '.decision == "block"' > "$test_out" && echo "OK:   self-review-on-stop" || { echo "FAIL: self-review"; fail=1; }

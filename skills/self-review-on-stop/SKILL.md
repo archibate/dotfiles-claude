@@ -38,7 +38,6 @@ Do **NOT** narrate or explain the review — including between tool calls.
 
 - Fires on top-level turns only (subagent Stop events are skipped).
 - Skips responses under 10 words (not worth auditing).
-- Skips `claudy_workspace` specifically — cc-connect's Discord relay only forwards the latest assistant message, so a "clean → single space" reply overwrites the original reply in the user's view. See 2026-04-20 incident for context.
 
 ## Rationale
 

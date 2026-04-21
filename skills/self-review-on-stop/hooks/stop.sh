@@ -3,13 +3,6 @@
 # Audit procedure lives in ../SKILL.md (load via Skill tool when this fires).
 set -euo pipefail
 
-# Skip chat-focused workspaces where cc-connect's single-space "clean" reply
-# overwrites the pre-stop message in the UI (claudy_workspace 2026-04-20 incident).
-project_dir="${CLAUDE_PROJECT_DIR:-$PWD}"
-case "$project_dir" in
-    */claudy_workspace|*/claudy_workspace/*) exit 0 ;;
-esac
-
 input=$(cat)
 
 # Skip subagent Stop events — only self-review on top-level turns.
@@ -28,6 +21,6 @@ word_count=$(echo "$last_text" | wc -w)
 jq -n '{
   decision: "block",
   continue: true,
-  reason: "Audit your last text response. Load the `self-review-on-stop` skill via the Skill tool for the complete audit procedure and reply format.",
+  reason: "Audit your last text response. Load the /self-review-on-stop skill for the complete audit procedure and reply format.",
   suppressOutput: true
 }'

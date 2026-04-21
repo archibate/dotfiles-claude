@@ -11,6 +11,10 @@ dm_send() {
   if [[ "$msg" == *$'\n'* ]]; then
     printf '%s' "$msg" | tm load-buffer -
     tm paste-buffer -t "$target" -p
+    # Claude Code needs a moment to finish consuming the bracketed-paste
+    # sequence before Enter; without the gap, Enter lands mid-paste and is
+    # treated as a newline in the buffer instead of submit.
+    sleep 0.2
   else
     tm send-keys -t "$target" -l -- "$msg"
   fi

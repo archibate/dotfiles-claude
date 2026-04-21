@@ -19,7 +19,7 @@ Check the ±30 lines around the edit using the checklist matching the file type:
 - **Over-emphasis** — abuse of **bold**, *italic*, ALL-CAPS not matching siblings' average emphasis strength and format.
 - **Patch over restructure** — minimal-diff edits where a bigger restructure would improve readability or orderliness; flag bullet appended to a list that should be regrouped, paragraph grown unwieldy, section heading no longer matching its content, content stuck in the wrong section.
 - **Inverted phrasing** — fronted conditionals or qualifiers that delay the subject and force the reader to hold context; flag "when X, do Y" where "Y when X" reads more directly.
-- **Stale references** — file paths, line citations, or quoted code snippets that no longer match what they reference.
+- **Stale references** — file paths, architecture documents, or quoted code snippets that no longer match what they reference.
 
 ## Code
 

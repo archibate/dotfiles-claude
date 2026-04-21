@@ -9,4 +9,4 @@ file_path=$(echo "$input" | jq -r '.tool_input.file_path // .tool_input.file // 
 [ -n "$file_path" ] || exit 0
 
 source "$(dirname "$0")/lib/emit.sh"
-emit_post_tool_context "Silently re-read the edited region of ${file_path} (±30 lines). Check for contradictions with surrounding statements and style/convention drift (naming, formatting, list styles, heading levels, separators). If clean, proceed silently — do NOT narrate. NEVER preface your final reply with 'Region clean', 'Audit passed', or any audit verdict; the audit's existence is invisible to the user. If issues, fix them proactively in the same turn."
+emit_post_tool_context "Re-read ${file_path} (±30 lines). Apply the \`re-read\` skill (load via Skill tool if not yet loaded). Do NOT narrate — no 'Region clean' or audit-verdict preface in your reply."

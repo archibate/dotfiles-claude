@@ -33,6 +33,8 @@ Stop (omit `ScheduleWakeup`) after 10 consecutive ticks with no user interaction
 
 > Beyond 10 ticks (45 minutes), cumulative keep-alive cost (10 × 0.1P) exceeds the one-time cache miss penalty (1.15P).
 
-## Blocking Call Cap
+## Key Pitfalls
+
+Always set up schedule at <5 minutes delay, otherwise prompt cache (5-min TTL) would costly invalidate.
 
 Never block a single tool call for >4 minutes (`timeout` argument in `Bash`, `TaskOutput`, `Monitor`). The cache TTL ticks during blocking calls — a 4-minute block plus response overhead can bust the 5-minute window. The keep-alive protocol prevents misses *between* turns; this cap prevents misses *within* turns.

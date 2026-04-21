@@ -1,37 +1,5 @@
 # Real-World Patterns
 
-## CI/CD — GitHub Actions
-
-```yaml
-- uses: anthropics/claude-code-action@v1
-  with:
-    prompt: "Review this PR for security vulnerabilities"
-    claude_args: "--model claude-sonnet-4-6"
-    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-Supports Bedrock (`use_bedrock: "true"`) and Vertex AI (`use_vertex: "true"`).
-
-## Structured Extraction
-
-Extract structured data with JSON Schema validation:
-
-```bash
-cat logs.txt | claude --bare -p \
-  --output-format json \
-  --json-schema '{"type":"object","properties":{"errors":{"type":"array","items":{"type":"string"}}}}' \
-  "Extract all error messages" | jq '.structured_output'
-```
-
-## PR Review
-
-```bash
-gh pr diff "$1" | claude --bare -p \
-  --append-system-prompt "You are a security engineer." \
-  --allowedTools "" \
-  --output-format json | jq -r '.result'
-```
-
 ## Cost-Capped Autonomous Run
 
 ```bash
@@ -73,6 +41,38 @@ claude --bare -p "Run tests and summarize failures" \
   --allowedTools "Bash(npm test),Read" \
   --output-format stream-json \
   --verbose
+```
+
+## CI/CD — GitHub Actions
+
+```yaml
+- uses: anthropics/claude-code-action@v1
+  with:
+    prompt: "Review this PR for security vulnerabilities"
+    claude_args: "--model claude-sonnet-4-6"
+    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Supports Bedrock (`use_bedrock: "true"`) and Vertex AI (`use_vertex: "true"`).
+
+## Structured Extraction
+
+Extract structured data with JSON Schema validation:
+
+```bash
+cat logs.txt | claude --bare -p \
+  --output-format json \
+  --json-schema '{"type":"object","properties":{"errors":{"type":"array","items":{"type":"string"}}}}' \
+  "Extract all error messages" | jq '.structured_output'
+```
+
+## PR Review
+
+```bash
+gh pr diff "$1" | claude --bare -p \
+  --append-system-prompt "You are a security engineer." \
+  --allowedTools "" \
+  --output-format json | jq -r '.result'
 ```
 
 ## Agent Teams in Headless Mode

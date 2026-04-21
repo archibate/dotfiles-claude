@@ -264,7 +264,7 @@
       }
     }
   },
-  "viewMode": "focus",
+  "viewMode": "default",
   "effortLevel": "xhigh",
   "awaySummaryEnabled": true,
   "showClearContextOnPlanAccept": true,
@@ -274,7 +274,5 @@
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true,
-  "autoScrollEnabled": false,
-  "teammateMode": "auto"
+  "voiceEnabled": true
 }

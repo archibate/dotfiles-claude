@@ -15,7 +15,7 @@ Source: `claude --help` (v2.1.105). Only flags relevant to programmatic/headless
 | `--include-hook-events` | Emit hook lifecycle events into output stream; requires `stream-json` |
 | `--replay-user-messages` | Re-echo stdin user messages on stdout; requires both `--input-format stream-json` and `--output-format stream-json` |
 | `--bare` | Skip CLAUDE.md, hooks, plugins, MCP, LSP, auto-memory. Sets `CLAUDE_CODE_SIMPLE=1`. Recommended for CI |
-| `--effort low\|medium\|high\|max` | Effort level (max = Opus 4.6 only) |
+| `--effort low\|medium\|high\|xhigh\|max` | Effort level (max = Opus 4.7 only) |
 
 ## Permission Control
 

@@ -52,22 +52,23 @@ modal_subtype() {
   esac
 }
 
-# Transcript's most recent non-system turn must be assistant with stop_reason=end_turn.
-# A fresh session (no transcript file, or no assistant/user records yet) passes —
-# there's no prior turn to validate against.
+# Transcript sanity check: reject only if the most recent assistant turn has a
+# non-terminal stop_reason (e.g. tool_use pending result). Pane state is the
+# authoritative liveness signal; this catches the narrow mid-tool case where
+# the UI might briefly show idle while the transcript says a tool is in flight.
+# User-only tails (fresh / interrupted sessions) and no-transcript cases pass.
 check_transcript_end_turn() {
   local tr
   tr=$(target_transcript "$1") || return 0
   local last_type last_stop
   read -r last_type last_stop < <(tac "$tr" \
     | jq -rc 'select(.type=="assistant" or .type=="user") | "\(.type) \(.message.stop_reason // "")"' \
-    | head -n 1)
-  [[ -z "$last_type" ]] && return 0
-  if [[ "$last_type" == "assistant" && "$last_stop" == "end_turn" ]]; then
-    return 0
+    | head -n 1) || true
+  if [[ "$last_type" == "assistant" && "$last_stop" != "end_turn" && -n "$last_stop" ]]; then
+    printf 'last assistant turn stop=%s\n' "$last_stop"
+    return 1
   fi
-  printf 'last turn: type=%s stop=%s\n' "$last_type" "$last_stop"
-  return 1
+  return 0
 }
 
 # True iff state is idle AND transcript confirms end_turn. Prints reason on stderr.

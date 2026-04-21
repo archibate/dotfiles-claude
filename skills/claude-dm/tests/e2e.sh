@@ -69,5 +69,29 @@ st=$(state_of t:0.0)
 [[ "$st" != busy ]] || fail "esc did not interrupt; state still busy"
 pass "esc / interrupt (post-esc state=$st)"
 
+echo "=== cmd /compact accepted by peer ==="
+# esc interrupts the turn but leaves the original prompt as a draft; C-u
+# clears the input line so the peer returns to idle for the next test.
+tmux -S "$SOCK" send-keys -t t:0.0 C-u
+sleep 1
+wait_state t:0.0 idle 30 || fail "not idle before /compact"
+"$CLAUDE_DM" cmd t:0.0 "/compact"
+wait_state t:0.0 idle 180 || fail "/compact did not leave peer idle within 180s"
+pass "cmd /compact"
+
+# The `answer` verb is NOT covered automatically because triggering a
+# permission modal depends on the peer's settings (defaultMode, allowed-tools)
+# and Claude Code's auto-approval heuristics for simple commands. In an
+# environment where the peer has `defaultMode: bypassPermissions` in user
+# settings (common for dev machines), no modal ever appears regardless of
+# --permission-mode default on the CLI.
+#
+# Manual probe for the answer verb — run on a peer in default-permission mode:
+#   claude-dm send t:0.0 "Use the Bash tool to run: curl https://example.com"
+#   # peer should reach state=modal subtype=permission
+#   claude-dm status t:0.0
+#   claude-dm answer t:0.0 1   # pick "Yes"
+#   # peer should return to idle with the command executed
+
 echo
 echo "e2e OK"

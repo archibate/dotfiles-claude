@@ -1,26 +1,20 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-input=$(cat)
-command=$(echo "$input" | jq -r '.tool_input.command // ""')
+source "$(dirname "$0")/lib/bypass.sh"
+source "$(dirname "$0")/lib/emit.sh"
+source "$(dirname "$0")/lib/read_input.sh"
 
-# Skip if empty
-if [ -z "$command" ]; then
-    exit 0
-fi
-
-# Bypass marker
-if echo "$command" | grep -qF 'BYPASS_SED_PRINT_CHECK'; then
-    exit 0
-fi
+read_bash_command
+bypass_check BYPASS_SED_PRINT_CHECK
 
 # Detect sed -n with numeric line printing on a file (e.g., sed -n '12,13p' file)
 # Pattern: sed -n followed by a number or number range ending in p, then a filename
 # We want to catch: '12p', "12p", 12p, '12,13p', "12,13!p", etc.
 # We do NOT want to catch: 's/foo/bar/p' (substitution), '/pattern/p' (regex)
-# Only match sed at command position (start of line or after && ; ||), not inside strings
-if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p['"'"'"]?\s+[^\s|;&>]+\s*$' ||
-   echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+p['"'"'"]?\s+[^\s|;&>]+\s*$'; then
+# Only match sed at command position (start of line or after && ; |), not inside strings
+if echo "$command" | grep -qP '(^|&&|;|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p['"'"'"]?\s+[^\s|;&>]+\s*$' ||
+   echo "$command" | grep -qP '(^|&&|;|\|)\s*sed\s+-n\s+['"'"'"]?\d+p['"'"'"]?\s+[^\s|;&>]+\s*$'; then
 
     # Extract the line numbers for helpful suggestion
     range=$(echo "$command" | grep -oP '\bsed\s+-n\s+\K['"'"'"]?\d+(?:[,.!]\d+)?p['"'"'"]?' | head -1 | tr -d "'\"" || true)
@@ -50,10 +44,9 @@ if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p[
         example='  Read(file_path="<path>", offset=<start_line-1>, limit=<num_lines>)'
     fi
 
-    source "$(dirname "$0")/lib/emit.sh"
     emit_pre_tool_deny "Use Read tool with offset and limit instead of sed -n for reading specific lines.
 ${example}
-If you must use sed -n for line printing, add comment \`BYPASS_SED_PRINT_CHECK\` to the first line of command."
+If you believe this is a false positive, add comment \`BYPASS_SED_PRINT_CHECK\` to the first line of command."
 fi
 
 exit 0

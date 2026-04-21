@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 # Block isolation: "worktree" + team_name combo (silently broken, GitHub #33045)
 # Workaround: pre-create worktrees, tell teammates to EnterWorktree(path:)
 set -euo pipefail

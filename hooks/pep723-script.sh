@@ -1,14 +1,16 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-input=$(cat)
-file_path=$(echo "$input" | jq -r '.tool_input.file_path // ""')
-content=$(echo "$input" | jq -r '.tool_input.content // ""')
+source "$(dirname "$0")/lib/read_input.sh"
+
+read_file_path
 
 # Only check .py files
 if [[ "$file_path" != *.py ]]; then
     exit 0
 fi
+
+content=$(jq -r '.tool_input.content // ""' <<< "$input")
 
 # Only check files that have a shebang (scripts, not modules)
 if [[ "$content" != "#!"* ]]; then

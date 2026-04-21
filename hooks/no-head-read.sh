@@ -1,23 +1,17 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-input=$(cat)
-command=$(echo "$input" | jq -r '.tool_input.command // ""')
+source "$(dirname "$0")/lib/bypass.sh"
+source "$(dirname "$0")/lib/emit.sh"
+source "$(dirname "$0")/lib/read_input.sh"
 
-# Skip if empty
-if [ -z "$command" ]; then
-    exit 0
-fi
-
-# Bypass marker
-if echo "$command" | grep -qF 'BYPASS_HEAD_READ_CHECK'; then
-    exit 0
-fi
+read_bash_command
+bypass_check BYPASS_HEAD_READ_CHECK
 
 # Detect head with line count reading a file: head -N file, head -n N file, head --lines=N file
 # Patterns: head -80, head -n 80, head --lines=80, head -n80
-# Only match head at command position (start of line or after && ; ||), not inside strings
-if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*head\s+(-\d+|-n\s*\d+|--lines[= ]\d+)\s+[^\s|;&>]+\s*$'; then
+# Only match head at command position (start of line or after && ; |), not inside strings
+if echo "$command" | grep -qP '(^|&&|;|\|)\s*head\s+(-\d+|-n\s*\d+|--lines[= ]\d+)\s+[^\s|;&>]+\s*$'; then
 
     # Extract line count
     limit=$(echo "$command" | grep -oP '\bhead\s+\K(-\d+|-n\s*\d+|--lines[= ]\d+)' | head -1 | grep -oP '\d+' || true)
@@ -31,10 +25,9 @@ if echo "$command" | grep -qP '(^|&&|;|\|\|)\s*head\s+(-\d+|-n\s*\d+|--lines[= ]
         example='  Read(file_path="<path>", limit=<num_lines>)'
     fi
 
-    source "$(dirname "$0")/lib/emit.sh"
     emit_pre_tool_deny "Use Read tool with limit instead of head for reading file lines.
 ${example}
-If you must use head, add comment \`BYPASS_HEAD_READ_CHECK\` to the first line of command."
+If you believe this is a false positive, add comment \`BYPASS_HEAD_READ_CHECK\` to the first line of command."
 fi
 
 exit 0

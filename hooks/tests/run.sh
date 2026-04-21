@@ -82,6 +82,12 @@ assert_silent python-unbuffered '{"tool_input":{"command":"python3 script.py"}}'
 
 assert_deny no-head-read '{"tool_input":{"command":"head -n 80 /tmp/x"}}' "Read tool"
 assert_silent no-head-read '{"tool_input":{"command":"head -c 100 /tmp/x"}}'
+# Command-position regex: piped-into-cmd is also command-position
+assert_deny no-head-read '{"tool_input":{"command":"echo x | head -n 80 /tmp/x"}}' "Read tool"
+assert_deny no-sed-print "$(jq -n --arg c "echo x | sed -n '12,13p' /tmp/x" '{tool_input:{command:$c}}')" "sed -n"
+assert_deny no-cat-write "$(jq -n --arg c "echo go | cat << EOF ${REDIR} /tmp/x
+hi
+EOF" '{tool_input:{command:$c}}')" "Write tool"
 
 # Build a long heredoc payload (>80 lines) — encode via jq to keep JSON valid
 long_payload=$(for i in $(seq 1 90); do echo "line $i"; done)
@@ -90,6 +96,41 @@ ${long_payload}
 EOF"
 assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "lines detected"
 assert_silent no-heredoc '{"tool_input":{"command":"echo hi"}}'
+# Heredoc trigger suggests BYPASS_HEREDOC_RESTRICTION in the error
+assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "BYPASS_HEREDOC_RESTRICTION"
+# Bypass marker silences the hook even on a >80-line heredoc
+heredoc_bypass="# BYPASS_HEREDOC_RESTRICTION
+${heredoc_cmd}"
+assert_silent no-heredoc "$(jq -n --arg c "$heredoc_bypass" '{tool_input:{command:$c}}')"
+# Every hook's bypass marker silences its own trigger
+assert_silent no-devnull-redirect "$(jq -n --arg c "# BYPASS_DEVNULL_CHECK
+ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')"
+assert_silent no-background-ampersand "$(jq -n --arg c "# BYPASS_BACKGROUND_CHECK
+sleep 10 ${AMP}" '{tool_input:{command:$c}}')"
+assert_silent no-cat-write "$(jq -n --arg c "# BYPASS_CAT_WRITE
+cat << EOF ${REDIR} /tmp/x
+hi
+EOF" '{tool_input:{command:$c}}')"
+assert_silent no-head-read '{"tool_input":{"command":"# BYPASS_HEAD_READ_CHECK\nhead -n 80 /tmp/x"}}'
+assert_silent no-sed-print "$(jq -n --arg c "# BYPASS_SED_PRINT_CHECK
+sed -n '12,13p' /tmp/x" '{tool_input:{command:$c}}')"
+assert_silent no-pip-npm '{"tool_input":{"command":"# BYPASS_PACKAGE_MANAGER_CHECK\npip install foo"}}'
+assert_silent no-pip-npm '{"tool_input":{"command":"# BYPASS_PACKAGE_MANAGER_CHECK\nnpm install"}}'
+assert_silent no-git-amend '{"tool_input":{"command":"# BYPASS_AMEND_CHECK\ngit commit --amend"}}'
+assert_silent no-git-amend '{"tool_input":{"command":"# BYPASS_FORCE_PUSH_CHECK\ngit push --force"}}'
+# G1 regression: amend bypass must not silence chained force-push
+assert_deny no-git-amend '{"tool_input":{"command":"# BYPASS_AMEND_CHECK\ngit commit --amend; git push --force"}}' "push --force"
+assert_deny no-git-amend '{"tool_input":{"command":"# BYPASS_FORCE_PUSH_CHECK\ngit commit --amend; git push --force"}}' "git commit --amend"
+assert_silent python-unbuffered '{"tool_input":{"command":"# BYPASS_UNBUFFERED_CHECK\npython3 script.py","run_in_background":true},"cwd":"/tmp"}'
+# Empty command should be silent (no-background-ampersand previously had no guard)
+assert_silent no-background-ampersand '{"tool_input":{"command":""}}'
+# Unified hint wording — every bypass hint now reads "If you believe this is a false positive"
+assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "If you believe this is a false positive"
+assert_deny no-background-ampersand "$(jq -n --arg c "sleep 10 ${AMP}" '{tool_input:{command:$c}}')" "If you believe this is a false positive"
+assert_deny no-cat-write "$(jq -n --arg c "cat << EOF ${REDIR} /tmp/x
+hi
+EOF" '{tool_input:{command:$c}}')" "If you believe this is a false positive"
+assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "If you believe this is a false positive"
 
 echo ""
 echo "=== PostToolUse regression ==="

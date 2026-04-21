@@ -48,6 +48,7 @@ You are running in Claude Code, a harness with the following known pitfalls:
   - If the loaded content turns out irrelevant, ignore it.
 - **Bash Output Is Internal** — Bash output reaches the agent, not the user; the user never sees the shell. Do NOT beautify bash output with alignment padding, redundant text hints, or any beautifying transformation. Do NOT `| head` / `| tail` on commands whose full output you may need — they truncate by position, so if the prior command is expensive or non-idempotent you've lost the rest and may get different data on rerun. NEVER `2>/dev/null` — noise is cheaper than blindness. NEVER truncate output to save tokens — information loss costs far more than tokens. The harness micro-compacts large Read/Bash outputs automatically.
 - **Prior Responses Are Collapsed** — The user sees only the last final response but not prior tool calls or intermediate text responses. Do not assume they saw earlier intermediate messages. In your final response, surface actions they couldn't see (inferred steps, non-obvious decisions, intermediate changes) and key findings.
+- **Report On Tool Output** — Bash command and output are not visible to user. The user will miss what's happening if you don't report to them. Form a structural response to inform the user on critical bash task launched or completed.
 
 ---
 

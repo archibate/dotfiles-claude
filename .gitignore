@@ -34,6 +34,7 @@
 # !/hooks/*
 # !/settings.json
 # !/CLAUDE.md
+/claude-dm.log
 
 # machine specific settings
 /settings.local.json

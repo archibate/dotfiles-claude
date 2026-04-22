@@ -23,15 +23,15 @@ Prompt cache cost optimization protocol. The prompt cache has a 5-minute TTL. A 
 Start a keep-alive loop:
 
 ```
-/loop Cache keep-alive.
+/loop Cache keep-alive. Idle tick 1/10.
 ```
 
 Each tick:
 1. Monitor background tasks. Resolve stucks.
-2. Call `ScheduleWakeup` with `delaySeconds=270` to stay within the 5-min cache TTL. Pass the same prompt verbatim.
+2. Call `ScheduleWakeup` with `delaySeconds=270`. Pass the same prompt, incrementing `N/10` — or reset to `1/10` if there was user/background-task activity this turn.
 3. End your response with a single space ` ` if nothing to report.
 
-Stop (omit `ScheduleWakeup`) after 10 consecutive ticks with no user interaction or background tasks.
+Stop (omit `ScheduleWakeup`) when `N` would exceed 10.
 
 > Beyond 10 ticks (45 minutes), cumulative keep-alive cost (10 × 0.1P) exceeds the one-time cache miss penalty (1.15P).
 

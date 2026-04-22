@@ -28,7 +28,7 @@ Step 2 — Orchestrator completes (spawns workers, exits). Notification arrives:
 
 Read orchestrator output to get the group name (printed by the script), then immediately:
 ```
-Bash(command: "pueue wait --group home-ubuntu-open_learn", run_in_background: true)
+Bash(command: "pueue wait --group home-alice-myproj", run_in_background: true)
 ```
 
 Step 3 — Workers finish. Second notification arrives:
@@ -43,10 +43,10 @@ Now check progress, read logs, run the report.
 The group name is derived from the working directory:
 ```python
 group = str(Path.cwd())[1:].replace("/", "-")
-# /home/ubuntu/open_learn → home-ubuntu-open_learn
+# /home/alice/myproj → home-alice-myproj
 ```
 
 Or read it from the orchestrator output, which always prints:
 ```
-Pueue group: home-ubuntu-open_learn  parallel=4
+Pueue group: home-alice-myproj  parallel=4
 ```

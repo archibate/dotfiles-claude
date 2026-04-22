@@ -46,7 +46,7 @@ claude-dm esc    <target>          [--force]   # Escape: interrupt turn or cance
 claude-dm answer <target> <key>    [--force]   # pick modal option (1/2/3/y/n/a/…)
 ```
 
-`<target>` is `session:window.pane` on the current socket (e.g. `CC:8.1`).
+`<target>` is `session:window.pane` on the current socket (e.g. `HOME:8.1`).
 
 ## Peer states
 
@@ -106,32 +106,32 @@ tmux -S /tmp/claude-dm-test.sock -f /dev/null new-session -d -s claude-test -n c
 Inspect a peer without touching it:
 ```bash
 claude-dm list
-claude-dm peek rql2:9.1 40
-claude-dm status CC:8.1
+claude-dm peek test:9.1 40
+claude-dm status HOME:8.1
 ```
 
 Trigger a skill on an idle peer:
 ```bash
-claude-dm cmd CC:6.1 "/compact"
-claude-dm cmd CC:6.1 "/re-read"
+claude-dm cmd HOME:6.1 "/compact"
+claude-dm cmd HOME:6.1 "/re-read"
 ```
 
 Ask and wait for reply:
 ```bash
-claude-dm ask CC:8.1 "What's the current test status?" 180
+claude-dm ask HOME:8.1 "What's the current test status?" 180
 ```
 
 Interrupt a peer that's run too long, or cancel a stuck modal:
 ```bash
-claude-dm esc rql2:10.2
+claude-dm esc test:10.2
 ```
 
 Answer a permission prompt or AskUserQuestion on a peer:
 ```bash
-claude-dm status CC:6.1           # verify state=modal (permission/question)
-claude-dm answer CC:6.1 1         # pick option 1 (typically "Yes")
-claude-dm answer CC:6.1 2         # option 2 ("Yes, and don't ask again")
-claude-dm answer CC:6.1 3         # option 3 ("No")
+claude-dm status HOME:6.1           # verify state=modal (permission/question)
+claude-dm answer HOME:6.1 1         # pick option 1 (typically "Yes")
+claude-dm answer HOME:6.1 2         # option 2 ("Yes, and don't ask again")
+claude-dm answer HOME:6.1 3         # option 3 ("No")
 ```
 
 ## Audit trail

@@ -3,7 +3,9 @@ name: cache-hygiene
 description: >
   Prompt cache cost optimization. Generates periodic conversation turns to keep the
   5-minute prompt cache warm during idle gaps. This skill should be used after
-  launching background tasks (Bash or Agent).
+  launching background tasks (Bash or Agent) or user says "cache keep-alive".
+allowed-tools:
+  - ScheduleWakeup
 compatibility: Claude Code
 ---
 

@@ -14,6 +14,8 @@ allowed-tools:
   - Read
   - Grep
   - ScheduleWakeup
+compatibility: Claude Code
+disable-model-invocation: true
 ---
 
 # Poll Progress

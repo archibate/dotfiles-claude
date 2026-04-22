@@ -5,7 +5,7 @@ description: >
   them interactively. This skill should be used after completing a major code
   modification or large multi-file edits — or when the user says "review",
   "review changes", "any bugs?", "review AI slop", "clean up AI code",
-  "review docs", "doc review".
+  "review docs", "code review".
 allowed-tools:
   - Read
   - Grep

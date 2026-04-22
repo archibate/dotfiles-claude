@@ -1,12 +1,11 @@
 ---
 name: repo-cache
 description: >
-  Clone or reuse a cached local checkout of a remote git repository (GitHub/GitLab/Bitbucket).
-  This skill should be used when the user says "clone this repo", "read the source code",
-  "look at their implementation", "check this GitHub project's files", "install this",
-  "run this project", "study this project", mentions an owner/repo identifier (e.g.
-  "anthropics/claude-code"), or when needing to browse multiple files, search across a
-  codebase, or deeply explore a remote repository's structure.
+  Clone or reuse a cached local checkout of a remote git repo (GitHub/GitLab/Bitbucket).
+  This skill should be used when the user provides a repo URL or owner/repo identifier
+  (e.g. "anthropics/claude-code"), says "clone this repo", "read the source", "look at
+  their implementation", "study this project", or needs to browse or search across
+  a remote codebase.
 ---
 
 Use this skill when the user points you to a remote git repository (GitHub/GitLab/Bitbucket URLs, `git@...`, or `owner/repo` shorthand).

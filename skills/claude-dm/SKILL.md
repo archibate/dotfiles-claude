@@ -1,17 +1,12 @@
 ---
 name: claude-dm
 description: >
-  Peer-to-peer messaging between independent Claude Code sessions sharing the
-  same tmux server. List running Claude sessions, peek their last assistant
-  reply, DM prose or slash commands, ask+wait-for-reply, interrupt a stuck
-  peer (esc), or answer a peer's permission / question modal. Use when the
-  user says "dm another claude", "check what another claude is doing",
-  "compact a stuck peer", "interrupt the other claude", "stop another
-  claude", "answer the permission prompt on peer X", "list running claude
-  sessions", "tell the other claude to X", "ask the other claude Y", or
-  mentions coordinating between multiple simultaneous Claude Code sessions.
-  NOT for spawning subagents (use the Agent tool) or scheduling future runs
-  (use schedule / RemoteTrigger).
+  Peer-to-peer messaging between Claude Code sessions sharing a tmux server:
+  list sessions, peek their last reply, DM prose or slash commands, ask and
+  wait for a reply, interrupt a stuck peer, or answer a peer's permission
+  modal. Use when coordinating multiple simultaneous Claude sessions — e.g.
+  "dm another claude", "list claude sessions", "stop another claude",
+  "answer the permission prompt on peer X", "orchestrate claude sessions".
 ---
 
 # claude-dm

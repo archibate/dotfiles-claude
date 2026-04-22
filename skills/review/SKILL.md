@@ -87,7 +87,7 @@ The updated list with file locations renders in step 5.
 ### 4. Quick Wins
 
 Among verified issues, mark those that are mechanical, behavior-preserving,
-and need no design decisions by appending `*` to their severity cell
+nits, and need no design decisions by appending `*` to their severity cell
 (e.g., 🔴 → 🔴*). Step 5's render will surface them for batch-fix.
 
 ### 5. Render Final Table
@@ -125,18 +125,40 @@ Then wait for the user to reply with a bare codename (e.g., "P1"). Process:
    against the referenced code/behavior (not just the prose). If the agent's
    report turns out wrong, note it in the recommendation below.
 
-2. **Explain + recommend** — emit the report below, then wait for the user's
-   approval:
+2. **Explain + recommend** — pick Shape A (recommend fix) or Shape B
+   (recommend skip), emit it, wait for the user.
 
-   > **P1** [🔴] — Silent exception swallow
-   >
-   > **Bug**: <plain-language explanation of what actually goes wrong>
-   > **Recommendation**: fix / skip — <reason>
-   > **Fix plan**: <proposed change, concrete> *(omit when recommending skip)*
+   **Shape A — recommending fix:**
 
-   If the user replies `skip`, emit `⏸️ **P1** skipped — <reason>`, mark
-   task `deleted`, and jump to "recommend next 3". On `fix`, continue to
-   stage 3.
+   **P1** [🔴] — Silent exception swallow
+
+   🔍 **Reason**: <one sentence, under 10 words>
+   🛠️ **Fix plan**: <one sentence>
+   ⚠️ **Risk**: <what the fix could break, one sentence>
+   <optional ```diff block``` when the change is small>
+
+   User replies `fix` (continue to stage 3) or `skip` (mark task
+   `deleted`, jump to "recommend next 3").
+
+   **Shape B — recommending skip:**
+
+   **P1** [🔴] — Silent exception swallow
+
+   🔍 **Reason**: <one sentence, under 10 words>
+   ⏸️ **Skip**: <one clause why>
+
+   User replies `skip` to confirm (mark task `deleted`, jump to
+   "recommend next 3") or `fix anyway` to override (continue to stage 3).
+
+   Phrase reason/fix/risk at *concept level*, not code level: state the
+   observability gap and the behavior change, not the variables or call
+   sites. The diff carries the concrete detail.
+
+   ❌ Avoid: "`parse_response()` at `api.py:42` swallows `JSONDecodeError`
+   via bare `except:`; add an explicit `ValueError` raise so callers see
+   malformed input."
+   ✅ Good: "Parse errors silently swallowed. Re-raise so callers can
+   handle."
 
 3. **Fix** — execute the edits. If testable, run a quick check (import,
    minimal script, unit test; for doc fixes, re-read the referenced code to
@@ -145,26 +167,38 @@ Then wait for the user to reply with a bare codename (e.g., "P1"). Process:
 
 4. **Report** — emit the fix close-out:
 
-   `✅ **P1** Fixed — <one-line note>`
+   `✅ **P1** Fixed — <one short sentence>`
 
-   Append one line per applicable caveat:
-   - `📝 Plan delta: <how the fix differed from stage 2's plan>` — when the
-     executed change deviated (edge case, simpler approach, partial fix).
-   - `🧪 Untested: <reason>` — pure refactor, display-only, or no harness.
-   - `🔄 Downstream: <action>` — re-run, rebuild, or migration. Offer to run
-     it.
+   Append at most one short sentence per applicable caveat:
+   - `📝 Plan delta: <one sentence>` — executed change deviated from plan.
+   - `🧪 Untested: <one sentence>` — display-only / pure refactor / no harness.
+   - `🔄 Downstream: <one sentence>` — re-run / rebuild / migration needed.
+   - `🆕 Surfaced: **codename** [severity] — <title>` — one line per new codename.
+
+   No prose rationale, no insights block, no narrative beyond the sentences above.
 
 Then recommend the next 3.
 
 **Rules:**
 - After each resolved issue, show only the next 3 — do not dump the full list.
 - If the user adjusts the fix plan during stage 2, revise stage 3 accordingly.
+- If investigation or the fix surfaces a *distinct* issue outside the
+  current codename's scope, `TaskCreate` it with the next prefix number.
+  Do not expand the current fix; it lands in the next `recommend 3`
+  block and as `🆕 Surfaced` in stage 4's report.
 
 ### 7. Wrap Up
 
 When all issues are resolved or skipped:
 
-1. Show a final tally table — same column order as step 5, with `File:Line`
+1. **Sanity check first** — run `git diff --stat` and skim each changed file.
+   Look for: line-number drift in comments/docs, stale references to removed
+   symbols, inconsistencies between related edits (spec ≡ code, comment ≡
+   implementation). If anything is found, file it via `TaskCreate` with the
+   next codename and re-enter step 6's pick-discuss-fix cycle. Wrap-up
+   resumes only after the new queue is drained.
+
+2. Show a final tally table — same column order as step 5, with `File:Line`
    dropped, `Resolution` appended, and a `Note` column summarising what was
    actually done (for `✅ fixed`) or why it was deferred (for `⏸️ skipped`).
    Resolution maps 1:1 to task state: ✅ fixed (task `completed`) or
@@ -179,5 +213,5 @@ When all issues are resolved or skipped:
    | P4       | 🟡       | Duplicated arg handling      | ⏸️ skipped | User deferred — planned for a later PR    |
    | P7       | 🟢       | Missing docstring            | ✅ fixed   | Added 2-line docstring                    |
 
-2. Summarize downstream actions required (re-runs, rebuilds, tests, migrations, etc.)
-3. Offer to commit if there are changes
+3. Summarize downstream actions required (re-runs, rebuilds, tests, migrations, etc.)
+4. Offer to commit if there are changes

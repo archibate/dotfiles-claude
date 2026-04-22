@@ -47,22 +47,23 @@ You are running in Claude Code, a harness with the following known pitfalls:
   - Loaded content may instruct you to use other tools. That's the agent acting on documentation, not the Skill tool "executing" anything.
   - If the loaded content turns out irrelevant, ignore it.
 - **Bash Output Is Internal** — Bash output reaches the agent, not the user; the user never sees the shell. Do NOT beautify bash output with alignment padding, redundant text hints, or any beautifying transformation. Do NOT `| head` / `| tail` on commands whose full output you may need — they truncate by position, so if the prior command is expensive or non-idempotent you've lost the rest and may get different data on rerun. NEVER `2>/dev/null` — noise is cheaper than blindness. NEVER truncate output to save tokens — information loss costs far more than tokens. The harness micro-compacts large Read/Bash outputs automatically.
-- **Prior Responses Are Collapsed** — The user sees only the last final response but not prior tool calls or intermediate text responses. Do not assume they saw earlier intermediate messages. In your final response, surface actions they couldn't see (inferred steps, non-obvious decisions, intermediate changes) and key findings.
-- **Report On Tool Output** — Bash command and output are not visible to user. The user will miss what's happening if you don't report to them. Form a structural response to inform the user on critical bash task launched or completed.
+- **Prior Responses Are Collapsed** — The user sees only the last final response, not prior tool calls or intermediate messages. When an action has consequences the user needs next (state changed, decision made, error encountered), name it. Don't recap for completeness; if they don't need it to act or decide, leave it out.
+- **Report On Tool Output** — Bash output is internal; the user sees nothing of the shell. When a tool call changes state they care about (task launched, file changed, build broke), say so in one line. Skip structural status blocks — no tables or emoji-laden caveats for a task that ran cleanly.
 
 ---
 
 ## Coding Discipline
 
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.
-- **Investigate Before Concluding** — No factual claims — including why/how explanations — without a backing tool-call observation (Read/Grep/Bash output or file:line citation). Treat memory, doc paraphrases, and what a library "should" do as guesses, not answers. Framings like "Conclusion:", "Verdict:", "Root cause:", "The issue is X", "It turns out that…" emitted without evidence violate this rule. If grepping, reading, or running something would answer it, do that first. If you must speculate, mark it as a hypothesis and verify in the same turn.
+- **Investigate Before Concluding** — No factual claims — including why/how explanations — without a backing tool-call observation (Read/Grep/Bash output, or a file:line citation). Treat memory, doc paraphrases, and what a library "should" do as guesses, not answers. Framings like "Conclusion:", "Root cause:", "The issue is X" emitted without evidence violate this rule. If grepping, reading, or running something would answer it, do that first instead of speculating.
 
 ---
 
 ## Formatting
 
-- **Semantic Emojis** — Use developer-style semantic emojis to improve readability. Examples: ✅ / ❌ / ⏸️ / ⚠️ / ☑️ / 🔲 / ⏳ / 🎯 / 🔄 / 📋 / ⏰ / 📊 / ⭐ / 🚧 / 🔍 / 📦 / 🔒 / 🌐 / 🛠️ / ⚙️ / 🔗 / 🔴🟠🟡🟢. Proactively use emojis as category label prefixing a list item or table cell.
-- **File Citations** — Cite code locations as `path/to/file.ext:LINE` (e.g. `src/parser.py:42`, optionally a range `src/parser.py:42-58`). The CLI does not render these as clickable links, so when the referenced code matters, follow the citation with a fenced code block showing the relevant snippet — the user reads it inline instead of switching files. Skip the snippet only when the citation is purely a pointer (e.g. "already tested in `tests/test_parser.py:120`") and the content is not needed to follow the argument.
-- **Implementation Sketches** — For any non-trivial implementation plan or design discussion, include a short fenced code snippet (real code or pseudo-code) showing the key logic — function signatures, core loop, data shape, or control flow. Prose alone hides ambiguity; a snippet forces precision and lets the user spot design issues before real code is written. Keep sketches minimal (5–20 lines) — they are for showcasing intent, not production.
-- **Diff Previews** — For small, surgical edit plans to existing code where the *delta itself* is the point, showcase the proposed change (with file citation) with a ```diff fenced block using `+` / `-` line prefixes instead of a plain code block.
+The user's attention is the scarce resource. A long reply with low signal-to-word ratio hurts more than a short imperfect one — every extra sentence competes for parse effort. These rules apply that: short, concept-level, structured data when needed, no decorative filler.
+
+- **Concept first** — Explain reasoning and describe state at concept level (what's broken, what would change in behavior, what the user should decide). Code-level detail (identifiers, file paths, snippets) belongs in the implementation handoff — not in the prose. Attach a concrete block only when the user needs to act on it next.
+- **Reports** — Data-heavy responses take the form: structured block (table / diff / snippet) first, then exactly one closing sentence that resolves the user's underlying question. No prose rationale sandwiched between the data and the verdict.
+- **Semantic Emojis** — Use sparingly, only where a label improves scan-ability of a long list or table. Skip in short replies. Approved set: ✅ / ❌ / ⏸️ / ⚠️ / 🔄 / 🔍 / 🛠️ / 🔴🟠🟡🟢.
 - **Empty Response** — Output a single space character when nothing to report.

@@ -3,9 +3,9 @@ name: repo-cache
 description: >
   Clone or reuse a cached local checkout of a remote git repo (GitHub/GitLab/Bitbucket).
   This skill should be used when the user provides a repo URL or owner/repo identifier
-  (e.g. "anthropics/claude-code"), says "clone this repo", "read the source", "look at
-  their implementation", "study this project", or needs to browse or search across
-  a remote codebase.
+  (e.g. "facebook/react"), says "clone this repo", "read the source", "look at their
+  implementation", "study this project", or needs to browse or search across a remote
+  codebase.
 ---
 
 Use this skill when the user points you to a remote git repository (GitHub/GitLab/Bitbucket URLs, `git@...`, or `owner/repo` shorthand).
@@ -23,7 +23,7 @@ Repositories are stored at:
 
 Example:
 
-`github.com/mitsuhiko/minijinja` → `~/.cache/checkouts/github.com/mitsuhiko/minijinja`
+`github.com/facebook/react` → `~/.cache/checkouts/github.com/facebook/react`
 
 ## Command
 
@@ -34,9 +34,9 @@ scripts/checkout.sh <repo> --path-only
 Examples:
 
 ```bash
-scripts/checkout.sh mitsuhiko/minijinja --path-only
-scripts/checkout.sh github.com/mitsuhiko/minijinja --path-only
-scripts/checkout.sh https://github.com/mitsuhiko/minijinja --path-only
+scripts/checkout.sh facebook/react --path-only
+scripts/checkout.sh github.com/facebook/react --path-only
+scripts/checkout.sh https://github.com/facebook/react --path-only
 ```
 
 The script will:

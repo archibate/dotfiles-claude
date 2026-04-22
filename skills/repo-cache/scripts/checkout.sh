@@ -20,9 +20,9 @@ Options:
   --update-interval <secs>    Minimum seconds between updates (default: 300).
 
 Environment:
-  LIBRARIAN_CACHE_ROOT        Override cache root (default: ~/.cache/checkouts)
-  LIBRARIAN_DEFAULT_HOST      Host for owner/repo shorthand (default: github.com)
-  LIBRARIAN_UPDATE_INTERVAL   Default update interval in seconds
+  REPO_CACHE_ROOT             Override cache root (default: ~/.cache/checkouts)
+  REPO_CACHE_DEFAULT_HOST     Host for owner/repo shorthand (default: github.com)
+  REPO_CACHE_UPDATE_INTERVAL  Default update interval in seconds
 EOF
 }
 
@@ -34,7 +34,7 @@ fi
 repo_input=""
 path_only=0
 force_update=0
-update_interval="${LIBRARIAN_UPDATE_INTERVAL:-300}"
+update_interval="${REPO_CACHE_UPDATE_INTERVAL:-300}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -119,7 +119,7 @@ parse_repo() {
         host="$first"
         path="${input#*/}"
       else
-        host="${LIBRARIAN_DEFAULT_HOST:-github.com}"
+        host="${REPO_CACHE_DEFAULT_HOST:-github.com}"
         path="$input"
       fi
       ;;
@@ -183,7 +183,7 @@ host="$parsed_host"
 org="$parsed_org"
 repo="$parsed_repo"
 
-cache_root="${LIBRARIAN_CACHE_ROOT:-$HOME/.cache/checkouts}"
+cache_root="${REPO_CACHE_ROOT:-$HOME/.cache/checkouts}"
 checkout_path="$cache_root/$host/$org/$repo"
 origin_url="https://$host/$org/$repo.git"
 
@@ -211,7 +211,7 @@ if [[ "$current_origin" != "$origin_url" ]]; then
   git -C "$checkout_path" remote set-url origin "$origin_url"
 fi
 
-last_fetch_file="$checkout_path/.git/librarian-last-fetch"
+last_fetch_file="$checkout_path/.git/repo-cache-last-fetch"
 now_epoch="$(date +%s)"
 needs_update=1
 

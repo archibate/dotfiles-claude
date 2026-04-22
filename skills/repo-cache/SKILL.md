@@ -1,5 +1,5 @@
 ---
-name: librarian
+name: repo-cache
 description: >
   Clone or reuse a cached local checkout of a remote git repository (GitHub/GitLab/Bitbucket).
   This skill should be used when the user says "clone this repo", "read the source code",

@@ -1,6 +1,9 @@
 ---
 name: bilibili-api
-description: This skill should be used when the user asks to "use bilibili API", "download bilibili video", "get bilibili user info", "list bilibili favorites", "send bilibili danmaku", "upload video to bilibili", "monitor bilibili live room", "search bilibili", "get bilibili comments", or needs guidance on the bilibili_api Python library usage, authentication, API endpoints, or workflow patterns.
+description: >
+  Use the `bilibili-api-python` async library (400+ endpoints) for any Bilibili
+  programmatic operation — videos, users, favorites, danmaku, live rooms,
+  comments, search, uploads.
 version: 0.1.0
 ---
 

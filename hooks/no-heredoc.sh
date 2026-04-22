@@ -1,10 +1,15 @@
 #!/usr/bin/bash
 set -euo pipefail
 
+source "$(dirname "$0")/lib/bypass.sh"
+source "$(dirname "$0")/lib/emit.sh"
+source "$(dirname "$0")/lib/read_input.sh"
+
 max_lines=80
 
-input=$(cat)
-command=$(jq -r '.tool_input.command // ""' <<< "$input")
+read_bash_command
+bypass_check BYPASS_HEREDOC_RESTRICTION
+bypass_check BYPASS_INLINE_SCRIPT_RESTRICTION
 
 # Detect heredoc (<<, not <<<)
 has_heredoc=false
@@ -52,22 +57,15 @@ if ! $has_heredoc && ! $has_inline_c; then
     exit 0
 fi
 
-# Bypass for git commit (heredoc used for commit message)
+# Implicit bypass for git commit (heredoc used for commit message)
 if echo "$command" | grep -qE '\bgit\s+commit\b'; then
-    exit 0
-fi
-
-# Explicit bypass markers
-if echo "$command" | grep -qF 'BYPASS_HEREDOC_RESTRICTION'; then
-    exit 0
-fi
-if echo "$command" | grep -qF 'BYPASS_INLINE_SCRIPT_RESTRICTION'; then
     exit 0
 fi
 
 # Count lines inside heredoc; allow if <= $max_lines
 script_lines=0
 detection_type=""
+bypass_marker=""
 if $has_heredoc; then
     marker=$(printf '%s' "$command" | grep -oE "<<[-'\" ]*[A-Za-z_][A-Za-z0-9_]*" | head -1 | grep -oE '[A-Za-z_][A-Za-z0-9_]*$')
     if [ -n "$marker" ]; then
@@ -78,10 +76,12 @@ if $has_heredoc; then
             END { print count+0 }
         ')
         detection_type="Heredoc"
+        bypass_marker="BYPASS_HEREDOC_RESTRICTION"
     fi
 elif $has_inline_c; then
     script_lines=$inline_c_lines
     detection_type="Inline -c script"
+    bypass_marker="BYPASS_INLINE_SCRIPT_RESTRICTION"
 fi
 
 script_lines=${script_lines:-0}
@@ -125,8 +125,7 @@ case "$interpreter" in
         ;;
 esac
 
-printf -v reason '%s >%s lines detected for %s. Use Write tool + temp file instead:\n  %s\nIf you must use inline script, add comment `BYPASS_INLINE_SCRIPT_RESTRICTION` to the first line of command.' \
-    "$detection_type" "$max_lines" "$interpreter" "$example"
+printf -v reason '%s >%s lines detected for %s. Use Write tool + temp file instead:\n  %s\nIf you believe this is a false positive, add comment `%s` to the first line of command.' \
+    "$detection_type" "$max_lines" "$interpreter" "$example" "$bypass_marker"
 
-source "$(dirname "$0")/lib/emit.sh"
 emit_pre_tool_deny "$reason"

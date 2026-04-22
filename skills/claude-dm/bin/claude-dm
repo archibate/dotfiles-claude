@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=../lib/common.sh
+source "$HERE/lib/common.sh"
+# shellcheck source=../lib/read.sh
+source "$HERE/lib/read.sh"
+# shellcheck source=../lib/safety.sh
+source "$HERE/lib/safety.sh"
+# shellcheck source=../lib/write.sh
+source "$HERE/lib/write.sh"
+
+usage() {
+  cat <<EOF
+Usage: claude-dm <verb> [args...]
+
+Read-only:
+  list                         roster of claude panes on \$CLAUDE_DM_SOCKET
+  peek  <target> [lines]       last N text blocks from peer's transcript (default 30)
+  tail  <target>               follow peer's transcript live
+  status <target>              show pane title, state, transcript path
+
+Write:
+  send   <target> <msg> [--force]                 DM a prose message; gated by safe_to_dm
+  cmd    <target> /<slash>  [--force] [--confirm] slash command; --confirm needed for red tier
+  ask    <target> <msg> [timeout_s]               DM + block until peer reply (sentinel; default 120s)
+  esc    <target> [--force]                       send Escape (emergency interrupt / modal cancel)
+  answer <target> <key> [--force]                 reply to modal (1/2/3/y/n/a); requires state=modal
+
+Env:
+  CLAUDE_DM_SOCKET=$SOCKET
+EOF
+}
+
+cmd_list() {
+  printf 'ADDR\tPID\tSTATE\tSID\tTITLE\n'
+  dm_roster
+}
+
+cmd_peek() {
+  local target="${1:?target required: session:window.pane}"
+  dm_peek "$target" "${2:-30}"
+}
+
+cmd_tail() {
+  local target="${1:?target required}"
+  dm_tail "$target"
+}
+
+cmd_status() {
+  local target="${1:?target required}"
+  local pid title sid tr
+  pid=$(target_pid "$target") || die "no such pane: $target"
+  [[ -n "$pid" ]] || die "no such pane: $target"
+  title=$(target_title "$target")
+  sid=$(pid_to_sid "$pid" 2>/dev/null || true)
+  tr=$(target_transcript "$target" 2>/dev/null || true)
+
+  printf 'target      %s\n' "$target"
+  printf 'pid         %s\n' "$pid"
+  printf 'title       %s\n' "$title"
+  printf 'cmd         %s\n' "$(target_cmd "$target")"
+  printf 'sessionId   %s\n' "${sid:-<none>}"
+  printf 'transcript  %s\n' "${tr:-<none>}"
+
+  local state; state=$(peer_state "$target")
+  printf 'state       %s' "$state"
+  if [[ "$state" == "modal" ]]; then
+    printf ' (%s)' "$(modal_subtype "$target")"
+  fi
+  printf '\n'
+
+  local reason
+  if reason=$(safe_to_dm "$target" 2>&1); then
+    printf 'safe_to_dm  yes\n'
+  else
+    printf 'safe_to_dm  no (%s)\n' "$reason"
+  fi
+}
+
+cmd_send() {
+  local target="${1:?target required}"
+  local msg="${2:?message required}"
+  local force="${3:-}"
+  dm_send "$target" "$msg" "$force"
+}
+
+cmd_cmd() {
+  local target="${1:?target required}"
+  local slash="${2:?slash command required}"
+  shift 2
+  dm_cmd "$target" "$slash" "$@"
+}
+
+cmd_ask() {
+  local target="${1:?target required}"
+  local msg="${2:?message required}"
+  local timeout="${3:-120}"
+  dm_ask "$target" "$msg" "$timeout"
+}
+
+cmd_esc() {
+  local target="${1:?target required}"
+  local force="${2:-}"
+  dm_esc "$target" "$force"
+}
+
+cmd_answer() {
+  local target="${1:?target required}"
+  local key="${2:?answer key required}"
+  local force="${3:-}"
+  dm_answer "$target" "$key" "$force"
+}
+
+main() {
+  local verb="${1:-}"; shift || true
+  case "$verb" in
+    list)   cmd_list   "$@" ;;
+    peek)   cmd_peek   "$@" ;;
+    tail)   cmd_tail   "$@" ;;
+    status) cmd_status "$@" ;;
+    send)   cmd_send   "$@" ;;
+    cmd)    cmd_cmd    "$@" ;;
+    ask)    cmd_ask    "$@" ;;
+    esc)    cmd_esc    "$@" ;;
+    answer) cmd_answer "$@" ;;
+    ''|-h|--help|help) usage ;;
+    *) usage >&2; die "unknown verb: $verb" ;;
+  esac
+}
+
+main "$@"

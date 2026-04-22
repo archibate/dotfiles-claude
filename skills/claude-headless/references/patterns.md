@@ -39,9 +39,10 @@ Skip CLAUDE.md, hooks, plugins, MCP for fast, reproducible runs:
 ```bash
 claude --bare -p "Run tests and summarize failures" \
   --allowedTools "Bash(npm test),Read" \
-  --output-format stream-json \
-  --verbose
+  --output-format json | jq -r '.result'
 ```
+
+Use `--output-format json` (single terminal blob) for CI — not `stream-json`, which needs a live consumer and forces `--verbose`. See `stream-json.md` for the streaming protocol.
 
 ## CI/CD — GitHub Actions
 
@@ -91,6 +92,27 @@ Key findings from testing:
 - Tmux sessions are created automatically even in `-p` mode
 - Lead can create teams, spawn teammates, exchange messages, and shut down — all via JSON stream
 - `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` env var required
+
+## Multi-Turn Stream-JSON via FIFO
+
+```bash
+mkfifo /tmp/cc-in
+tail -f /tmp/cc-in | claude -p \
+  --input-format stream-json --output-format stream-json --verbose \
+  > /tmp/cc-out.log 2>&1 &
+
+# Turn 1
+echo '{"type":"user","message":{"role":"user","content":"List 3 primes"},"session_id":"default"}' > /tmp/cc-in
+
+# Turn 2 — reuse session_id to stay in the same conversation
+echo '{"type":"user","message":{"role":"user","content":"And 3 more"},"session_id":"default"}' > /tmp/cc-in
+```
+
+- `tail -f` holds the FIFO's read end open across turns; each `echo` writes one NDJSON record
+- `--verbose` is required with `stream-json`
+- `session_id: "default"` works for turn 1; reuse it or switch to the UUID from `system/init`
+
+See `stream-json.md` for the event schema.
 
 ## Bot Bridge / Proxy
 

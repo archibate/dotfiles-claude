@@ -1,10 +1,9 @@
 ---
 name: deepwiki
 description: >
-  Quick AI-generated overview of GitHub repositories via DeepWiki MCP. This skill should be
-  used when the user says "how does this project work", "what's the architecture of this repo",
-  "explain this codebase", or when needing a fast high-level understanding of a repository's
-  architecture and design decisions.
+  Quick AI-generated overview of GitHub repositories via DeepWiki MCP. Use when
+  needing a fast high-level understanding of a repository's architecture and
+  design decisions without fetching full repository.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---
@@ -70,4 +69,4 @@ scripts/mcpcall.py ask_question --args '{"repoName": ["pallets/flask", "django/d
 - `ask_question` supports up to 10 repos at once for cross-project comparisons.
 - Use `ask_question` for targeted queries — it's faster than reading full wiki contents.
 - Works with any public GitHub repository.
-- Responses are AI-generated and can hallucinate, especially on small/obscure repos. Always verify key claims against actual source code (use `/librarian` to clone and read).
+- Responses are AI-generated and can hallucinate, especially on small/obscure repos. Always verify key claims against actual source code (use `/repo-cache` to clone and read).

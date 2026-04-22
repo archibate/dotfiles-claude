@@ -3,17 +3,12 @@
 # CLAUDE.md: "uv not pip", "pnpm not npm"
 set -euo pipefail
 
-input=$(cat)
-command=$(jq -r '.tool_input.command // ""' <<< "$input")
-
-[ -n "$command" ] || exit 0
-
-# Bypass marker
-if echo "$command" | grep -qF 'BYPASS_PACKAGE_MANAGER_CHECK'; then
-    exit 0
-fi
-
+source "$(dirname "$0")/lib/bypass.sh"
 source "$(dirname "$0")/lib/emit.sh"
+source "$(dirname "$0")/lib/read_input.sh"
+
+read_bash_command
+bypass_check BYPASS_PACKAGE_MANAGER_CHECK
 
 # Detect pip usage (pip install, pip freeze, pip list, etc.)
 # Match pip at command position, not as substring (e.g. "pipenv" should not match)

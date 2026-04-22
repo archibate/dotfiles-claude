@@ -1,10 +1,11 @@
 ---
 name: claude-headless
 description: >
-  Programmatic/headless Claude Code usage: CLI flags, stream-json protocol, Agent SDKs,
-  CI/CD patterns, session management. This skill should be used before working with
-  Claude Code non-interactively — including CI/CD integration, session inspection, or
-  building tooling that invokes Claude Code programmatically.
+  Programmatic/headless Claude Code usage: CLI flags, stream-json protocol, Agent
+  SDKs, session management. This skill should be used when spawning Claude as a
+  subprocess, testing a skill or agent behavior, running `claude -p`, building with
+  the Agent SDK, or the user says "test in claude", "claude headless", "claude in
+  background".
 ---
 
 # Claude Headless

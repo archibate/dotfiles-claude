@@ -25,12 +25,15 @@ compatibility: Claude Code
 ## When to Use
 
 - Non-interactive long-running tasks expected to run for >2 minutes
-- Computation intensive tasks with parallel job scheduling (prevent resource exhaustion)
+- Computation intensive tasks with parallel job scheduling: pueue smart scheduler and resource limitation prevent resource exhaustion
+- Jobs requires persistence: pueue daemonized in background, persist even after claude exists
 
 ## When NOT to Use
 
 - Short tasks (<2 minutes): run in Bash directly
 - Interactive commands: `tmux` instead for TUI access
+- IO-bound tasks: pueue scheduler not helpful
+- Jobs okay to exit by claude exit: use built-in `run_in_background` instead
 
 ## Workflow
 

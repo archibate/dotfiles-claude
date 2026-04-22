@@ -3,10 +3,9 @@
 # CLAUDE.md: "uv run not python3"
 set -euo pipefail
 
-input=$(cat)
-command=$(echo "$input" | jq -r '.tool_input.command // ""')
+source "$(dirname "$0")/lib/read_input.sh"
 
-[ -n "$command" ] || exit 0
+read_bash_command
 
 # Skip if command already uses uv run
 if echo "$command" | grep -qP '\buv\s+run\b'; then

@@ -1,12 +1,11 @@
 ---
 name: context7
 description: >
-  Fetch current documentation for libraries, frameworks, SDKs, APIs, and CLI tools via
-  Context7. This skill should be used before calling any library API whose exact syntax,
-  configuration, or version-specific behavior is uncertain — even well-known ones like
-  React, Next.js, Prisma, Express, Tailwind, Django, or Spring Boot. Covers API syntax,
-  configuration, version migration, and library-specific debugging. Prefer this over web
-  search for library docs.
+  Fetch current documentation for libraries, SDKs, APIs, and CLI tools via
+  Context7. This skill should be used before any library API call — for unknown
+  libraries to learn correct usage, for well-known ones as anti-hallucination
+  guard since training cutoff knowledge predates recent API changes. Prefer over
+  web search for library docs.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

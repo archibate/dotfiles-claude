@@ -12,6 +12,11 @@ if echo "$command" | grep -qP '\buv\s+run\b'; then
     exit 0
 fi
 
+# Skip if an active venv/conda env already scopes bare python3 correctly
+if [ -n "${VIRTUAL_ENV:-}" ] || [ -n "${CONDA_PREFIX:-}" ]; then
+    exit 0
+fi
+
 # Detect bare python3/python at command position
 if ! echo "$command" | grep -qP '(^|&&|;|\|)\s*python3?\s'; then
     exit 0

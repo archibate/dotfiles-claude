@@ -13,6 +13,11 @@ check_python_unbuffered() {
     local command="$1"
     local cwd="${2:-.}"
 
+    # Already unbuffered via inherited environment (Python treats any non-empty value as truthy)
+    if [ -n "${PYTHONUNBUFFERED:-}" ]; then
+        return 1  # OK
+    fi
+
     local has_python=false
     local recipe=""
 

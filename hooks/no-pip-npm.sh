@@ -12,7 +12,8 @@ bypass_check BYPASS_PACKAGE_MANAGER_CHECK
 
 # Detect pip usage (pip install, pip freeze, pip list, etc.)
 # Match pip at command position, not as substring (e.g. "pipenv" should not match)
-if echo "$command" | grep -qP '(^|&&|;|\|)\s*pip3?\s'; then
+# Skip inside an active conda env — conda users may need pip for conda-managed interpreters.
+if [ -z "${CONDA_PREFIX:-}" ] && echo "$command" | grep -qP '(^|&&|;|\|)\s*pip3?\s'; then
     emit_pre_tool_deny 'Use uv instead of pip.
   pip install pkg  →  uv add pkg (project) or uv pip install pkg (venv)
   pip freeze       →  uv pip freeze

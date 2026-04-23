@@ -22,6 +22,11 @@ if ! command -v uv >/dev/null 2>&1; then
     exit 0
 fi
 
+# Skip inside an active conda env — the interpreter is managed by conda, not uv scripts.
+if [ -n "${CONDA_PREFIX:-}" ]; then
+    exit 0
+fi
+
 expected_shebang="#!/usr/bin/env -S uv run --script"
 first_line=$(printf '%s' "$content" | head -1)
 

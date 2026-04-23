@@ -1,11 +1,12 @@
 ---
 name: context7
 description: >
-  Fetch current documentation for libraries, SDKs, APIs, and CLI tools via
-  Context7. This skill should be used before any library API call — for unknown
-  libraries to learn correct usage, for well-known ones as anti-hallucination
-  guard since training cutoff knowledge predates recent API changes. Prefer over
-  web search for library docs.
+  Fetch current documentation for libraries, SDKs, APIs, and CLI tools via Context7.
+  TRIGGER before writing or editing any non-stdlib library call — including libraries
+  you think you know, since training cutoff predates recent API changes. SKIP only for
+  stdlib code, raw HTTP/filesystem, shell built-ins, or stable primitives whose
+  signatures haven't changed in years (e.g. `json.dumps`, `os.path`). Version-pinning
+  alone is not grounds to skip. Prefer this over web search for library docs.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

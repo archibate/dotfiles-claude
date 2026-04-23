@@ -2,9 +2,10 @@
 name: preflight-check
 description: >
   Resource-aware pre-launch checklist for long-running or heavy tasks — prevents OOM,
-  wasted compute, and daytime disruption. This skill should be used before launching any
-  long-running task, computation-intensive jobs, background workers, parallel jobs,
-  or any task estimated >10 minutes.
+  wasted compute, and daytime disruption. TRIGGER before: any `pueue add` of compute work,
+  builds/benchmarks/renders/training jobs, large-scale scrapes or scripted browser runs,
+  spawning 2+ parallel subagents, full-repo test runs, or any Bash call with
+  `run_in_background=true` whose runtime is uncertain.
 allowed-tools:
   - Bash(free:*)
   - Bash(df:*)

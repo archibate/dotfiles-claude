@@ -6,8 +6,8 @@ description: >
   This skill should be used when searching non-English content, finding academic
   papers, extracting figures from PDFs, searching for images, or user says
   "search in Chinese", "find papers on arXiv", "search for images of", "get
-  BibTeX". Prefer over WebSearch when content is non-English, academic, or media
-  (PDF/image).
+  BibTeX". Prefer this over WebSearch when content is non-English, academic, or
+  media (PDF/image).
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

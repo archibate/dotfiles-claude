@@ -133,6 +133,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "ScheduleWakeup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/no-schedule-wakeup-deadzone.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [

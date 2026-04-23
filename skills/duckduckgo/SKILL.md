@@ -1,6 +1,6 @@
 ---
 name: duckduckgo
-description: Use this skill for web search and content scraping via DuckDuckGo.
+description: Web search and content scraping via DuckDuckGo. Use this as a fallback to other web tools.
 disable-model-invocation: true
 allowed-tools:
   - Bash(npx -y mcporter*:*)

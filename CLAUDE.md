@@ -25,7 +25,6 @@ Specialized tools available:
 - `pdftotext` — PDF text extraction
 - `sqlite3` — SQLite CLI
 - `hyperfine` — command benchmarking
-- `defuddle` (`npx defuddle`) — web content extraction
 
 ---
 

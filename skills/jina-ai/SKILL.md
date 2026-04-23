@@ -82,7 +82,7 @@ jina read https://example.com
 jina read https://example.com --links --images
 ```
 
-> Fallback if `jina read` not working: Use `/defuddle` or `/scrapling` skill instead.
+> Fallback if `jina read` not working: Use `/read-url` skill instead.
 
 ### Search
 
@@ -197,10 +197,11 @@ jina search "query" && echo "ok" || echo "failed: $?"
 
 | Scenario | Tool |
 |---|---|
-| Read a web page | **defuddle** or **WebFetch** (built-in) |
-| Fallback if `jina` service unreachable | **WebSearch** (built-in) |
+| Read a web page | **`/read-url`** skill |
 | Find STEM papers | `jina search --arxiv` |
 | Find social-science / finance papers | `jina search --ssrn` |
+| Generic web search | `jina search` |
+| Fallback if `jina` service unreachable | **WebSearch** (built-in) |
 
 ## Tips
 

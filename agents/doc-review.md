@@ -83,7 +83,8 @@ comprehension.
 
 | Pattern | Flag When |
 |---|---|
-| **Tonal drift** | New lines diverge from siblings in length or rhetorical strength. Editorial framing ("useful for X", "critical for", "recommended for"), selling language, over-explanation, justifying parentheticals. |
+| **Tonal drift** | New lines diverge from siblings in length or rhetorical strength. Editorial framing ("useful for X", "critical for", "recommended for"), selling language, over-explanation. |
+| **Justifying asides** | Asides that add nothing the reader needs, in any delimiter (parenthetical, em-dash, or comma-set-off). Defenses of already-obvious claims ("obvious thing (long explanation defending it)") or citations of authorities the reader can already locate ("rules (see X section)", "rules — per X section", "rules, per X section"). Don't flag informative asides: acronym expansions, enumerated examples of the preceding term, scope carve-outs ("applies here — not in X"), or refs the reader can't easily locate. |
 | **Defensive caveats** | Paragraphs warning about failure modes the reader isn't hitting. "Why not X? Because…" preemptive Q&A, "Caveats:"/"Gotchas:" anticipating hypothetical mistakes. |
 | **Audience mismatch** | Guidance shaped for a different reader than the file's actual consumer. Interactive-human cues in agent-facing docs, author-local artifacts (home paths, usernames) in public docs, low-level internals in end-user tutorials. |
 | **Incident-flavored examples** | Concrete details from the writer's current task embedded as canonical examples in reusable reference docs — specific tool names, error strings, filenames that read out-of-scope when consulted outside today's context. |

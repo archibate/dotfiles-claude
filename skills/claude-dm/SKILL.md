@@ -2,11 +2,9 @@
 name: claude-dm
 description: >
   Peer-to-peer messaging between Claude Code sessions sharing a tmux server:
-  list sessions, peek their last reply, DM prose or slash commands, ask and
-  wait for a reply, interrupt a stuck peer, or answer a peer's permission
-  modal. Use when coordinating multiple simultaneous Claude sessions — e.g.
+  Use when coordinating multiple simultaneous Claude sessions — e.g.
   "dm another claude", "list claude sessions", "stop another claude",
-  "answer the permission prompt on peer X", "orchestrate claude sessions".
+  "monitor peer claude", "orchestrate claude sessions", "spawn claude in tmux".
 ---
 
 # claude-dm

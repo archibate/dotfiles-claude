@@ -135,12 +135,12 @@
         ]
       }
     ],
-    "SessionStart": [
+    "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/explanatory-session-start.sh",
+            "command": "bash ~/.claude/hooks/concise-reply-reminder.sh",
             "timeout": 5
           }
         ]

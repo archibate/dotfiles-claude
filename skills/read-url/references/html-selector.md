@@ -10,8 +10,10 @@ Save the HTML and grep for distinctive class names or ids near the wanted conten
 
 ```bash
 curl -sL <url> -o /tmp/page.html
-rg -o 'class="[^"]*"' /tmp/page.html | sort -u
+rg -o "class=[\"'][^\"']*" /tmp/page.html | sed 's/class=.//' | tr ' ' '\n' | sort -u
 ```
+
+Handles both double- and single-quoted `class=` attrs; one class per line.
 
 If the user can name the selector (e.g. from browser devtools), use that directly.
 

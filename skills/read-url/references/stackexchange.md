@@ -1,6 +1,6 @@
 # Stack Exchange API
 
-Stack Overflow / Stack Exchange pages put the question and answers in sibling DOM blocks, so defuddle returns only the question. Use the API instead.
+Defuddle does extract the question plus answers from Stack Exchange pages, but the output interleaves vote counts, edit timestamps, usernames, and comment dumps around the actual content. The API returns just the markdown body with clean metadata — use it instead for anything longer than a spot-check.
 
 ## Site parameter
 
@@ -17,7 +17,7 @@ The `site=` query string uses short names, not full domains:
 | `mathoverflow.net` | `mathoverflow.net` |
 | Other `*.stackexchange.com` | subdomain (e.g. `tex`, `stats`, `apple`) |
 
-Full list: `curl -sL 'https://api.stackexchange.com/2.3/sites?pagesize=500' | jq -r '.items[] | "\(.api_site_parameter)\t\(.site_url)"'`.
+Full list: `curl -sL 'https://api.stackexchange.com/2.3/sites?pagesize=500' | jq -r '.items[] | "\(.api_site_parameter)\t\(.site_url)"'` — this counts against the quota too; cache locally if repeating.
 
 ## Question ID from URL
 

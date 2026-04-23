@@ -243,13 +243,14 @@
     "pyright-lsp@claude-plugins-official": true,
     "context7@claude-plugins-official": false,
     "clangd-lsp@claude-plugins-official": true,
-    "claude-hud@claude-hud": true,
-    "code-simplifier@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
-    "codex@openai-codex": true,
-    "plugin-dev@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "typescript-lsp@claude-plugins-official": true
+    "claude-hud@claude-hud": false,
+    "code-simplifier@claude-plugins-official": false,
+    "claude-md-management@claude-plugins-official": false,
+    "codex@openai-codex": false,
+    "plugin-dev@claude-plugins-official": false,
+    "code-review@claude-plugins-official": false,
+    "typescript-lsp@claude-plugins-official": true,
+    "lua-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {

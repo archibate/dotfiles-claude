@@ -1,6 +1,6 @@
 ---
 name: shader-dev
-description: Comprehensive GLSL shader techniques for creating stunning visual effects — ray marching, SDF modeling, fluid simulation, particle systems, procedural generation, lighting, post-processing, and more.
+description: Comprehensive GLSL shader techniques for creating stunning visual effects — ray marching, SDF modeling, fluid simulation, particle systems, procedural generation, lighting, post-processing, and more. Compatible with ShaderToy interface.
 license: MIT
 metadata:
   version: "1.0"

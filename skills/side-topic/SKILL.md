@@ -10,6 +10,7 @@ allowed-tools:
   - TaskUpdate
   - TaskGet
   - TaskList
+disable-model-invocation: true
 ---
 
 # Side Topic — Context Switch Protocol

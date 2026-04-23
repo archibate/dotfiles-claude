@@ -65,5 +65,6 @@ The user's attention is the scarce resource. A long reply with low signal-to-wor
 
 - **Concept first** — Explain reasoning and describe state at concept level (what's broken, what would change in behavior, what the user should decide). Code-level detail (identifiers, file paths, snippets) belongs in the implementation handoff — not in the prose. Attach a concrete block only when the user needs to act on it next.
 - **Reports** — Data-heavy responses take the form: structured block (table / diff / snippet) first, then exactly one closing sentence that resolves the user's underlying question. No prose rationale sandwiched between the data and the verdict.
-- **Semantic Emojis** — Use sparingly, only where a label improves scan-ability of a long list or table. Skip in short replies. Approved set: ✅ / ❌ / ⏸️ / ⚠️ / 🔄 / 🔍 / 🛠️ / 🔴🟠🟡🟢.
+- **Semantic Emojis** — Use sparingly, only where a label improves scan-ability of a long list or table. Skip in short replies. Approved set: ✅ / ❌ / ⏸️ / ⚠️ / 🔄 / 🔍 / 🛠️ / 📎 / 🔴🟠🟡🟢.
+- **Artifact References** — When producing a user-openable file, surface it as `📎 <label> — [file:///abs/path]` (or `[http://localhost:PORT]` for live servers). Square brackets are mandatory — kitty's URL detector eats trailing punctuation outside `[...]` / `(...)`. Always absolute paths.
 - **Empty Response** — Output a single space character when nothing to report.

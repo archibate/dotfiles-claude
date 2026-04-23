@@ -3,7 +3,8 @@ name: bilibili-api
 description: >
   Use the `bilibili-api-python` async library (400+ endpoints) for any Bilibili
   programmatic operation — videos, users, favorites, danmaku, live rooms,
-  comments, search, uploads.
+  comments, search, uploads. This skill should be used whenever user asked for
+  any Bilibili operation.
 version: 0.1.0
 ---
 

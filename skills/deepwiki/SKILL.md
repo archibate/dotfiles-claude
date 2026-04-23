@@ -1,8 +1,8 @@
 ---
 name: deepwiki
 description: >
-  Quick AI-generated overview of GitHub repositories via DeepWiki MCP. Use when
-  needing a fast high-level understanding of a repository's architecture and
+  Fetch quick AI-generated overview of GitHub repositories via DeepWiki MCP. Use
+  when needing a fast high-level understanding of a repository's architecture and
   design decisions without fetching full repository.
 allowed-tools:
   - Bash(*mcpcall.py*:*)

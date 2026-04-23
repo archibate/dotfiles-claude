@@ -2,9 +2,10 @@
 name: side-topic
 description: >
   Workflow to preserve task state when the user interrupts mid-task with an unrelated topic,
-  then resume afterward. This skill MUST be used when a mid-task message is off-topic, or
-  the user says "btw", "quick question", "unrelated but", "before I forget", or "back to
-  what we were doing".
+  then resume afterward. TRIGGER whenever a mid-task message's subject clearly differs from
+  the active task — do not wait for explicit cue words. Common cue phrases: "btw", "also",
+  "one more thing", "quick question", "unrelated but", "before I forget", "tangent",
+  "side note", "back to what we were doing".
 allowed-tools:
   - TaskCreate
   - TaskUpdate

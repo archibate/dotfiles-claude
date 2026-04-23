@@ -1,6 +1,6 @@
 ---
 name: canvas-design
-description: Create beautiful visual art in .png and .pdf documents using design philosophy. Use this skill when the user asks to create a poster, piece of art, design, or other static piece.
+description: Create beautiful visual art in .png and .pdf documents using design philosophy. This skill should be used when the user asks to create a poster, piece of art, design, or other static piece.
 license: Create original visual designs, never copying existing artists' work to avoid copyright violations. Complete terms in LICENSE.txt
 ---
 

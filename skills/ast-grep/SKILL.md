@@ -1,10 +1,11 @@
 ---
 name: ast-grep
 description: >
-  Guide for writing ast-grep rules to perform structural code search and analysis. This
-  skill should be used when a simple grep/glob search is insufficient and structural
-  AST-based pattern matching is needed — e.g. finding specific code structures, renaming
-  across syntax boundaries, or complex code queries.
+  Guide for writing ast-grep rules to perform structural code search and analysis.
+  TRIGGER when a text-only grep would need 2+ alternations, regex capture groups,
+  multi-line patterns, or filtering by syntactic role (call vs. import vs. definition).
+  Also TRIGGER when renaming a symbol across call sites + definitions, finding all
+  callers of a method on a specific type, matching code shapes, or writing codemods.
 ---
 
 # ast-grep Code Search

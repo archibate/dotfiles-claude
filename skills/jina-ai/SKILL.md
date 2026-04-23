@@ -1,268 +1,209 @@
 ---
 name: jina-ai
 description: >
-  Web search in specific languages/regions (local community content), academic
-  papers (arXiv/SSRN), PDF extraction, BibTeX, and image search via Jina AI.
-  This skill should be used when searching non-English content, finding academic
-  papers, extracting figures from PDFs, searching for images, or user says
-  "search in Chinese", "find papers on arXiv", "search for images of", "get
-  BibTeX". Prefer this over WebSearch when content is non-English, academic, or
-  media (PDF/image).
+  Web search with time-window and region/language filters, academic papers (arXiv/SSRN), PDF table/figure extraction, BibTeX, image search, web page reading, embeddings, reranking, classification, and deduplication (text or images) via Jina AI. This skill should be used when searching non-English content, finding academic papers, extracting figures from PDFs, searching for images, or user says "search in Chinese", "find papers on arXiv", "search for images of", "get BibTeX". Prefer this over WebSearch for better results.
 allowed-tools:
-  - Bash(*mcpcall.py*:*)
+  - Bash(jina:*)
+  - Bash(*dedup_images.py*:*)
 ---
 
 # Jina AI
 
-Call Jina MCP tools via `scripts/mcpcall.py` for web content extraction, search, academic research, embeddings-based NLP, and visual capture.
+Use the `jina` CLI for all Jina AI APIs — search, read, embed, rerank, classify, dedup, screenshot, BibTeX, PDF figures. Composable with Unix pipes.
 
 ## Setup
 
-Requires `JINA_API_KEY` environment variable (get one at [jina.ai/api-key](https://jina.ai/api-key)):
+One-time install (skip if `command -v jina` returns a path):
 
 ```bash
-export JINA_API_KEY=<key>
+uv tool install jina-cli --with 'httpx[socks]'
 ```
 
-## Web Reading ⚠️ Unreliable — use defuddle or WebFetch instead
+`JINA_API_KEY` must be set in the environment. Get one at <https://jina.ai/?sui=apikey>.
 
-### read_url ❌
-Extract web page content as clean markdown. Supports single URL or array of URLs.
-- `url` (required): URL string or array of URLs
-- `withAllLinks`: extract all hyperlinks as structured data
-- `withAllImages`: extract all images as structured data
+## Commands
+
+| Command | Function |
+|---|---|
+| `jina read URL` | Extract clean markdown from a web page |
+| `jina search QUERY` | Web search (also `--arxiv`, `--ssrn`, `--images`, `--blog`) |
+| `jina embed TEXT` | Generate embeddings |
+| `jina rerank QUERY` | Rerank stdin documents by relevance |
+| `jina classify TEXT --labels a,b,c` | Classify text into labels |
+| `jina dedup [-k N]` | Deduplicate stdin text lines |
+| `jina screenshot URL` | Capture a screenshot of a URL |
+| `jina bibtex QUERY` | Search BibTeX citations (DBLP + Semantic Scholar) |
+| `jina expand QUERY` | Expand a query into related queries |
+| `jina pdf URL\|ARXIV_ID` | Extract figures/tables/equations from a PDF |
+| `jina datetime URL` | Guess publish/update date of a URL |
+| `jina primer` | Session context (time, location, network) |
+| `scripts/dedup_images.py PATH_OR_URL ...` | Deduplicate images by visual similarity (CLIP v2) — see [Image dedup](#image-dedup) |
+
+Most `jina` subcommands support `--json` for structured output and `--api-key` to override `$JINA_API_KEY`.
+
+## Pipes
+
+Commands read stdin and write stdout, so chain them:
 
 ```bash
-scripts/mcpcall.py read_url url:"https://example.com"
-scripts/mcpcall.py read_url url:"https://example.com" withAllLinks:true
+# Search and rerank
+jina search "transformer models" | jina rerank "efficient inference"
+
+# Read multiple URLs (one per line on stdin)
+cat urls.txt | jina read
+
+# Search, then deduplicate near-identical results
+jina search "attention mechanism" | jina dedup
+
+# Expand a query, then search the first variant
+jina expand "climate change" | head -1 | xargs -I {} jina search "{}"
+
+# Get JSON, slice with jq
+jina search --arxiv "BERT" --json | jq -r '.results[].title'
 ```
 
-### parallel_read_url ❌
-Read up to 5 URLs in parallel for batch extraction.
-- `urls` (required): array of `{url, withAllLinks?, withAllImages?}` objects
-- `timeout`: milliseconds (default 30000)
+For batch fan-out where the subcommand only takes one input (e.g. `search`, `bibtex`), launch parallel Bash calls or use `xargs -P`:
 
 ```bash
-scripts/mcpcall.py parallel_read_url --args '{"urls": [{"url": "https://a.com"}, {"url": "https://b.com"}]}'
+printf '%s\n' "query A" "query B" "query C" | xargs -P 3 -I {} jina search "{}" --json
 ```
 
-## Web Search
+To fan a single query into 5 diverse parallel searches:
+```bash
+jina expand "LLM" | xargs -P 5 -I {} jina search "{}"
+```
 
-### search_web
-Search the web for current information. Supports single query or array of queries for parallel search.
-- `query` (required): search terms (string or array)
-- `num`: max results 1-100 (default 30)
-- `tbs`: time filter — `qdr:h` (hour), `qdr:d` (day), `qdr:w` (week), `qdr:m` (month), `qdr:y` (year)
-- `gl`: country code (e.g. `cn`)
-- `hl`: language code (e.g. `zh-cn`)
-- `location`: location string (e.g. `Shanghai`)
+## Usage
+
+### Read web pages
 
 ```bash
-scripts/mcpcall.py search_web query:"search terms" num:10
-scripts/mcpcall.py search_web query:"关键词" gl:cn hl:zh-cn
-scripts/mcpcall.py search_web query:"recent news" tbs:qdr:w
+jina read https://example.com
+jina read https://example.com --links --images
 ```
 
-### parallel_search_web
-Run up to 5 web searches in parallel for broader coverage.
-- `searches` (required): array of `{query, num?, tbs?, gl?, hl?, location?}`
-- `timeout`: milliseconds (default 30000)
+> Fallback if `jina read` not working: Use `/defuddle` or `/scrapling` skill instead.
+
+### Search
 
 ```bash
-scripts/mcpcall.py parallel_search_web --args '{"searches": [{"query": "topic A"}, {"query": "topic B", "num": 5}]}'
+jina search "what is BERT"
+jina search --arxiv "attention mechanism" -n 10
+jina search --ssrn "corporate governance"
+jina search --images "neural network diagram"
+jina search --blog "embeddings"
+jina search "AI news" --time d                  # past day (h|d|w|m|y)
+jina search "深度学习" --gl cn --hl zh-cn       # Chinese region/language
+jina search "LLM" --location "Shanghai"
 ```
 
-### search_images
-Search for images across the web (like Google Images). Returns base64 JPEG by default.
-- `query` (required): image search terms
-- `return_url`: set `true` to get URLs instead of base64
-- `tbs`, `gl`, `hl`, `location`: same as `search_web`
+### Embed
 
 ```bash
-scripts/mcpcall.py search_images query:"neural network diagram"
-scripts/mcpcall.py search_images query:"logo" return_url:true
+jina embed "hello world"
+jina embed "text1" "text2" "text3"
+cat texts.txt | jina embed --json
+jina embed "hello" --model jina-embeddings-v5-text-small --task retrieval.query
 ```
 
-## Academic Research
-
-### search_arxiv
-Search arXiv for academic papers in STEM fields.
-- `query` (required): search terms, author names, or topics (string or array)
-- `num`: max results 1-100 (default 30)
-- `tbs`: time filter
+### Rerank
 
 ```bash
-scripts/mcpcall.py search_arxiv query:"transformer attention" num:10
-scripts/mcpcall.py search_arxiv query:"reinforcement learning" tbs:qdr:m
+cat docs.txt | jina rerank "machine learning"
+jina search "AI" | jina rerank "embeddings" --top-n 5
 ```
 
-### parallel_search_arxiv
-Run up to 5 arXiv searches in parallel for comprehensive coverage.
-- `searches` (required): array of `{query, num?, tbs?}`
-- `timeout`: milliseconds (default 30000)
+### Classify
 
 ```bash
-scripts/mcpcall.py parallel_search_arxiv --args '{"searches": [{"query": "topic A"}, {"query": "topic B"}]}'
+jina classify "I love this product" --labels positive,negative,neutral
+echo "stock prices rose sharply" | jina classify --labels business,sports,tech
+cat texts.txt | jina classify --labels cat1,cat2,cat3 --json
 ```
 
-### search_ssrn
-Search SSRN for social science, economics, law, finance papers.
-- `query` (required): search terms (string or array)
-- `num`: max results 1-100 (default 30)
-- `tbs`: time filter
+### Deduplicate (text)
 
 ```bash
-scripts/mcpcall.py search_ssrn query:"market microstructure" num:10
+cat items.txt | jina dedup
+cat items.txt | jina dedup -k 10
 ```
 
-### parallel_search_ssrn
-Run up to 5 SSRN searches in parallel.
-- `searches` (required): array of `{query, num?, tbs?}`
-- `timeout`: milliseconds (default 30000)
+### Image dedup
+
+`jina dedup` is text-only. For visual deduplication of images, use the bundled script:
 
 ```bash
-scripts/mcpcall.py parallel_search_ssrn --args '{"searches": [{"query": "topic A"}, {"query": "topic B"}]}'
+scripts/dedup_images.py *.png                          # local paths, default keeps n//2
+scripts/dedup_images.py -k 5 --json img1.jpg img2.jpg
+ls images/*.png | scripts/dedup_images.py -k 3
+scripts/dedup_images.py https://example.com/a.png /tmp/b.png   # mix URLs + paths
 ```
 
-### search_bibtex
-Search DBLP + Semantic Scholar, return BibTeX citations.
-- `query` (required): paper title, topic, or keywords
-- `author`: filter by author name
-- `year`: minimum publication year
-- `num`: max results 1-50 (default 10)
+It calls `https://api.jina.ai/v1/embeddings` with model `jina-clip-v2` and runs greedy farthest-point sampling on cosine similarity. Local paths are read and base64-encoded; `http(s)://…` and `data:` URIs pass through. Prefer local paths — Jina's URL fetcher cannot reach some hot-link-protected hosts (e.g. Wikimedia, certain CDNs).
+
+### Screenshot
 
 ```bash
-scripts/mcpcall.py search_bibtex query:"attention is all you need"
-scripts/mcpcall.py search_bibtex query:"deep learning" author:Hinton year:2020 num:5
+jina screenshot https://example.com                    # prints screenshot URL
+jina screenshot https://example.com -o page.png        # saves to file
+jina screenshot https://example.com --full-page -o page.jpg
 ```
 
-## PDF & Screenshots
-
-### extract_pdf
-Extract figures, tables, and equations from PDFs using layout detection.
-- `id`: arXiv paper ID (e.g. `2301.12345`)
-- `url`: direct PDF URL
-- `type`: filter by `figure`, `table`, `equation` (comma-separated)
-- `max_edge`: max image edge size in px (default 1024)
+### BibTeX
 
 ```bash
-scripts/mcpcall.py extract_pdf id:2301.12345
-scripts/mcpcall.py extract_pdf url:"https://example.com/paper.pdf" type:figure
+jina bibtex "attention is all you need"
+jina bibtex "transformer" --author Vaswani --year 2017
 ```
 
-### capture_screenshot_url ❌ Use agent-browser instead
-Capture web page screenshots as base64 JPEG.
-- `url` (required): page URL
-- `firstScreenOnly`: `true` for viewport only (faster), `false` for full page
-- `return_url`: `true` to get URL instead of base64
+### PDF figure extraction
 
 ```bash
-scripts/mcpcall.py capture_screenshot_url url:"https://example.com"
-scripts/mcpcall.py capture_screenshot_url url:"https://example.com" firstScreenOnly:true
+jina pdf https://arxiv.org/pdf/2301.12345
+jina pdf 2301.12345                                    # arXiv ID shorthand
+jina pdf https://example.com/paper.pdf --type figure,table
 ```
 
-## NLP & Embeddings
-
-### classify_text
-Classify texts into user-defined labels using Jina embeddings.
-- `texts` (required): array of strings to classify
-- `labels` (required): array of label strings
-- `model`: embedding model (default `jina-embeddings-v5-text-small`)
+### Other
 
 ```bash
-scripts/mcpcall.py classify_text --args '{"texts": ["great product", "terrible"], "labels": ["positive", "negative", "neutral"]}'
+jina datetime https://example.com/article              # guess publish date
+jina expand "machine learning optimization"            # query variants
+jina primer                                            # session context
 ```
 
-### sort_by_relevance
-Rerank documents by relevance to a query using Jina Reranker.
-- `query` (required): the query to rank against
-- `documents` (required): array of document texts
-- `top_n`: max results to return
+## JSON output and exit codes
+
+All data-returning subcommands support `--json` for structured output (pipe to `jq`).
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | User/input error (missing args, bad input, missing API key) |
+| 2 | API/server error (network, timeout, HTTP error) |
+| 130 | Interrupted (Ctrl+C) |
 
 ```bash
-scripts/mcpcall.py sort_by_relevance --args '{"query": "machine learning", "documents": ["doc1 text", "doc2 text"], "top_n": 5}'
+jina search "query" && echo "ok" || echo "failed: $?"
 ```
 
-### deduplicate_strings
-Select top-k semantically unique strings from a list.
-- `strings` (required): array of strings
-- `k`: number to return (auto-optimized if omitted)
+## Environment
 
-```bash
-scripts/mcpcall.py deduplicate_strings --args '{"strings": ["hello world", "hi world", "goodbye"]}'
-```
-
-### deduplicate_images
-Select top-k visually unique images using CLIP v2 embeddings.
-- `images` (required): array of image URLs or base64 strings
-- `k`: number to return (auto-optimized if omitted)
-
-```bash
-scripts/mcpcall.py deduplicate_images --args '{"images": ["https://a.com/1.jpg", "https://a.com/2.jpg"]}'
-```
-
-### expand_query
-Rewrite a search query into multiple expanded variants for deeper research.
-- `query` (required): the query to expand
-
-```bash
-scripts/mcpcall.py expand_query query:"machine learning optimization"
-```
-
-## Utility
-
-### primer
-Get current session context (time, location, network) for localized responses. No parameters.
-
-```bash
-scripts/mcpcall.py primer
-```
-
-### guess_datetime_url
-Guess when a web page was last updated/published.
-- `url` (required): page URL
-
-```bash
-scripts/mcpcall.py guess_datetime_url url:"https://example.com/article"
-```
-
-### search_jina_blog
-Search Jina AI's official blog and news.
-- `query` (required): search terms (string or array)
-- `num`: max results 1-100 (default 30)
-- `tbs`: time filter
-
-```bash
-scripts/mcpcall.py search_jina_blog query:"embeddings" num:10
-```
-
-### show_api_key
-Show the current Jina API key for this session. No parameters.
-
-```bash
-scripts/mcpcall.py show_api_key
-```
+| Variable | Description |
+|---|---|
+| `JINA_API_KEY` | Required for most commands |
 
 ## Tool Selection Guide
 
-| Scenario | Tool | Notes |
-|---|---|---|
-| Read a web page | **defuddle** or **WebFetch** | |
-| General web search | **WebSearch** (built-in) | |
-| Region/language-specific search | `search_web` with `gl`/`hl` | e.g. `gl:jp hl:ja` for Japanese results |
-| Find STEM papers | `search_arxiv` | Jina's strength |
-| Find social science / finance papers | `search_ssrn` | Jina's strength |
-| Get BibTeX citations | `search_bibtex` | Jina's strength |
-| Extract figures from a paper | `extract_pdf` | Jina's strength |
-| Find images | `search_images` | |
-| Categorize text into labels | `classify_text` | |
-| Rank documents by relevance | `sort_by_relevance` | |
-| Remove duplicate content | `deduplicate_strings` / `deduplicate_images` | |
+| Scenario | Tool |
+|---|---|
+| Read a web page | **defuddle** or **WebFetch** (built-in) |
+| Fallback if `jina` service unreachable | **WebSearch** (built-in) |
+| Find STEM papers | `jina search --arxiv` |
+| Find social-science / finance papers | `jina search --ssrn` |
 
 ## Tips
 
-- Use `expand_query` before `parallel_search_web` or `parallel_search_arxiv` to generate diverse queries for thorough research.
-- Parallel variants accept up to 5 items — use them for batch work.
-- Set `tbs:qdr:w` to restrict results to the past week for time-sensitive queries.
-- For Chinese-language results, set `gl:cn hl:zh-cn` on search tools.
-- `scripts/mcpcall.py --list jina` to see all available tools.
+- For Chinese results, set `--gl cn --hl zh-cn`; for date-bounded results, `--time w` (past week).
+- Use `--json` when parsing output; default text is for humans and Unix pipes.
+- Errors go to stderr with a fix hint; check `$?` (or use `&&`/`||`) rather than parsing stderr.

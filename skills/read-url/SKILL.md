@@ -39,6 +39,7 @@ Step 2 — URLs matching a known domain:
 | `mp.weixin.qq.com` (微信公众号) | `/scrapling` skill — `scrapling extract get <url>` works without a browser |
 | `instagram.com` | `instaloader` CLI |
 | `reddit.com` | append `.json` to the URL, fetch with `curl` |
+| `stackoverflow.com` / `*.stackexchange.com` / `superuser.com` / `serverfault.com` / `askubuntu.com` | Stack Exchange API — see `references/stackexchange.md` |
 
 ## vs. WebFetch
 

@@ -15,7 +15,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "bash ./hooks/no-sleep-pueue.sh"
+          command: "bash hooks/no-sleep-pueue.sh"
           timeout: 5
 compatibility: Claude Code
 ---

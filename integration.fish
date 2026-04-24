@@ -45,7 +45,7 @@ function claude-with
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
     end
-    claude --settings ~/.claude/$provider-settings.json $argv[2..]
+    claude --settings ~/.claude/providers/$provider.json $argv[2..]
 end
 
 function glm

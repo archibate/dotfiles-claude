@@ -1,0 +1,14 @@
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_BASE_URL": "https://api.evolink.ai",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-5.4-mini",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.4",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.4"
+  },
+  "skipAutoPermissionPrompt": false,
+  "voiceEnabled": false,
+  "remoteControlAtStartup": false
+}

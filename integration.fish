@@ -43,6 +43,10 @@ function claude-with
             set -fx ANTHROPIC_AUTH_TOKEN $DEEPSEEK_API_KEY
         case aigcdesk
             set -fx ANTHROPIC_AUTH_TOKEN $AIGCDESK_API_KEY
+        case openrouter
+            set -fx ANTHROPIC_AUTH_TOKEN $OPENROUTER_API_KEY
+        case evolink
+            set -fx ANTHROPIC_AUTH_TOKEN $EVOLINK_API_KEY
         case '*'
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
@@ -60,6 +64,14 @@ end
 
 function aigcdesk
     claude-with aigcdesk $argv
+end
+
+function openrouter
+    claude-with openrouter $argv
+end
+
+function evolink
+    claude-with evolink $argv
 end
 
 function commit

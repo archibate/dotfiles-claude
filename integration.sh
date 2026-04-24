@@ -49,6 +49,12 @@ claude-with() {
         aigcdesk)
             token="$AIGCDESK_API_KEY"
             ;;
+        openrouter)
+            token="$OPENROUTER_API_KEY"
+            ;;
+        evolink)
+            token="$EVOLINK_API_KEY"
+            ;;
         *)
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
@@ -67,6 +73,14 @@ deepseek() {
 
 aigcdesk() {
     claude-with aigcdesk "$@"
+}
+
+openrouter() {
+    claude-with openrouter "$@"
+}
+
+evolink() {
+    claude-with evolink "$@"
 }
 
 commit() {

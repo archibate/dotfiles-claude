@@ -46,6 +46,9 @@ claude-with() {
         deepseek)
             token="$DEEPSEEK_API_KEY"
             ;;
+        aigcdesk)
+            token="$AIGCDESK_API_KEY"
+            ;;
         *)
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
@@ -60,6 +63,10 @@ glm() {
 
 deepseek() {
     claude-with deepseek "$@"
+}
+
+aigcdesk() {
+    claude-with aigcdesk "$@"
 }
 
 commit() {

@@ -41,6 +41,8 @@ function claude-with
             set -fx ANTHROPIC_AUTH_TOKEN $ZAI_API_KEY
         case deepseek
             set -fx ANTHROPIC_AUTH_TOKEN $DEEPSEEK_API_KEY
+        case aigcdesk
+            set -fx ANTHROPIC_AUTH_TOKEN $AIGCDESK_API_KEY
         case '*'
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
@@ -54,6 +56,10 @@ end
 
 function deepseek
     claude-with deepseek $argv
+end
+
+function aigcdesk
+    claude-with aigcdesk $argv
 end
 
 function commit

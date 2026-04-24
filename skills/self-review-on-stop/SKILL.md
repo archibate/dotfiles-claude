@@ -11,7 +11,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "bash hooks/stop.sh"
+          command: "bash ~/.claude/skills/self-review-on-stop/hooks/stop.sh"
           timeout: 5
 compatibility: Claude Code
 ---

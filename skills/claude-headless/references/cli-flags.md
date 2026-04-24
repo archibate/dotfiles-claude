@@ -16,7 +16,7 @@ Source: `claude --help` (v2.1.116) cross-checked against [code.claude.com/docs/e
 | `--include-partial-messages` | Stream token-level partial events; requires `-p` + `stream-json` |
 | `--include-hook-events` | Emit hook lifecycle events into output stream; requires `stream-json` |
 | `--replay-user-messages` | Re-echo stdin user messages on stdout; requires both `--input-format stream-json` and `--output-format stream-json` |
-| `--bare` | Skip auto-discovery of CLAUDE.md, hooks, skills, plugins, MCP servers, auto-memory. Sets `CLAUDE_CODE_SIMPLE=1` |
+| `--bare` | Skip auto-discovery of CLAUDE.md, hooks, skills, plugins, MCP servers, auto-memory, and OAuth/keychain reads. Sets `CLAUDE_CODE_SIMPLE=1`. See `auth.md` |
 | `--betas <betas...>` | Beta API headers (API key users only), e.g. `interleaved-thinking` |
 | `--effort low\|medium\|high\|xhigh\|max` | Effort level (max = Opus 4.7 only) |
 

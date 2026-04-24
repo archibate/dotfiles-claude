@@ -6,7 +6,6 @@
 claude --bare -p "Implement feature X from the issue" \
   --permission-mode bypassPermissions \
   --max-budget-usd 2.00 \
-  --max-budget-usd 5.00 \
   --output-format json
 ```
 
@@ -34,10 +33,11 @@ claude -p "Continue" --resume "$session_id"
 
 ## Bare Mode for Deterministic CI
 
-Skip CLAUDE.md, hooks, plugins, MCP for fast, reproducible runs:
+Skip CLAUDE.md, hooks, plugins, MCP, and keychain for fast, reproducible runs. Auth must be provided via `ANTHROPIC_API_KEY` or `apiKeyHelper` — see `auth.md`.
 
 ```bash
-claude --bare -p "Run tests and summarize failures" \
+# bare-settings.json contains: {"apiKeyHelper": "cat /path/to/oat-token"}
+claude --bare --settings bare-settings.json -p "Run tests and summarize failures" \
   --allowedTools "Bash(npm test),Read" \
   --output-format json | jq -r '.result'
 ```

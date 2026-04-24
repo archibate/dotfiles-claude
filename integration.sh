@@ -1,9 +1,18 @@
 claude() {
     local _session
     _session="$(basename "$PWD")-$(openssl rand -hex 8 2>/dev/null || printf '%05x%05x' $RANDOM $RANDOM)"
+    SHELL="$(command -v bash)" \
     PYTHONUNBUFFERED=1 \
     AGENT_BROWSER_SESSION="$_session" \
     command claude --thinking-display summarized --allow-dangerously-skip-permissions "$@"
+}
+
+claude-simple() {
+    CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT=1 claude "$@"
+}
+
+claude-bare() {
+    command claude --bare --settings ~/.claude/bare-settings.json "$@"
 }
 
 opus() {

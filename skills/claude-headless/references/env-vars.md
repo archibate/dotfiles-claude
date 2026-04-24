@@ -260,8 +260,8 @@ Source: [code.claude.com/docs/en/env-vars](https://code.claude.com/docs/en/env-v
 ## Common CI Snippet
 
 ```bash
-# Quiet, isolated, deterministic CI run
-export CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_OAUTH_TOKEN_SECRET"
+# Quiet, isolated, deterministic CI run. Auth via ANTHROPIC_API_KEY or apiKeyHelper — see auth.md.
+export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
 export CLAUDE_CONFIG_DIR=/tmp/claude-ci-config
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 export CLAUDE_CODE_SKIP_PROMPT_HISTORY=1

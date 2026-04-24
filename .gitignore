@@ -22,6 +22,8 @@
 /chrome
 /usage-data
 /.credentials.json
+/oat-token
+/bare-settings.json
 /*.bak
 /mcp-needs-auth-cache.json
 /transcripts

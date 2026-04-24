@@ -17,7 +17,7 @@ Use the Read tool on the ±30 lines around the edit, and audit against the check
 - **Hallucinated references** — documentation describing APIs, CLI flags, commands, config keys, modules, or tools that may not actually exist; uncommon libraries and niche flags are highest risk.
 - **Stale references** — file paths, architecture documents, or quoted code snippets that no longer match what they reference.
 - **Tonal drift in new content** — new lines diverging from unchanged siblings in length or rhetorical strength; flag editorial framing ("useful for X", "critical for", "recommended for"), audience-guidance, selling language, over-explanation.
-- **Justifying asides** — asides that add nothing the reader needs, in any delimiter (parenthetical, em-dash, or comma-set-off); flag defenses of already-obvious claims ("obvious thing (long explanation defending it)") and citations of authorities the reader can already locate ("rules (see X section)", "rules — per X section", "rules, per X section"). Don't flag informative asides: acronym expansions, enumerated examples of the preceding term, scope carve-outs ("applies here — not in X"), or refs the reader can't easily locate.
+- **Justifying asides** — asides that add nothing the reader needs, in any delimiter (parenthetical, em-dash, or comma-set-off); flag defenses of already-obvious claims ("obvious thing (long explanation defending it)") and citations of authorities the reader can already locate ("X rules — per X section"). Don't flag informative asides: acronym expansions, enumerated examples of the preceding term, non-obvious detail the reader would likely miss without justification ("fetch X — this requires login"), scope carve-outs ("applies here — not in X"), or refs the reader can't easily locate.
 - **Defensive caveats** — paragraphs warning about failure modes the reader isn't hitting; flag "Why not X? Because…" preemptive Q&A framings, "Caveats:"/"Gotchas:" lists anticipating hypothetical mistakes, parenthetical warnings about edge cases of adjacent machinery that the documented pattern doesn't depend on.
 - **Audience mismatch** — guidance shaped for a reader different from the file's actual consumer; flag interactive-human cues (keyboard shortcuts, walkthrough framing, "open a terminal") in agent-facing or non-interactive reference docs, author-local artifacts (absolute home paths, personal usernames, machine-specific config) in public-facing docs like READMEs, and low-level internals or protocol detail in end-user tutorials.
 - **Incident-flavored examples** — concrete details from the writer's current task embedded as canonical triggers in reusable reference docs (checklists, style guides, conventions, architecture notes); flag specific tool names, error strings, filenames, or task-at-hand artifacts that would read as out-of-scope when the doc is consulted outside today's context.
@@ -43,5 +43,31 @@ Use the Read tool on the ±30 lines around the edit, and audit against the check
 
 ## Mitigation
 
-- **Issues** — fix proactively in the same turn.
+- **Issues** — fix proactively in the same turn. Flagged items are fixed, not explained away. If you catch yourself writing "the user asked me to add it" or "it's a hard-won gotcha worth preserving," that rationalization inherits the flaw — flag yourself too and fix.
 - **Clean** — proceed silently; NEVER narrate the audit or preface your reply with its verdict ("Region clean", "Audit passed").
+
+## Worked Example: Fix-Justifying Aside
+
+A common tendency after a bug-fix edit: attach a parenthetical explaining *why* the new form is needed. The diff shape:
+
+Broken state (before the edit):
+
+```
+| `bare-settings.json` | `{"apiKeyHelper": "cat ~/.claude/oat-token"}` |
+```
+
+Tempting wrong edit — fix plus fix-justifying aside:
+
+```diff
+-| `bare-settings.json` | `{"apiKeyHelper": "cat ~/.claude/oat-token"}` |
++| `bare-settings.json` | `{"apiKeyHelper": "sh -c 'cat ~/.claude/oat-token'"}` (shell wrapper needed for `~` expansion) |
+```
+
+The parenthetical is emphasis on *the change you just made*, not information the reader needs to use the form. The tell: the preceding sibling row carries no comparable aside — if the "why" were load-bearing, the sibling would have its own.
+
+Correct edit — fix alone:
+
+```diff
+-| `bare-settings.json` | `{"apiKeyHelper": "cat ~/.claude/oat-token"}` |
++| `bare-settings.json` | `{"apiKeyHelper": "sh -c 'cat ~/.claude/oat-token'"}` |
+```

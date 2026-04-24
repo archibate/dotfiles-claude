@@ -32,7 +32,7 @@ Work down this fallback ladder in order. Each step is only tried when prior step
 
 1. **Raw `.md` / `.txt` / plain-text URL** → `curl -sL <url>` (already clean, no HTML to strip)
 2. **Known site** → use the dedicated CLI/API from the [routing table](#routing-table) below
-3. **Mintlify-hosted docs page** → append `.md` to the URL (`/foo` → `/foo.md`) — Mintlify serves clean markdown on the `.md` route. Detection: `mintlify` substring in HTML body, or `x-mint-proxy-version` / `x-cache-key: mintlify/…` on the `.md` response
+3. **Docs page** → try `curl -sL <url>.md`. Mintlify and other docs platforms serve clean markdown on the `.md` route — if the response is `text/markdown`, you're done; otherwise fall through
 4. **Blog / newsletter / multi-post index** → try RSS first: `curl -sL <url>/feed` (also `/rss`, `/feed.xml`, `/atom.xml`, `/index.xml`). Most static-site generators and CMS platforms expose one; RSS gives you clean `<content:encoded>` or `<summary>` bodies without chrome
 5. **Generic site** (articles, docs, tech blogs, unknown) → `npx defuddle parse <url> --markdown` — see `references/defuddle.md`
 6. **JS-rendered page** (defuddle returns empty / skeleton-only content) → `/agent-browser` skill
@@ -70,7 +70,7 @@ Step 2 — URLs matching a known domain:
 | Any other MediaWiki site — Wikipedia, Arch Wiki, cppreference, `*.wiki.gg`, etc. | Wikimedia-run wikis use the REST API + `prop=extracts`; third-party wikis use `?action=raw` or `api.php?action=parse` (some need defuddle due to heavy templates) — see `references/mediawiki.md` |
 | `www.rfc-editor.org` / any RFC | `curl -sL 'https://www.rfc-editor.org/rfc/rfc<N>.txt'` — canonical plaintext, no chrome. `.html` and `.json` also available (the JSON has metadata like obsoleted-by, authors, status) |
 | `peps.python.org` | Individual PEP: `curl -sL 'https://peps.python.org/pep-<N>/'` (clean HTML). All PEPs indexed: `curl -sL 'https://peps.python.org/api/peps.json' \| jq` — number, title, status, authors, created date |
-| `docs.claude.com` / `docs.anthropic.com` (Anthropic & Claude Code docs) | Mintlify-hosted — append `.md` to the URL. `docs.claude.com` 301s to `platform.claude.com` (API/SDK pages) or `code.claude.com` (Claude Code pages) depending on path. Indexes: `platform.claude.com/llms.txt` and `llms-full.txt`; `code.claude.com/llms.txt` |
+| `docs.claude.com` / `docs.anthropic.com` (Anthropic & Claude Code docs) | Append `.md` to the URL. Indexes: `platform.claude.com/llms.txt` (+ `llms-full.txt`) for API/SDK pages; `code.claude.com/llms.txt` for Claude Code |
 | `news.ycombinator.com` | `curl -sL 'https://hn.algolia.com/api/v1/items/<id>' \| jq` — returns story + full comment tree as nested JSON |
 | `pypi.org` | `curl -sL 'https://pypi.org/pypi/<package>/json' \| jq -r '.info.description'` for README; `.info.summary` / `.info.version` for metadata |
 | `npmjs.com` / `registry.npmjs.org` | `npm view <package> readme` for README; `curl -sL 'https://registry.npmjs.org/<package>' \| jq` for full metadata |
@@ -96,7 +96,7 @@ Step 2 — URLs matching a known domain:
 
 ## Bulk discovery
 
-When the task is "ingest the whole docs site" rather than read one page, probe `<site>/llms.txt` (curated URL index) and `<site>/llms-full.txt` (full corpus, single file). Both are plain text — `curl -sL` directly. Convention is widely adopted across docs platforms (Mintlify, Cloudflare, Stripe, Next.js, and others); worth probing on any unfamiliar docs domain.
+For whole-site ingestion, probe `<site>/llms.txt` (URL index) and `/llms-full.txt` (full corpus). Convention adopted by Mintlify, Cloudflare, Stripe, Next.js, and others.
 
 ## vs. WebFetch
 

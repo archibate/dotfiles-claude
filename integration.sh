@@ -8,7 +8,11 @@ claude() {
 }
 
 claude-simple() {
-    CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT=1 claude "$@"
+    if [ $# -eq 0 ]; then
+        CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT=1 claude
+    else
+        CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT=1 "$@"
+    fi
 }
 
 claude-bare() {
@@ -29,6 +33,33 @@ sonnet() {
 
 haiku() {
     claude --model haiku "$@"
+}
+
+claude-with() {
+    local provider="$1"
+    shift
+    local token
+    case "$provider" in
+        glm)
+            token="$ZAI_API_KEY"
+            ;;
+        deepseek)
+            token="$DEEPSEEK_API_KEY"
+            ;;
+        *)
+            echo "claude-with: unknown provider '$provider'" >&2
+            return 1
+            ;;
+    esac
+    ANTHROPIC_AUTH_TOKEN="$token" claude --settings ~/.claude/"$provider"-settings.json "$@"
+}
+
+glm() {
+    claude-with glm "$@"
+}
+
+deepseek() {
+    claude-with deepseek "$@"
 }
 
 commit() {

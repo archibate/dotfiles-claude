@@ -7,7 +7,11 @@ end
 
 function claude-simple
     set -lx CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT 1
-    claude $argv
+    if test (count $argv) -eq 0
+        claude
+    else
+        $argv
+    end
 end
 
 function claude-bare
@@ -28,6 +32,28 @@ end
 
 function haiku
     claude --model haiku $argv
+end
+
+function claude-with
+    set -l provider $argv[1]
+    switch $provider
+        case glm
+            set -fx ANTHROPIC_AUTH_TOKEN $ZAI_API_KEY
+        case deepseek
+            set -fx ANTHROPIC_AUTH_TOKEN $DEEPSEEK_API_KEY
+        case '*'
+            echo "claude-with: unknown provider '$provider'" >&2
+            return 1
+    end
+    claude --settings ~/.claude/$provider-settings.json $argv[2..]
+end
+
+function glm
+    claude-with glm $argv
+end
+
+function deepseek
+    claude-with deepseek $argv
 end
 
 function commit

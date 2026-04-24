@@ -28,7 +28,7 @@ Start a keep-alive loop:
 
 Each tick:
 1. Monitor background tasks. Resolve stucks.
-2. Call `ScheduleWakeup` with `delaySeconds=270`. Pass the same prompt, incrementing `N/10` — or reset to `1/10` if there was user/background-task activity this turn.
+2. Call `ScheduleWakeup` with `delaySeconds=270`. Pass the same prompt, incrementing `N/10`. Reset to `1/10` when user requests or there are background-task running this turn.
 3. End your response with a single space ` ` if nothing to report.
 
 Stop (omit `ScheduleWakeup`) when `N` would exceed 10.

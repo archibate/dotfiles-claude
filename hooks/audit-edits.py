@@ -23,6 +23,7 @@ import fcntl
 import io
 import json
 import os
+import re
 import signal
 import stat as stat_mod
 import subprocess
@@ -312,23 +313,42 @@ def render_diff_from_path(json_path: Path) -> str:
     return buf.getvalue()
 
 
+# Header pattern: a line whose only word content is CLEAN or FIXES, allowing
+# markdown decoration around it (`**FIXES**`, `# CLEAN`, `[FIXES]`, etc.).
+# This is lenient by design: some models emit free-form preamble before the
+# structured verdict, and a strict line-1 check would drop their reports.
+_VERDICT_HEADER_RE = re.compile(r"^\W*(CLEAN|FIXES)\W*$")
+
+
 def _parse_verdict(raw: str) -> tuple[str, list[dict]]:
     """Parse the subagent's tab-separated verdict.
-    Returns ("CLEAN", []), ("FIXES", [{file,category,fix}, ...]), or
-    ("UNKNOWN", []) if the output doesn't match either shape."""
+
+    Scans for the first line whose only word content is CLEAN or FIXES
+    (preamble before it is ignored). After a FIXES header, parses
+    tab-separated 3-field lines and skips any line that doesn't fit (so
+    trailing prose or markdown code fences are dropped). Returns
+    ("UNKNOWN", []) only when no header is found at all."""
     lines = [ln for ln in (raw or "").splitlines() if ln.strip()]
-    if not lines:
+
+    header_idx = -1
+    header = ""
+    for i, ln in enumerate(lines):
+        m = _VERDICT_HEADER_RE.match(ln.strip())
+        if m:
+            header = m.group(1)
+            header_idx = i
+            break
+
+    if not header:
         return ("UNKNOWN", [])
-    head = lines[0].strip()
-    if head == "CLEAN":
+    if header == "CLEAN":
         return ("CLEAN", [])
-    if head != "FIXES":
-        return ("UNKNOWN", [])
+
     issues: list[dict] = []
-    for ln in lines[1:]:
+    for ln in lines[header_idx + 1:]:
         parts = ln.split("\t")
         if len(parts) != 3:
-            continue
+            continue  # skip prose, code fences, blank lines, etc.
         path, category, fix = (p.strip() for p in parts)
         if not path or category not in ALL_CATEGORIES or not fix:
             continue

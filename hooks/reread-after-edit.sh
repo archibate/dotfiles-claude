@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 # PostToolUse hook: after editing a file, inject a re-read reminder with inline checklist.
-# Doc files and code files get different checklists.
+# Doc files and code files get different checklists. Unknown types silently pass.
 set -euo pipefail
 
 source "$(dirname "$0")/lib/emit.sh"
@@ -8,20 +8,30 @@ source "$(dirname "$0")/lib/read_input.sh"
 
 read_file_path
 
-case "${file_path,,}" in
+# basename for matching files like CMakeLists.txt / Dockerfile (which have full paths)
+basename_lower="${file_path##*/}"
+basename_lower="${basename_lower,,}"
+
+case "${basename_lower}" in
+    # Specially-named CODE files whose extension would otherwise look like DOC
+    cmakelists.txt)
+        kind="CODE"
+        ;;
     *.md|*.markdown|*.rst|*.txt|*.adoc|*.org|*.tex)
         kind="DOC"
         ;;
-    *.py|*.pyi|*.js|*.jsx|*.ts|*.tsx|*.mjs|*.cjs|*.go|*.rs|*.c|*.cc|*.cpp|*.cxx|*.h|*.hpp|*.java|*.kt|*.scala|*.rb|*.php|*.sh|*.bash|*.zsh|*.fish|*.lua|*.vim|*.el|*.clj|*.ex|*.exs|*.swift|*.m|*.mm|*.r|*.sql|*.html|*.htm|*.css|*.scss|*.sass|*.less|*.vue|*.svelte|*.json|*.yaml|*.yml|*.toml|*.ini|*.cfg|*.dockerfile|dockerfile|makefile|justfile)
+    *.py|*.pyi|*.js|*.jsx|*.ts|*.tsx|*.mjs|*.cjs|*.go|*.rs|*.c|*.cc|*.cpp|*.cxx|*.h|*.hpp|*.java|*.kt|*.scala|*.rb|*.php|*.sh|*.bash|*.zsh|*.fish|*.lua|*.vim|*.el|*.clj|*.ex|*.exs|*.swift|*.m|*.mm|*.r|*.sql|*.html|*.htm|*.css|*.scss|*.sass|*.less|*.vue|*.svelte|*.json|*.yaml|*.yml|*.toml|*.ini|*.cfg|*.cmake|*.dockerfile|dockerfile|makefile|justfile|pipfile|gemfile|rakefile|.env|.env.*|.gitignore|.dockerignore)
         kind="CODE"
         ;;
     *)
-        kind="DOC"
+        kind="OTHER"
         ;;
 esac
 
-if [[ "${kind}" == "DOC" ]]; then
-    emit_post_tool_context "Re-read ${file_path} (±30 lines) — DOC audit, walk explicitly through:
+case "${kind}" in
+    DOC)
+        emit_post_tool_context "Re-read ${file_path} (±30 lines) — DOC audit, walk explicitly through:
+- Contradictions: new statements contradict unchanged surrounding text or earlier sections?
 - Over-emphasis: bold/emoji/🆕/ALL-CAPS density vs surrounding lines?
 - Tonal drift in new content: matches sibling rhetorical strength and length?
 - Justifying asides: parentheticals defending obvious claims?
@@ -29,12 +39,15 @@ if [[ "${kind}" == "DOC" ]]; then
 - Hallucinated refs: uncommon API/flag/symbol/command verified against source?
 - Stale references: file paths or quoted snippets still match what they reference?
 - Audience mismatch: agent-facing doc has interactive-human cues, or vice versa?
+- Incident-flavored examples: concrete details from current task embedded as canonical triggers in reusable docs?
 - Style/convention drift: list/heading/separator/emoji conventions consistent?
+- Inverted phrasing: fronted conditionals or qualifiers that delay the subject?
 - Patch over restructure: bigger regroup needed instead of minimal-diff append?
 - Positional fit: new items near edit site rather than thematic siblings?
 Silent fix per item. Do NOT narrate — no 'Region clean' or audit-verdict preface."
-else
-    emit_post_tool_context "Re-read ${file_path} (±30 lines) — CODE audit, walk explicitly through:
+        ;;
+    CODE)
+        emit_post_tool_context "Re-read ${file_path} (±30 lines) — CODE audit, walk explicitly through:
 - Contradictions: new code violates types/invariants/assumptions in unchanged surrounding code?
 - Comment/code mismatch: docstring/comment still describes the actual behavior?
 - Structural drift: defensiveness/abstraction depth/verbosity matches adjacent code?
@@ -48,4 +61,8 @@ else
 - Missed extraction: new code duplicates logic that already exists and could be shared?
 - Module placement: new function/class in convenient-but-unrelated file vs the module that owns the concept?
 Silent fix per item. Do NOT narrate — no 'Region clean' or audit-verdict preface."
-fi
+        ;;
+    OTHER)
+        # unknown file type — silently pass, no checklist forced
+        ;;
+esac

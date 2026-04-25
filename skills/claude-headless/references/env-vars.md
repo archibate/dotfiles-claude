@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-Source: [code.claude.com/docs/en/env-vars](https://code.claude.com/docs/en/env-vars), v2.1.116. Comprehensive list. Headless/CI-relevant variables are marked 🎯 in the Notes column.
+Source: [code.claude.com/docs/en/env-vars](https://code.claude.com/docs/en/env-vars), v2.1.119. Comprehensive list. Headless/CI-relevant variables are marked 🎯 in the Notes column.
 
 ## Authentication & API
 

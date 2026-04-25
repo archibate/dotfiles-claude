@@ -379,6 +379,8 @@ def cmd_stop_hook() -> int:
     # own asyncRewake processes; without this, they all read the same JSON and
     # produce duplicate verdicts. The rename moves the snapshot aside so the
     # next PreToolUse hook starts a fresh JSON for the next turn.
+    # The pid + timestamp suffix lets two near-simultaneous Stops both claim
+    # without collision (only one wins the rename, the other gets ENOENT).
     src = session_file(sid)
     pending = AUDIT_DIR / f"{sid}.json.auditing-{os.getpid()}-{int(time.time())}"
     try:
@@ -411,7 +413,7 @@ def cmd_stop_hook() -> int:
             result = subprocess.run(
                 ["claude", "-p", diff,
                  "--agent", "audit-fresh-eye",
-                 "--model", "sonnet",
+                 "--model", "haiku",
                  "--permission-mode", "dontAsk",
                  "--max-budget-usd", "0.20",
                  "--output-format", "json",

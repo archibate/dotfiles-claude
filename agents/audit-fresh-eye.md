@@ -5,7 +5,7 @@ description: >
   unified diff from the user message, walks DOC and CODE checklists, returns
   CLEAN or a tab-separated FIXES verdict. Inspects only — no file writes or
   destructive operations. Invoked by the audit-edits.py Stop hook.
-model: sonnet
+model: haiku
 color: yellow
 permissionMode: dontAsk
 maxTurns: 50

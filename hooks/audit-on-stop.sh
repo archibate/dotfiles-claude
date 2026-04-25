@@ -1,10 +1,16 @@
 #!/usr/bin/bash
 # Stop hook: spawn a fresh-eye audit subagent over all files edited this turn.
 # Uses asyncRewake — exit 2 wakes the main agent with fix instructions; exit 0
-# stays silent. Subagent runs --bare + --settings ~/.claude/bare-settings.json
-# so it skips all hooks (no recursion), CLAUDE.md, and skill listings — minimal
-# context, OAuth via apiKeyHelper reading ~/.claude/oat-token.
+# stays silent. Recursion guard: when this hook fires inside the audit subagent
+# itself, CLAUDE_AUDIT_SUBAGENT=1 is set in the env, and we exit early.
+# (Switch back to --bare + ~/.claude/bare-settings.json once oat-token is
+# refreshed via `claude setup-token > ~/.claude/oat-token`.)
 set -euo pipefail
+
+# Recursion guard — the audit subagent itself triggers its own Stop hook
+if [[ "${CLAUDE_AUDIT_SUBAGENT:-}" == "1" ]]; then
+    exit 0
+fi
 
 input=$(cat /dev/stdin)
 session_id=$(jq -r '.session_id // empty' <<< "${input}")
@@ -74,9 +80,7 @@ Output exactly one of:
 
 Output the verdict only, no narration, no preamble."
 
-verdict=$(claude -p "${prompt}" \
-    --bare \
-    --settings "${HOME}/.claude/bare-settings.json" \
+verdict=$(CLAUDE_AUDIT_SUBAGENT=1 claude -p "${prompt}" \
     --model sonnet \
     --allowedTools Read,Grep,Glob \
     --permission-mode bypassPermissions \

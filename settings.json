@@ -202,12 +202,12 @@
         ]
       },
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/reread-after-edit.sh",
-            "timeout": 5
+            "command": "bash ~/.claude/hooks/audit-enqueue.sh",
+            "timeout": 3
           }
         ]
       },
@@ -228,6 +228,20 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/websearch-followup-hint.sh",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/audit-on-stop.sh",
+            "asyncRewake": true,
+            "rewakeMessage": "Fresh-eye audit subagent flagged issues from this turn — apply silently as Edit operations:",
+            "rewakeSummary": "Audit feedback",
+            "timeout": 120
           }
         ]
       }

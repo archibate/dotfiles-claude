@@ -1,8 +1,14 @@
 #!/usr/bin/bash
 # Stop hook: spawn a fresh-eye audit subagent over all files edited this turn.
 # Uses asyncRewake — exit 2 wakes the main agent with fix instructions; exit 0
-# stays silent. Subagent runs with --bare so it does not re-trigger this hook.
+# stays silent. Recursion guard: when this hook fires inside the audit subagent
+# itself, CLAUDE_AUDIT_SUBAGENT=1 is set in the env, and we exit early.
 set -euo pipefail
+
+# Recursion guard — the audit subagent itself triggers its own Stop hook
+if [[ "${CLAUDE_AUDIT_SUBAGENT:-}" == "1" ]]; then
+    exit 0
+fi
 
 input=$(cat /dev/stdin)
 session_id=$(jq -r '.session_id // empty' <<< "${input}")
@@ -72,14 +78,12 @@ Output exactly one of:
 
 Output the verdict only, no narration, no preamble."
 
-verdict=$(claude -p "${prompt}" \
-    --bare \
+verdict=$(CLAUDE_AUDIT_SUBAGENT=1 claude -p "${prompt}" \
     --model sonnet \
     --allowedTools Read,Grep,Glob \
     --permission-mode bypassPermissions \
     --max-budget-usd 0.20 \
-    --output-format text \
-    2>/dev/null) || exit 0
+    --output-format text) || exit 0
 
 if [[ "${verdict}" == CLEAN* ]] || [[ -z "${verdict}" ]]; then
     exit 0

@@ -56,3 +56,5 @@
 /skills/bilibili-mp3
 /skills/sync-translation
 /skills/system-monitor
+
+__pycache__/

@@ -148,6 +148,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/audit-edits.py hook",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -218,6 +228,18 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/websearch-followup-hint.sh",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/audit-edits.py stop-hook",
+            "timeout": 300,
+            "asyncRewake": true
           }
         ]
       }

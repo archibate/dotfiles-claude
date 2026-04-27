@@ -433,7 +433,7 @@ def cmd_stop_hook() -> int:
             result = subprocess.run(
                 ["claude", "-p", diff,
                  "--agent", "audit-fresh-eye",
-                 "--model", "haiku",
+                 "--model", "sonnet",
                  "--permission-mode", "dontAsk",
                  "--max-budget-usd", "0.20",
                  "--output-format", "json",

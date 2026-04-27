@@ -247,8 +247,7 @@
   },
   "worktree": {
     "symlinkDirectories": [
-      ".venv",
-      "node_modules"
+      ".venv"
     ]
   },
   "statusLine": {
@@ -291,6 +290,7 @@
   "autoDreamEnabled": false,
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
+  "theme": "auto",
   "autoScrollEnabled": false,
   "teammateMode": "auto",
   "remoteControlAtStartup": true,

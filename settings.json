@@ -34,6 +34,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash ~/.claude/hooks/no-head-tail-pipe.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
             "command": "bash ~/.claude/hooks/no-heredoc.sh",
             "timeout": 5
           }

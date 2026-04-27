@@ -84,6 +84,20 @@ assert_deny no-head-read '{"tool_input":{"command":"head -n 80 /tmp/x"}}' "Read 
 assert_silent no-head-read '{"tool_input":{"command":"head -c 100 /tmp/x"}}'
 # Command-position regex: piped-into-cmd is also command-position
 assert_deny no-head-read '{"tool_input":{"command":"echo x | head -n 80 /tmp/x"}}' "Read tool"
+
+# no-head-tail-pipe: trailing `| head` / `| tail` truncates internal output
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "truncate by position"
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"cat /tmp/x | tail -n 5"}}' "truncate by position"
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"git log | head -20"}}' "BYPASS_HEAD_TAIL_CHECK"
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "If you believe this is a false positive"
+assert_silent no-head-tail-pipe '{"tool_input":{"command":"ls"}}'
+# Bare `head -n N <file>` lacks a leading pipe — separate hook (no-head-read) handles it
+assert_silent no-head-tail-pipe '{"tool_input":{"command":"head -n 5 /tmp/x"}}'
+# Intermediate head — output still continues into another pipe stage, not truncating
+assert_silent no-head-tail-pipe '{"tool_input":{"command":"cmd | head | wc -l"}}'
+# `||` is logical-or, not a pipe
+assert_silent no-head-tail-pipe '{"tool_input":{"command":"cmd || head -n 5 file"}}'
+assert_silent no-head-tail-pipe '{"tool_input":{"command":"# BYPASS_HEAD_TAIL_CHECK\nls | head"}}'
 assert_deny no-sed-print "$(jq -n --arg c "echo x | sed -n '12,13p' /tmp/x" '{tool_input:{command:$c}}')" "sed -n"
 assert_deny no-cat-write "$(jq -n --arg c "echo go | cat << EOF ${REDIR} /tmp/x
 hi

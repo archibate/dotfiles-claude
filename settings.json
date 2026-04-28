@@ -7,6 +7,7 @@
     "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING": "1",
     "CLAUDE_CODE_BASH_SANDBOX_SHOW_INDICATOR": "1",
     "CLAUDE_CODE_TMUX_TRUECOLOR": "1",
+    "BASH_MAX_OUTPUT_LENGTH": "10000",
     "BASH_MAX_TIMEOUT_MS": "240000",
     "CLAUDE_AUTO_BACKGROUND_TASKS": "1"
   },
@@ -250,6 +251,17 @@
             "command": "~/.claude/hooks/audit-edits.py stop-hook",
             "timeout": 300,
             "asyncRewake": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/inject-time.sh",
+            "timeout": 5
           }
         ]
       }

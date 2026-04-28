@@ -55,6 +55,9 @@ claude-with() {
         evolink)
             token="$EVOLINK_API_KEY"
             ;;
+        qwen)
+            token="dummy"
+            ;;
         *)
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
@@ -81,6 +84,10 @@ openrouter() {
 
 evolink() {
     claude-with evolink "$@"
+}
+
+qwen() {
+    claude-with qwen "$@"
 }
 
 commit() {

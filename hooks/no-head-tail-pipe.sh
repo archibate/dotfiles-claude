@@ -13,9 +13,13 @@ bypass_check BYPASS_HEAD_TAIL_CHECK
 # `[^|]*$` anchors head/tail as trailing — intermediate uses like `cmd | head | wc`
 # intentionally pass through.
 if echo "$command" | grep -qP '(^|[^|])\|\s*(head|tail)\b[^|]*$'; then
-    emit_pre_tool_deny 'Do not pipe into `| head` / `| tail` — they truncate by position and hide output the agent may need. If the prior stage is expensive or non-idempotent you have also lost the rest of its output.
-Run the command without the truncation; the harness micro-compacts large output automatically.
-If you believe this is a false positive, add comment `BYPASS_HEAD_TAIL_CHECK` to the first line of command.'
+    emit_pre_tool_deny 'Do not pipe into `| head` / `| tail` — they truncate by line position and discard the rest. The harness already saves large output to a file and shows a head preview, so plain `cmd` gives you the same visible head AND the rest for rg/Read.
+
+Prefer the producer'"'"'s native limit (semantic — short-circuits work):
+  rg / grep   →  -m N
+  fd          →  --max-results N
+
+Bypass with comment `BYPASS_HEAD_TAIL_CHECK` if your case is legitimate.'
 fi
 
 exit 0

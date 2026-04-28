@@ -28,6 +28,7 @@
 /mcp-needs-auth-cache.json
 /transcripts
 /image-cache
+/uploads
 /teams
 # /*
 # !/.gitignore

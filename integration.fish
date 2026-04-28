@@ -47,6 +47,8 @@ function claude-with
             set -fx ANTHROPIC_AUTH_TOKEN $OPENROUTER_API_KEY
         case evolink
             set -fx ANTHROPIC_AUTH_TOKEN $EVOLINK_API_KEY
+        case qwen
+            set -fx ANTHROPIC_AUTH_TOKEN dummy
         case '*'
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
@@ -72,6 +74,10 @@ end
 
 function evolink
     claude-with evolink $argv
+end
+
+function qwen
+    claude-with qwen $argv
 end
 
 function commit

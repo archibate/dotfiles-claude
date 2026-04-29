@@ -1,12 +1,7 @@
 ---
 name: context7
 description: >
-  Fetch current documentation for libraries, SDKs, APIs, and CLI tools via Context7.
-  TRIGGER before writing or editing any non-stdlib library call — including libraries
-  you think you know, since training cutoff predates recent API changes. SKIP only for
-  stdlib code, raw HTTP/filesystem, shell built-ins, or stable primitives whose
-  signatures haven't changed in years (e.g. `json.dumps`, `os.path`). Version-pinning
-  alone is not grounds to skip. Prefer this over web search for library docs.
+  Fetch authoritative, current, version-specific documentation for libraries, SDKs, APIs, and CLI tools via Context7. MUST TRIGGER before writing or editing any non-stdlib library call — including well-known libraries you think you know, since your prior knowledge may be stale. SKIP for internal/private libraries, stdlib code, raw HTTP/filesystem, shell built-ins, or stable primitives whose signatures haven't changed in years (e.g. `json.dumps`, `os.path`). Prefer this over web search for library docs.
 allowed-tools:
   - Bash(*mcpcall.py*:*)
 ---

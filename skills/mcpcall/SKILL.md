@@ -1,5 +1,6 @@
 ---
 name: mcpcall
+disable-model-invocation: true
 description: >
   Guide and template for converting MCP servers into self-contained Claude Code skills
   with a Python wrapper script. This skill should be used before creating a new MCP-backed

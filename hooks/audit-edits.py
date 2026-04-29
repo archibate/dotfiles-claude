@@ -359,7 +359,14 @@ def _parse_verdict(raw: str) -> tuple[str, list[dict]]:
 def _render_fixes(issues: list[dict]) -> str:
     """Format parsed issues into the stable agent-facing layout. Issues are
     grouped by file, ordered as the subagent emitted them."""
-    out: list[str] = ["FIXES:"]
+    out: list[str] = [
+        "Suggestions from a fresh-eye audit of this turn's edits. The auditor "
+        "sees the diff and can Read/Grep the repo, but not the conversation "
+        "or the user's intent — treat each item as a hypothesis to verify, "
+        "not a mandatory fix. Apply genuine issues, dismiss false positives.",
+        "",
+        "FIXES:",
+    ]
     last_file: str | None = None
     for it in issues:
         if it["file"] != last_file:
@@ -435,7 +442,7 @@ def cmd_stop_hook() -> int:
                  "--agent", "audit-fresh-eye",
                  "--model", "sonnet",
                  "--permission-mode", "dontAsk",
-                 "--max-budget-usd", "0.20",
+                 "--max-budget-usd", "0.30",
                  "--output-format", "json",
                  "--disable-slash-commands",
                  "--exclude-dynamic-system-prompt-sections",

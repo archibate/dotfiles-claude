@@ -27,8 +27,16 @@ allowed-tools:
 
 Infer intent, scope, and review mode from what the user said. No formal arguments.
 
-- **Agent**: `code-review` for bugs (default), `ai-slop-review` for AI slop, `doc-review` for documentation, all three for "full review"
-- **Scope**: specific files if mentioned, `git diff` if uncommitted changes exist, else project directory
+**Agent** (by intent):
+
+| Intent          | Agent(s)              |
+|-----------------|-----------------------|
+| bugs (default)  | `code-review`         |
+| AI slop         | `ai-slop-review`      |
+| documentation   | `doc-review`          |
+| "full review"   | all three in parallel |
+
+**Scope**: specific files if mentioned, `git diff` if uncommitted changes exist, else project directory.
 
 ## Steps
 
@@ -38,18 +46,29 @@ Determine scope and launch the appropriate agent(s). Tell the agent the target
 (file paths or `"git diff"`). For "full review", launch all three agents in
 parallel.
 
+Assign codename prefix per source so findings stay attributable when streams
+merge: **C** = `code-review`, **S** = `ai-slop-review`, **D** = `doc-review`.
+Number within each prefix from 1 (e.g., `C1`, `C2`, `S1`, `D1`).
+
+If every launched agent returned a no-issues line, emit a one-line all-clear
+and stop — skip steps 2–7.
+
 ### 2. Create Issue List
 
 Assign each finding a short codename (1-2 letter prefix + number) and
 `TaskCreate` each. Emit a terse receipt — one bulleted line per codename,
 in the order the agents returned them. Format: `- **codename** — issue title`
 (no severity yet; severity lands in step 5's table after verification).
+
+Each task body carries `Detail:` (the issue) and `Suggested Fix:` (the
+agent's recommendation). Source is encoded by the codename prefix.
+
 Example:
 
-> - **P1** — Silent exception swallow
-> - **P2** — Early-return swallows JSON parse errors
-> - **P3** — Duplicate list comprehension
-> - **P4** — Duplicated arg handling
+> - **C1** — Silent exception swallow
+> - **C2** — Early-return swallows JSON parse errors
+> - **S1** — Duplicate list comprehension
+> - **S2** — Duplicated arg handling
 
 ### 3. Verify Findings
 
@@ -77,18 +96,25 @@ Before moving on, give the user a terse verification report — tally plus
 per-codename outcomes. Confirmed codenames collapse into one line; ⚠️/❌
 entries get one-line reasons. Example:
 
-> 6 confirmed (P1, P3–P5, P7–P8) · 1 partial · 2 false positives
-> - ⚠️ P6 — agent said X, actually Y (description updated)
-> - ❌ P2 — agent misread the early-return at `util.py:12`
-> - ❌ P9 — agent fabricated the call site
+> 6 confirmed (C1, C3, S1–S2, D1–D2) · 1 partial · 2 false positives
+> - ⚠️ C4 — agent said X, actually Y (description updated)
+> - ❌ C2 — agent misread the early-return at `util.py:12`
+> - ❌ S3 — agent fabricated the call site
 
 The updated list with file locations renders in step 5.
 
 ### 4. Quick Wins
 
-Among verified issues, mark those that are mechanical, behavior-preserving,
-nits, and need no design decisions by appending `*` to their severity cell
-(e.g., 🔴 → 🔴*). Step 5's render will surface them for batch-fix.
+Among verified issues, append `*` to the severity cell only when ALL of:
+
+- single-file, single-hunk diff
+- no signature or API change
+- no runtime behavior change
+- no logic restructure (only renames, formatting, dead-code removal, typo
+  fixes, missing imports)
+
+If any check fails, leave unmarked. When in doubt, do not mark — the user
+can always promote during the pick-discuss-fix cycle.
 
 ### 5. Render Final Table
 
@@ -100,16 +126,15 @@ quick-wins.
 
 | Codename | Severity | File:Line       | Issue                           |
 |----------|----------|-----------------|---------------------------------|
-| P1       | 🔴       | parser.py:42    | Silent exception swallow        |
-| P3       | 🔴*      | util.py:88      | Duplicate list comprehension    |
-| P4       | 🟡       | cli.py:12       | Duplicated arg handling         |
-| P7       | 🟢       | docs.md:3       | Missing docstring               |
+| C1       | 🔴       | parser.py:42    | Silent exception swallow        |
+| S1       | 🔴*      | util.py:88      | Duplicate list comprehension    |
+| S2       | 🟡       | cli.py:12       | Duplicated arg handling         |
+| D1       | 🟢       | README.md:3     | Broken internal link            |
 
-`*quick-win: can be batch-fixed without behavior changes`
+_\* = quick-win (batch-fixable without behavior change)_
 
-Keep `Detail` and `Suggested Fix` inside each `TaskCreate` body — the table
-is for scanning and picking only. Then offer to batch-fix all quick-wins
-before entering the interactive cycle.
+The table is for scanning; full content stays in each task body (per step 2).
+Then offer to batch-fix all quick-wins before entering the interactive cycle.
 
 ### 6. Pick-Discuss-Fix Cycle
 
@@ -118,7 +143,7 @@ recommend **exactly 3 next issues**. Format:
 `**codename** [severity] — issue title` (a brief recall of *what* the issue
 is, not the fix direction). If fewer than 3 remain, show all remaining.
 
-Then wait for the user to reply with a bare codename (e.g., "P1"). Process:
+Then wait for the user to reply with a bare codename (e.g., "C1"). Process:
 
 1. **Investigate** — mark task `in_progress`; read the cited `file:line`,
    trace call sites, check related logic. For doc issues, verify the claim
@@ -130,7 +155,7 @@ Then wait for the user to reply with a bare codename (e.g., "P1"). Process:
 
    **Shape A — recommending fix:**
 
-   **P1** [🔴] — Silent exception swallow
+   **C1** [🔴] — Silent exception swallow
 
    🔍 **Reason**: <one sentence, under 10 words>
    🛠️ **Fix plan**: <one sentence>
@@ -142,7 +167,7 @@ Then wait for the user to reply with a bare codename (e.g., "P1"). Process:
 
    **Shape B — recommending skip:**
 
-   **P1** [🔴] — Silent exception swallow
+   **C1** [🔴] — Silent exception swallow
 
    🔍 **Reason**: <one sentence, under 10 words>
    ⏸️ **Skip**: <one clause why>
@@ -167,7 +192,7 @@ Then wait for the user to reply with a bare codename (e.g., "P1"). Process:
 
 4. **Report** — emit the fix close-out:
 
-   `✅ **P1** Fixed — <one short sentence>`
+   `✅ **C1** Fixed — <one short sentence>`
 
    Append at most one short sentence per applicable caveat:
    - `📝 Plan delta: <one sentence>` — executed change deviated from plan.
@@ -183,7 +208,8 @@ Then recommend the next 3.
 - After each resolved issue, show only the next 3 — do not dump the full list.
 - If the user adjusts the fix plan during stage 2, revise stage 3 accordingly.
 - If investigation or the fix surfaces a *distinct* issue outside the
-  current codename's scope, `TaskCreate` it with the next prefix number.
+  current codename's scope, `TaskCreate` it with the next number under the
+  appropriate prefix (`C`/`S`/`D` per the source of the new finding).
   Do not expand the current fix; it lands in the next `recommend 3`
   block and as `🆕 Surfaced` in stage 4's report.
 
@@ -208,10 +234,10 @@ When all issues are resolved or skipped:
 
    | Codename | Severity | Issue                        | Resolution | Note                                      |
    |----------|----------|------------------------------|------------|-------------------------------------------|
-   | P1       | 🔴       | Silent exception swallow     | ✅ fixed   | Replaced bare `except:` with `ValueError` |
-   | P3       | 🔴*      | Duplicate list comprehension | ✅ fixed   | Extracted to `_filter_active()` helper    |
-   | P4       | 🟡       | Duplicated arg handling      | ⏸️ skipped | User deferred — planned for a later PR    |
-   | P7       | 🟢       | Missing docstring            | ✅ fixed   | Added 2-line docstring                    |
+   | C1       | 🔴       | Silent exception swallow     | ✅ fixed   | Replaced bare `except:` with `ValueError` |
+   | S1       | 🔴*      | Duplicate list comprehension | ✅ fixed   | Extracted to `_filter_active()` helper    |
+   | S2       | 🟡       | Duplicated arg handling      | ⏸️ skipped | User deferred — planned for a later PR    |
+   | D1       | 🟢       | Broken internal link         | ✅ fixed   | Updated link target to current path       |
 
 3. Summarize downstream actions required (re-runs, rebuilds, tests, migrations, etc.)
 4. Offer to commit if there are changes

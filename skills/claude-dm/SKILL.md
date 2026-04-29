@@ -4,7 +4,8 @@ description: >
   Peer-to-peer messaging between Claude Code sessions sharing a tmux server:
   Use when coordinating multiple simultaneous Claude sessions — e.g.
   "dm another claude", "list claude sessions", "stop another claude",
-  "monitor peer claude", "orchestrate claude sessions", "spawn claude in tmux".
+  "peek peer claude", "peek other sessions", "monitor peer claude",
+  "orchestrate claude sessions", "sync with peer", "spawn claude in tmux".
 ---
 
 # claude-dm

@@ -2,21 +2,6 @@
 
 Claude Code accepts credentials via two modes: normal (auto-discovery) and `--bare` (explicit-only). Cloud providers (Bedrock / Vertex / Foundry) use their own credentials in both modes.
 
-## Standard Layout
-
-Convention for `--bare` subscription auth:
-
-| Path | Contents |
-|---|---|
-| `~/.claude/oat-token` | OAuth token from `claude setup-token`, mode 600 |
-| `~/.claude/bare-settings.json` | `{"apiKeyHelper": "sh -c 'cat ~/.claude/oat-token'"}` |
-
-Usage:
-
-```bash
-claude --bare --settings ~/.claude/bare-settings.json -p "QUERY"
-```
-
 ## Getting a Credential
 
 **Subscription OAuth** — Claude.ai Pro/Max quota. Two flows:
@@ -31,7 +16,7 @@ claude --bare --settings ~/.claude/bare-settings.json -p "QUERY"
 Any of these are read automatically:
 
 - `~/.claude/.credentials.json` — populated by `claude auth login`
-- `CLAUDE_CODE_OAUTH_TOKEN` env var
+- `CLAUDE_CODE_OAUTH_TOKEN` env var — get one from `claude setup-token`
 - `ANTHROPIC_API_KEY` env var
 - OS keychain
 - `apiKeyHelper` command from settings
@@ -40,20 +25,22 @@ For workers that outlive the OAuth access token's expiry, also set `CLAUDE_CODE_
 
 ## --bare Mode
 
+`--bare` requires an Anthropic API key (`sk-ant-api03-...`); OAuth tokens are not accepted in any channel (env var, credentials file, keychain, or `apiKeyHelper` output).
+
 Two paths:
 
-**API key:**
+**API key env var:**
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-api03-..."
 claude --bare -p "..."
 ```
 
-**apiKeyHelper via `--settings`** — also the path for subscription OAuth tokens:
+**apiKeyHelper via `--settings`** — keeps the key off the env:
 
 ```json
 // bare-settings.json
-{ "apiKeyHelper": "cat /path/to/oat-token" }
+{ "apiKeyHelper": "cat /path/to/api-key" }
 ```
 
 ```bash
@@ -72,14 +59,14 @@ claude --bare --settings bare-settings.json -p "..."
 
 Full variable list: `env-vars.md` → "Authentication & API".
 
-## Token Storage Conventions
+## Credential Storage Conventions
 
-Claude Code does not look at any particular file for the setup-token output. Common patterns, most to least secure:
+Claude Code does not look at any particular file for the credential. Common patterns, most to least secure:
 
 | Storage | Retrieval | Notes |
 |---|---|---|
 | System keyring (`secret-tool`, `pass`) | `apiKeyHelper: "secret-tool lookup ..."` | Encrypted at rest |
-| GPG-encrypted file | `apiKeyHelper: "gpg -d ~/.claude/oat.gpg"` | Portable |
-| Mode-600 plain file | `cat /path/to/token` | Relies on filesystem permissions |
+| GPG-encrypted file | `apiKeyHelper: "gpg -d ~/.claude/key.gpg"` | Portable |
+| Mode-600 plain file | `cat /path/to/key` | Relies on filesystem permissions |
 | CI secret | Injected into job env | Standard for CI/CD |
 | Shell rc (`export` in `.bashrc` / `config.fish`) | Automatic | Leaks into every child process |

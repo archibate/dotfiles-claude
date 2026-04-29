@@ -36,7 +36,7 @@ claude -p "Continue" --resume "$session_id"
 Skip CLAUDE.md, hooks, plugins, MCP, and keychain for fast, reproducible runs. Auth must be provided via `ANTHROPIC_API_KEY` or `apiKeyHelper` — see `auth.md`.
 
 ```bash
-# bare-settings.json contains: {"apiKeyHelper": "cat /path/to/oat-token"}
+# bare-settings.json contains: {"apiKeyHelper": "cat /path/to/api-key"}
 claude --bare --settings bare-settings.json -p "Run tests and summarize failures" \
   --allowedTools "Bash(npm test),Read" \
   --output-format json | jq -r '.result'

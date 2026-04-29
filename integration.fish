@@ -48,7 +48,7 @@ function claude-with
         case evolink
             set -fx ANTHROPIC_AUTH_TOKEN $EVOLINK_API_KEY
         case qwen
-            set -fx ANTHROPIC_AUTH_TOKEN dummy
+            set -fx ANTHROPIC_AUTH_TOKEN $LLAMA_API_KEY
         case '*'
             echo "claude-with: unknown provider '$provider'" >&2
             return 1

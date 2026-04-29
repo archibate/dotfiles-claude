@@ -56,7 +56,7 @@ claude-with() {
             token="$EVOLINK_API_KEY"
             ;;
         qwen)
-            token="dummy"
+            token="$LLAMA_API_KEY"
             ;;
         *)
             echo "claude-with: unknown provider '$provider'" >&2

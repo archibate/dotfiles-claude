@@ -33,10 +33,10 @@ if [ -n "$file_path" ]; then
     example=$(printf '  Write("%s", <content>)' "$file_path")
     reason="Use Write tool instead of cat heredoc for file writes.
 ${example}
-If you believe this is a false positive, add comment \`BYPASS_CAT_WRITE\` to the first line of command."
+If you have legitimate reason, add comment \`# BYPASS_CAT_WRITE\` before the first line of command."
 else
     reason='Use Write tool instead of cat heredoc for file writes.
-If you believe this is a false positive, add comment `BYPASS_CAT_WRITE` to the first line of command.'
+If you have legitimate reason, add comment `# BYPASS_CAT_WRITE` before the first line of command.'
 fi
 
 emit_pre_tool_deny "$reason"

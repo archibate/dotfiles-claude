@@ -17,7 +17,7 @@ if [ -z "${CONDA_PREFIX:-}" ] && echo "$command" | grep -qP '(^|&&|;|\|)\s*pip3?
     emit_pre_tool_deny 'Use uv instead of pip.
   pip install pkg  →  uv add pkg (project) or uv pip install pkg (venv)
   pip freeze       →  uv pip freeze
-If you believe this is a false positive, add comment `BYPASS_PACKAGE_MANAGER_CHECK` to the first line of command.'
+If you have legitimate reason, add comment `# BYPASS_PACKAGE_MANAGER_CHECK` before the first line of command.'
     exit 0
 fi
 
@@ -27,7 +27,7 @@ if echo "$command" | grep -qP '(^|&&|;|\|)\s*npm\s'; then
     emit_pre_tool_deny 'Use pnpm instead of npm.
   npm install  →  pnpm install
   npm run      →  pnpm run
-If you believe this is a false positive, add comment `BYPASS_PACKAGE_MANAGER_CHECK` to the first line of command.'
+If you have legitimate reason, add comment `# BYPASS_PACKAGE_MANAGER_CHECK` before the first line of command.'
     exit 0
 fi
 

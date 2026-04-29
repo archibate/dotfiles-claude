@@ -95,6 +95,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash ~/.claude/hooks/no-destructive-git.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
             "command": "bash ~/.claude/hooks/no-devnull-redirect.sh",
             "timeout": 5
           }
@@ -278,7 +288,7 @@
     "claude-hud@claude-hud": false,
     "code-simplifier@claude-plugins-official": false,
     "claude-md-management@claude-plugins-official": false,
-    "codex@openai-codex": false,
+    "codex@openai-codex": true,
     "plugin-dev@claude-plugins-official": false,
     "code-review@claude-plugins-official": false,
     "typescript-lsp@claude-plugins-official": true,

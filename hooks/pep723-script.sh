@@ -27,6 +27,11 @@ if [ -n "${CONDA_PREFIX:-}" ]; then
     exit 0
 fi
 
+# Skip inside an active virtualenv — the interpreter is managed by the venv, not uv scripts.
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+    exit 0
+fi
+
 expected_shebang="#!/usr/bin/env -S uv run --script"
 first_line=$(printf '%s' "$content" | head -1)
 

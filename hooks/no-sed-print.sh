@@ -46,7 +46,7 @@ if echo "$command" | grep -qP '(^|&&|;|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p['"
 
     emit_pre_tool_deny "Use Read tool with offset and limit instead of sed -n for reading specific lines.
 ${example}
-If you believe this is a false positive, add comment \`BYPASS_SED_PRINT_CHECK\` to the first line of command."
+If you have legitimate reason, add comment \`# BYPASS_SED_PRINT_CHECK\` before the first line of command."
 fi
 
 exit 0

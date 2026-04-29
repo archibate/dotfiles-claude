@@ -17,7 +17,7 @@ read_bash_command
 if echo "$command" | grep -qP 'git\s+commit\b.*--amend' \
     && ! has_bypass_marker BYPASS_AMEND_CHECK; then
     emit_pre_tool_deny 'Do not use git commit --amend. Always create new commits instead.
-If you believe this is a false positive, add comment `BYPASS_AMEND_CHECK` to the first line of command.'
+If you have legitimate reason, add comment `# BYPASS_AMEND_CHECK` before the first line of command.'
     exit 0
 fi
 
@@ -25,7 +25,7 @@ fi
 if echo "$command" | grep -qP 'git\s+push\b[^|;&]*(\s--force(-with-lease|-if-includes)?\b|\s-[a-zA-Z]*f\b)' \
     && ! has_bypass_marker BYPASS_FORCE_PUSH_CHECK; then
     emit_pre_tool_deny "Do not use git push --force (or -f). Force-push rewrites remote history and can destroy others' work.
-If you believe this is a false positive, add comment \`BYPASS_FORCE_PUSH_CHECK\` to the first line of command."
+If you have legitimate reason, add comment \`# BYPASS_FORCE_PUSH_CHECK\` before the first line of command."
     exit 0
 fi
 

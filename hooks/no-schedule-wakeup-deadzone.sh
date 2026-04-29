@@ -16,7 +16,7 @@ if echo "$reason" | grep -qF "BYPASS_WAKEUP_DEADZONE"; then
 fi
 
 if awk -v d="$delay" 'BEGIN { exit !(d >= 300 && d <= 1800) }'; then
-    emit_pre_tool_deny "ScheduleWakeup delaySeconds=$delay is in the dead zone [300, 1800]: past the 5-min prompt-cache TTL, but too short to treat as long-idle. Drop to <=270s (cache stays warm — wake again if still waiting) or raise past 1800s (genuinely idle, accept one miss). Load /cache-hygiene for the full protocol. Bypass via BYPASS_WAKEUP_DEADZONE in the reason field."
+    emit_pre_tool_deny "ScheduleWakeup delaySeconds=$delay is in the dead zone [300, 1800]: past the 5-min prompt-cache TTL, but too short to treat as long-idle. Drop to <=270s (cache stays warm — wake again if still waiting) or raise past 1800s (genuinely idle, accept one miss). Load /cache-hygiene for the full protocol. If you have legitimate reason, add \`BYPASS_WAKEUP_DEADZONE\` to the reason field."
 fi
 
 exit 0

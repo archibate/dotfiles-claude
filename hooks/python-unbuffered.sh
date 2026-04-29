@@ -24,7 +24,7 @@ if check_python_unbuffered "$command" "$cwd"; then
 Claude launches processes with stdout as a pipe, causing Python to buffer output instead of flushing in real time — making it look stuck or empty.
 Either: PYTHONUNBUFFERED=1 uv run python script.py
     or: uv run python -u script.py
-If you believe this is a false positive, add comment `BYPASS_UNBUFFERED_CHECK` to the first line of command.'
+If you have legitimate reason, add comment `# BYPASS_UNBUFFERED_CHECK` before the first line of command.'
 fi
 
 exit 0

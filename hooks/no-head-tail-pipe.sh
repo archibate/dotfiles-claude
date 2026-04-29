@@ -19,7 +19,7 @@ Prefer the producer'"'"'s native limit (semantic — short-circuits work):
   rg / grep   →  -m N
   fd          →  --max-results N
 
-Bypass by appending comment `# BYPASS_HEAD_TAIL_CHECK` if your case is legitimate.'
+If you have legitimate reason, add comment `# BYPASS_HEAD_TAIL_CHECK` before the first line of command.'
 fi
 
 exit 0

@@ -62,6 +62,32 @@ assert_deny no-git-amend "$(jq -n --arg c "git commit --amend" '{tool_input:{com
 assert_deny no-git-amend "$(jq -n --arg c "git push --force" '{tool_input:{command:$c}}')" "push --force"
 assert_silent no-git-amend '{"tool_input":{"command":"git status"}}'
 
+# no-destructive-git: each destructive operation has its own bypass marker
+assert_deny no-destructive-git '{"tool_input":{"command":"git reset --hard HEAD~1"}}' "reset --hard"
+assert_deny no-destructive-git '{"tool_input":{"command":"git clean -fd"}}' "git clean -f"
+assert_deny no-destructive-git '{"tool_input":{"command":"git clean -f"}}' "git clean -f"
+assert_deny no-destructive-git '{"tool_input":{"command":"git branch -D feature-x"}}' "branch -D"
+assert_deny no-destructive-git '{"tool_input":{"command":"git checkout -- foo.py"}}' "checkout --"
+assert_deny no-destructive-git '{"tool_input":{"command":"git checkout ."}}' "checkout --"
+assert_deny no-destructive-git '{"tool_input":{"command":"git checkout main -- foo.py"}}' "checkout --"
+assert_deny no-destructive-git '{"tool_input":{"command":"git restore foo.py"}}' "git restore"
+# Safe forms — silent
+assert_silent no-destructive-git '{"tool_input":{"command":"git status"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git reset HEAD~1"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git checkout main"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git checkout -b feature"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git branch -d merged-feature"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git restore --staged foo.py"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git clean -n"}}'
+# Bypass markers silence their own check only
+assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_RESET_HARD_CHECK\ngit reset --hard HEAD~1"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_GIT_CLEAN_CHECK\ngit clean -fd"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_BRANCH_DELETE_CHECK\ngit branch -D feature"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_CHECKOUT_DISCARD_CHECK\ngit checkout -- foo.py"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_RESTORE_CHECK\ngit restore foo.py"}}'
+# Reset bypass must not silence chained clean -fd
+assert_deny no-destructive-git '{"tool_input":{"command":"# BYPASS_RESET_HARD_CHECK\ngit reset --hard; git clean -fd"}}' "git clean -f"
+
 assert_deny no-pip-npm "$(jq -n --arg c "pip install foo" '{tool_input:{command:$c}}')" "Use uv instead"
 assert_deny no-pip-npm "$(jq -n --arg c "npm install" '{tool_input:{command:$c}}')" "Use pnpm"
 assert_silent no-pip-npm '{"tool_input":{"command":"uv add foo"}}'
@@ -86,10 +112,10 @@ assert_silent no-head-read '{"tool_input":{"command":"head -c 100 /tmp/x"}}'
 assert_deny no-head-read '{"tool_input":{"command":"echo x | head -n 80 /tmp/x"}}' "Read tool"
 
 # no-head-tail-pipe: trailing `| head` / `| tail` truncates internal output
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "truncate by position"
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"cat /tmp/x | tail -n 5"}}' "truncate by position"
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "truncate by line position"
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"cat /tmp/x | tail -n 5"}}' "truncate by line position"
 assert_deny no-head-tail-pipe '{"tool_input":{"command":"git log | head -20"}}' "BYPASS_HEAD_TAIL_CHECK"
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "If you believe this is a false positive"
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "If you have legitimate reason"
 assert_silent no-head-tail-pipe '{"tool_input":{"command":"ls"}}'
 # Bare `head -n N <file>` lacks a leading pipe — separate hook (no-head-read) handles it
 assert_silent no-head-tail-pipe '{"tool_input":{"command":"head -n 5 /tmp/x"}}'
@@ -138,13 +164,13 @@ assert_deny no-git-amend '{"tool_input":{"command":"# BYPASS_FORCE_PUSH_CHECK\ng
 assert_silent python-unbuffered '{"tool_input":{"command":"# BYPASS_UNBUFFERED_CHECK\npython3 script.py","run_in_background":true},"cwd":"/tmp"}'
 # Empty command should be silent (no-background-ampersand previously had no guard)
 assert_silent no-background-ampersand '{"tool_input":{"command":""}}'
-# Unified hint wording — every bypass hint now reads "If you believe this is a false positive"
-assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "If you believe this is a false positive"
-assert_deny no-background-ampersand "$(jq -n --arg c "sleep 10 ${AMP}" '{tool_input:{command:$c}}')" "If you believe this is a false positive"
+# Unified hint wording — every bypass hint now reads "If you have legitimate reason"
+assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "If you have legitimate reason"
+assert_deny no-background-ampersand "$(jq -n --arg c "sleep 10 ${AMP}" '{tool_input:{command:$c}}')" "If you have legitimate reason"
 assert_deny no-cat-write "$(jq -n --arg c "cat << EOF ${REDIR} /tmp/x
 hi
-EOF" '{tool_input:{command:$c}}')" "If you believe this is a false positive"
-assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "If you believe this is a false positive"
+EOF" '{tool_input:{command:$c}}')" "If you have legitimate reason"
+assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "If you have legitimate reason"
 
 # no-schedule-wakeup-deadzone: delays in [300,1800] denied (inclusive boundaries)
 assert_deny no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":600,"reason":"x"}}' "dead zone"

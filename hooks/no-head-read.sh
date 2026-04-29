@@ -27,7 +27,7 @@ if echo "$command" | grep -qP '(^|&&|;|\|)\s*head\s+(-\d+|-n\s*\d+|--lines[= ]\d
 
     emit_pre_tool_deny "Use Read tool with limit instead of head for reading file lines.
 ${example}
-If you believe this is a false positive, add comment \`BYPASS_HEAD_READ_CHECK\` to the first line of command."
+If you have legitimate reason, add comment \`# BYPASS_HEAD_READ_CHECK\` before the first line of command."
 fi
 
 exit 0

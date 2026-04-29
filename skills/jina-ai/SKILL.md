@@ -82,7 +82,7 @@ jina read https://example.com
 jina read https://example.com --links --images
 ```
 
-> Fallback if `jina read` not working: Use `/read-url` skill instead.
+> If `jina read` not working: Fallback to use `/read-url` skill instead.
 
 ### Search
 

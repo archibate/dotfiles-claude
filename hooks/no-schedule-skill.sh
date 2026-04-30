@@ -20,7 +20,7 @@ if echo "$args" | grep -qF "BYPASS_REMOTE_SCHEDULE"; then
 fi
 
 if [[ "$skill" == "schedule" ]]; then
-    emit_pre_tool_deny "/schedule is disabled on this host. It schedules REMOTE routines on Anthropic's cloud (CCR), but this is a persistent server — use the harness-native CronCreate tool instead (load the /local-schedulegskill for the workflow). CronCreate runs prompts/skills on a local cron schedule, persists across sessions, and uses local files/env. Companion tools: CronList, CronDelete. If you legitimately need a remote routine for this task, bypass by including the token \`BYPASS_REMOTE_SCHEDULE\` in the skill args."
+    emit_pre_tool_deny "/schedule is disabled on this host. It schedules REMOTE routines on Anthropic's cloud (CCR), but this is a persistent server — use the harness-native CronCreate tool instead (load the /local-schedule skill for the workflow). CronCreate runs prompts/skills on a local cron schedule, persists across sessions, and uses local files/env. Companion tools: CronList, CronDelete. If you legitimately need a remote routine for this task, bypass by including the token \`BYPASS_REMOTE_SCHEDULE\` in the skill args."
 fi
 
 exit 0

@@ -46,10 +46,12 @@ def extract_assistant_text(content) -> str:
     return "\n".join(p for p in parts if p).strip()
 
 
-def process(jsonl_path: Path, slice_date: str | None) -> dict | None:
-    """Distill one transcript file. If `slice_date` is YYYY-MM-DD, only keep
-    user/assistant messages whose timestamp begins with that date; sessions
-    with zero today-user-prompts after slicing are dropped."""
+def process(jsonl_path: Path, since_iso: str | None) -> dict | None:
+    """Distill one transcript file. If `since_iso` is YYYY-MM-DD, only keep
+    user/assistant messages whose timestamp is >= that date (inclusive
+    lower bound, no upper bound). Sessions with zero in-window user prompts
+    after slicing are dropped. Lexicographic compare on ISO-8601 timestamps
+    sorts correctly without parsing."""
     user_msgs: list[str] = []
     asst_msgs: list[str] = []
     cwd = None
@@ -74,7 +76,7 @@ def process(jsonl_path: Path, slice_date: str | None) -> dict | None:
                 if ts:
                     session_started = session_started or ts
                     session_ended = ts
-                in_slice = (not slice_date) or ts.startswith(slice_date)
+                in_slice = (not since_iso) or (ts >= since_iso)
                 if t == "user":
                     msg = ev.get("message") or {}
                     content = msg.get("content")
@@ -104,7 +106,7 @@ def process(jsonl_path: Path, slice_date: str | None) -> dict | None:
     if not user_msgs:
         return None
 
-    is_carryover = bool(slice_date) and bool(session_started) and not session_started.startswith(slice_date)
+    is_carryover = bool(since_iso) and bool(session_started) and (session_started < since_iso)
 
     return {
         "session": jsonl_path.stem,
@@ -124,11 +126,11 @@ def process(jsonl_path: Path, slice_date: str | None) -> dict | None:
     }
 
 
-def main(date_filter: str | None) -> None:
+def main(since_iso: str | None) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     files = sorted(PROJECTS.glob("**/*.jsonl"))
-    if date_filter:
-        files = [f for f in files if f.stat().st_mtime >= _mtime_floor(date_filter)]
+    if since_iso:
+        files = [f for f in files if f.stat().st_mtime >= _mtime_floor(since_iso)]
 
     by_cwd: dict[str, list[dict]] = defaultdict(list)
     raw_total = 0
@@ -138,7 +140,7 @@ def main(date_filter: str | None) -> None:
     for f in files:
         if f.name.startswith("agent-"):
             continue  # subagent files; their content is also in parent
-        rec = process(f, date_filter)
+        rec = process(f, since_iso)
         if not rec:
             continue
         n_sessions += 1

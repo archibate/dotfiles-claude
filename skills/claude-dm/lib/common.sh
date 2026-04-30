@@ -79,3 +79,15 @@ target_transcript() {
   sid=$(pid_to_sid "$pid") || return 1
   sid_to_transcript "$sid"
 }
+
+# Resolve the current pane to a session:window.pane addr on its tmux socket.
+# Honours the actual socket from $TMUX (not CLAUDE_DM_SOCKET) since "self" must
+# target the real running pane. Mutates SOCKET so subsequent tm() calls follow.
+# Prints addr; returns nonzero with a warning if not running inside tmux.
+self_target() {
+  [[ -n "${TMUX:-}" ]]      || { warn "not running inside tmux"; return 1; }
+  [[ -n "${TMUX_PANE:-}" ]] || { warn "TMUX_PANE not set"; return 1; }
+  SOCKET="${TMUX%%,*}"
+  tmux -S "$SOCKET" display-message -p -t "$TMUX_PANE" \
+    '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null
+}

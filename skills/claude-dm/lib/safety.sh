@@ -71,6 +71,32 @@ check_transcript_end_turn() {
   return 0
 }
 
+# Classify the input box without checking pane title. For self-DM the title is
+# always busy (the agent is mid-turn), but the box still tells us whether the
+# user has queued a draft or a modal is open. Returns: empty | drafting | modal
+# | unknown.
+#
+# Differs from peer_state's box extraction: matches rules that *start* with
+# 10+ ─ chars rather than requiring the whole line, so that titled rules
+# (e.g. `──── working-dir ────`) count as box delimiters. Without this, the
+# top rule misses, awk only sees the bottom rule, and slurps the status line
+# below it as if it were a draft.
+peer_box_state() {
+  local target="$1" body box draft menu_lines
+  body=$(tm capture-pane -p -J -t "$target" 2>/dev/null) || { printf 'unknown\n'; return 0; }
+  body=$(tail -n 15 <<<"$body")
+  body=$(sed $'s/\xc2\xa0/ /g' <<<"$body")
+
+  grep -qP '^─{10,}' <<<"$body" || { printf 'unknown\n'; return 0; }
+  grep -qP '^❯ '     <<<"$body" || { printf 'unknown\n'; return 0; }
+
+  box=$(awk '/^─{10,}/ { if (inside) exit; inside=1; next } inside { print }' <<<"$body")
+  draft=$(tr -d '❯ \t\n' <<<"$box")
+  if [[ -z "$draft" ]]; then printf 'empty\n'; return 0; fi
+  menu_lines=$(grep -cE '^[[:space:]❯]*[0-9]+[.)]' <<<"$box" || true)
+  if (( menu_lines >= 2 )); then printf 'modal\n'; else printf 'drafting\n'; fi
+}
+
 # True iff state is idle AND transcript confirms end_turn. Prints reason on stderr.
 safe_to_dm() {
   local target="$1" state reason

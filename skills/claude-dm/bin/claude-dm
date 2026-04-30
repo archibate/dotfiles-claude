@@ -27,6 +27,8 @@ Write:
   ask    <target> <msg> [timeout_s]               DM + block until peer reply (sentinel; default 120s)
   esc    <target> [--force]                       send Escape (emergency interrupt / modal cancel)
   answer <target> <key> [--force]                 reply to modal (1/2/3/y/n/a); requires state=modal
+  self   /<slash>                                 queue an allowlisted slash command on the current pane
+                                                  (allowlist: /compact, /context); refuses unless input box is empty
 
 Env:
   CLAUDE_DM_SOCKET=$SOCKET
@@ -113,6 +115,11 @@ cmd_answer() {
   dm_answer "$target" "$key" "$force"
 }
 
+cmd_self() {
+  local slash="${1:?slash command required (e.g. /compact)}"
+  dm_self "$slash"
+}
+
 main() {
   local verb="${1:-}"; shift || true
   case "$verb" in
@@ -125,6 +132,7 @@ main() {
     ask)    cmd_ask    "$@" ;;
     esc)    cmd_esc    "$@" ;;
     answer) cmd_answer "$@" ;;
+    self)   cmd_self   "$@" ;;
     ''|-h|--help|help) usage ;;
     *) usage >&2; die "unknown verb: $verb" ;;
   esac

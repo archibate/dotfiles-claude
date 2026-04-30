@@ -43,6 +43,7 @@ claude-dm cmd    <target> /<slash> [--force] [--confirm]
 claude-dm ask    <target> <msg>   [timeout_s]
 claude-dm esc    <target>          [--force]   # Escape: interrupt turn or cancel modal
 claude-dm answer <target> <key>    [--force]   # pick modal option (1/2/3/y/n/a/…)
+claude-dm self   /<slash>                      # queue a user-only slash command on the current pane
 ```
 
 `<target>` is `session:window.pane` on the current socket (e.g. `HOME:8.1`).
@@ -70,6 +71,7 @@ When state is `modal`, `status` also reports a subtype — `permission` (Bash/Ed
 | `ask`    | `idle` (+ L3 end_turn) | everything else | `--force` |
 | `esc`    | `busy`, `modal`, `idle`, `other` | `drafting` only (would wipe human's draft) | `--force` |
 | `answer` | `modal` only | everything else | `--force` |
+| `self`   | own pane, input box `empty` | input box `drafting` / `modal` / `unknown` | none (allowlist is hard) |
 | `peek` / `tail` / `list` / `status` | always | — | — |
 
 Why the draft protection: `send-keys` *appends* to the tty buffer. If a human has a half-typed draft, your message concatenates with theirs. Every write verb that goes through `safe_to_dm` catches this via the `drafting` state; `esc` applies the same rule explicitly.
@@ -132,6 +134,28 @@ claude-dm answer HOME:6.1 1         # pick option 1 (typically "Yes")
 claude-dm answer HOME:6.1 2         # option 2 ("Yes, and don't ask again")
 claude-dm answer HOME:6.1 3         # option 3 ("No")
 ```
+
+Self-trigger a user-only slash command on the current pane:
+```bash
+claude-dm self /context             # see context-window usage on next turn
+claude-dm self /compact             # pre-emptive compaction before heavy work
+```
+
+`self` resolves the current pane via `$TMUX_PANE` and the socket from `$TMUX`.
+Allowlist is hard: only `/compact` and `/context`. The synchronous box check up
+front refuses if a draft or modal is already present (the same `peer_box_state`
+check that protects peer DMs).
+
+`self` returns immediately and forks a background daemon that waits for the
+agent's current turn to end, then sends the slash command followed by a
+`<notification>claude-dm self /<slash> dispatched; output above</notification>`
+user message. Sequencing them at peer-idle is critical: keystrokes mid-turn
+land in a live input box and get submitted prematurely (slash output orphaned,
+notification arrives as an interrupt). Deferring to idle makes them behave as
+if the user had typed them post-turn — so the slash runs cleanly and its
+output bundles into the notification, which arrives as one real user turn
+carrying both. The daemon re-checks the box state at idle and aborts silently
+if a draft or modal appeared while waiting. Bound: 5 minute timeout.
 
 ## Audit trail
 

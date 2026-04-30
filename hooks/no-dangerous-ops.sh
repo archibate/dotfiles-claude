@@ -148,7 +148,7 @@ fi
 # Firewall wipe — locks you out of remote machines instantly.
 #   iptables/ip6tables -F | -X | --flush | --delete-chain
 #   nft flush ruleset
-#   ufw [--force] reset | disable
+#   ufw [--force] reset
 # ----------------------------------------------------------------------------
 if (echo "$command" | grep -qP '\bip6?tables\b[^|;&]*\s(-[a-zA-Z]*[FX][a-zA-Z]*\b|--flush\b|--delete-chain\b)' \
     || echo "$command" | grep -qP '\bnft\s+flush\s+ruleset\b' \

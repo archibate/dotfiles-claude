@@ -33,7 +33,7 @@ Use `#!/usr/bin/bash` (not `/bin/bash` or `/usr/bin/env bash`). Always `set -euo
 ### `lib/bypass.sh`
 
 - `bypass_check MARKER` — if `MARKER` appears anywhere in `$command`, exits the hook with 0. Call it after `read_bash_command` and before detection so bypassed commands skip the expensive work.
-- `has_bypass_marker MARKER` — non-exiting predicate (returns 0/1). Use for hooks with multiple independent checks that each carry their own marker — e.g. `no-git-amend.sh`, where `BYPASS_AMEND_CHECK` must not silence a chained `git push --force`. Pattern: `if <pattern-match> && ! has_bypass_marker BYPASS_X; then deny; fi`.
+- `has_bypass_marker MARKER` — non-exiting predicate (returns 0/1). Use for hooks with multiple independent checks that each carry their own marker — e.g. `no-git-amend.sh`, where `BYPASS_AMEND_CHECK` must not silence a chained `git push --force` or `git push --delete`. Pattern: `if <pattern-match> && ! has_bypass_marker BYPASS_X; then deny; fi`.
 
 Conventions:
 - Every `no-*` hook that blocks something must accept a bypass marker, so the user has an escape hatch.

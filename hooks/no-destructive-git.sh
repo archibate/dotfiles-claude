@@ -9,7 +9,8 @@
 # Each check carries its own bypass marker so unrelated chained commands
 # don't silence each other.
 #
-# Companion: no-git-amend.sh covers `git commit --amend` and `git push --force`.
+# Companion: no-git-amend.sh covers `git commit --amend`, `git push --force`,
+# and `git push --delete`.
 set -euo pipefail
 
 source "$(dirname "$0")/lib/bypass.sh"

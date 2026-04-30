@@ -486,16 +486,25 @@ def _spawn_audit_codex(diff: str, cwd: str, sid: str) -> str | None:
     env = {**os.environ, "CODEX_AUDIT_SUBAGENT": "1"}
     prompt = f"{prompt_body}\n\n---\n\n{diff}"
 
+    cmd = ["codex", "exec",
+           "--ephemeral",
+           "--skip-git-repo-check",
+           "--ignore-rules",
+           "-s", "read-only",
+           "-C", cwd,
+           "-o", str(out_file)]
+    model = os.environ.get("AUDIT_CODEX_MODEL")
+    if model:
+        cmd += ["-m", model]
+    effort = os.environ.get("AUDIT_CODEX_EFFORT")
+    if effort:
+        cmd += ["-c", f"model_reasoning_effort={effort}"]
+    cmd.append(prompt)
+    _stop_log(sid, f"codex args: model={model or '<config>'} effort={effort or '<config>'}")
+
     try:
         result = subprocess.run(
-            ["codex", "exec",
-             "--ephemeral",
-             "--skip-git-repo-check",
-             "--ignore-rules",
-             "-s", "read-only",
-             "-C", cwd,
-             "-o", str(out_file),
-             prompt],
+            cmd,
             cwd=cwd,
             env=env,
             capture_output=True,
@@ -532,7 +541,7 @@ def cmd_stop_hook() -> int:
         exit 0 → silent
         exit 2 → wakes Claude with stderr (the verdict) as a system reminder.
     Recursion guard via CLAUDE_AUDIT_SUBAGENT / CODEX_AUDIT_SUBAGENT env var.
-    Backend selected by AUDIT_BACKEND={claude,codex}; defaults to claude."""
+    Backend selected by AUDIT_BACKEND={claude,codex,both}; defaults to claude."""
     if os.environ.get("CLAUDE_AUDIT_SUBAGENT") == "1":
         return 0
     if os.environ.get("CODEX_AUDIT_SUBAGENT") == "1":

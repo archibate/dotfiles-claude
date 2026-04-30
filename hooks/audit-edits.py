@@ -405,18 +405,23 @@ def _spawn_audit_claude(diff: str, cwd: str, sid: str) -> str | None:
         "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
     }
+    model = os.environ.get("AUDIT_CLAUDE_MODEL", "sonnet")
+    effort = os.environ.get("AUDIT_CLAUDE_EFFORT")
+    cmd = ["claude", "-p", diff,
+           "--agent", "audit-fresh-eye",
+           "--model", model,
+           "--permission-mode", "dontAsk",
+           "--max-budget-usd", "0.30",
+           "--output-format", "json",
+           "--disable-slash-commands",
+           "--exclude-dynamic-system-prompt-sections",
+           "--no-session-persistence"]
+    if effort:
+        cmd += ["--effort", effort]
+    _stop_log(sid, f"claude args: model={model} effort={effort or '<default>'}")
     try:
         result = subprocess.run(
-            ["claude", "-p", diff,
-             "--agent", "audit-fresh-eye",
-             "--model", "sonnet",
-             "--permission-mode", "dontAsk",
-             "--max-budget-usd", "0.30",
-             "--output-format", "json",
-             "--disable-slash-commands",
-             "--exclude-dynamic-system-prompt-sections",
-             "--no-session-persistence"],
-            cwd=cwd, env=env, capture_output=True, text=True, timeout=240,
+            cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=240,
         )
     except FileNotFoundError:
         _stop_log(sid, "claude CLI not found on PATH")

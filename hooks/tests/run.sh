@@ -88,6 +88,164 @@ assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_RESTORE_CHE
 # Reset bypass must not silence chained clean -fd
 assert_deny no-destructive-git '{"tool_input":{"command":"# BYPASS_RESET_HARD_CHECK\ngit reset --hard; git clean -fd"}}' "git clean -f"
 
+# no-dangerous-ops: every check has its own bypass marker.
+#
+# 1. Disk format / partition (mkfs, parted, fdisk, gdisk, sgdisk, cfdisk, wipefs;
+#    cryptsetup luksFormat/erase/reencrypt). Allowed with --dry-run.
+assert_deny no-dangerous-ops '{"tool_input":{"command":"mkfs.ext4 /dev/sdb1"}}' "disk-format"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo mkfs -t ext4 /dev/sdc"}}' "disk-format"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"parted /dev/sda mklabel gpt"}}' "disk-format"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sgdisk -Z /dev/sda"}}' "disk-format"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"wipefs -a /dev/sdb"}}' "disk-format"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo cryptsetup luksFormat /dev/sda1"}}' "luksFormat"
+# --dry-run exempts
+assert_silent no-dangerous-ops '{"tool_input":{"command":"parted --dry-run /dev/sda mklabel gpt"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"mkfs.ext4 --dry-run /dev/sdb1"}}'
+#
+# 2. Block-device writes — target-based, any tool.
+assert_deny no-dangerous-ops '{"tool_input":{"command":"dd if=image.iso of=/dev/sda bs=4M"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"dd of=/dev/nvme0n1 if=foo"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"dd of=/dev/sr0 if=cd.iso"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"dd of=/dev/mapper/cryptroot if=blob"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"dd of=/dev/loop0 if=blob"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"dd of=/dev/md0 if=blob"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"cp file.iso /dev/sda"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"cp file.iso /dev/sdb1"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"mv image /dev/sda"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"install -m 644 image /dev/sda"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"cat file.iso > /dev/sda"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"pv file.iso > /dev/sdb"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"echo hi >> /dev/sda"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"tee /dev/sda"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"tee -a /dev/nvme0n1"}}' "/dev/<device>"
+# Path-traversal escape attempts must NOT slip through the safe-device allowlist
+assert_deny no-dangerous-ops '{"tool_input":{"command":"cat foo > /dev/null/../sda"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"dd if=foo of=/dev/null/sub"}}' "/dev/<device>"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"echo > /dev/null2"}}' "/dev/<device>"
+# Reads from /dev/<dev> are NOT writes — silent
+assert_silent no-dangerous-ops '{"tool_input":{"command":"dd if=/dev/sda of=backup.img"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"cp /dev/sda /tmp/backup.img"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"hexdump -C /dev/sda"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"lsblk /dev/sda"}}'
+# Pseudo-device writes pass through the allowlist
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo log > /dev/null"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"dd if=foo of=/dev/null"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"dd if=foo of=/dev/zero"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo log > /dev/stderr"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo hi > /dev/tty"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo bytes > /dev/ttyUSB0"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo bytes > /dev/ttyACM0"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo > /dev/fd/3"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo > /dev/pts/0"}}'
+#
+# 3. Privileged-config writes — /etc, /proc, /sys, /boot
+assert_deny no-dangerous-ops '{"tool_input":{"command":"echo 1 > /proc/sys/kernel/sysrq"}}' "/etc, /proc, /sys"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"echo b > /proc/sysrq-trigger"}}' "/etc, /proc, /sys"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo tee /etc/passwd"}}' "/etc, /proc, /sys"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"cp config /etc/myapp.conf"}}' "/etc, /proc, /sys"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"echo 0 > /sys/class/leds/foo/brightness"}}' "/etc, /proc, /sys"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"dd if=newkern of=/boot/vmlinuz"}}' "/etc, /proc, /sys"
+# Reads of those paths are silent
+assert_silent no-dangerous-ops '{"tool_input":{"command":"cat /etc/passwd"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"cat /proc/cpuinfo"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"cat /etc/passwd > /tmp/users"}}'
+#
+# 4. Secure-delete tools
+assert_deny no-dangerous-ops '{"tool_input":{"command":"shred -u secret.txt"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"srm -r /tmp/junk"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"wipe -rf /tmp/junk"}}' "shred"
+# `wipefs` is the disk-format check, not secure-delete (already asserted above)
+#
+# 5. Power-state operations
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo shutdown -h now"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"reboot"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"poweroff"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"halt"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"init 0"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"init 6"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"telinit 1"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"systemctl poweroff"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"systemctl reboot"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo kill -9 1"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"kill -KILL 1"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"kill -9 -1"}}' "power state"
+# `git init` must not match power-state init regex (\binit\s+[016]\b requires digit)
+assert_silent no-dangerous-ops '{"tool_input":{"command":"git init"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"systemctl restart nginx"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"kill 1234"}}'
+#
+# 6. Recursive permission/ownership
+assert_deny no-dangerous-ops '{"tool_input":{"command":"chmod -R 777 ./build"}}' "Recursive"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"chmod -Rfv 644 ./src"}}' "Recursive"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"chown -R root:root /opt/app"}}' "Recursive"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"chmod 755 ./script.sh"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"chmod -h u+x foo"}}'
+#
+# 7. Docker prune
+assert_deny no-dangerous-ops '{"tool_input":{"command":"docker system prune -af --volumes"}}' "docker"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"docker volume prune -f"}}' "docker"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"docker image prune -a"}}' "docker"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"docker ps"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"docker rm specific-container"}}'
+#
+# 8. Firewall wipe
+assert_deny no-dangerous-ops '{"tool_input":{"command":"iptables -F"}}' "firewall"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo iptables --flush"}}' "firewall"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ip6tables -X"}}' "firewall"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"nft flush ruleset"}}' "firewall"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo ufw reset"}}' "firewall"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo ufw --force reset"}}' "firewall"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"iptables -L"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"iptables -A INPUT -j ACCEPT"}}'
+#
+# 9. crontab -r
+assert_deny no-dangerous-ops '{"tool_input":{"command":"crontab -r"}}' "crontab"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"crontab -ri"}}' "crontab"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"crontab --remove"}}' "crontab"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"crontab -l"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"crontab -e"}}'
+#
+# 10. killall
+assert_deny no-dangerous-ops '{"tool_input":{"command":"killall firefox"}}' "killall"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo killall -9 chrome"}}' "killall"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"pkill -f myapp"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"pgrep firefox"}}'
+#
+# Unrelated commands
+assert_silent no-dangerous-ops '{"tool_input":{"command":"ls /etc"}}'
+#
+# Bypass markers — each check is silenced by ITS OWN marker
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_DISK_FORMAT_CHECK\nmkfs.ext4 /dev/sdb1"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_DISK_FORMAT_CHECK\nsudo cryptsetup luksFormat /dev/sda1"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_BLOCKDEV_WRITE_CHECK\ndd if=foo of=/dev/sda"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_BLOCKDEV_WRITE_CHECK\ncp file.iso /dev/sda"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_BLOCKDEV_WRITE_CHECK\ncat foo > /dev/sda"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_SYSPATH_WRITE_CHECK\necho 1 > /proc/sys/kernel/sysrq"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_SYSPATH_WRITE_CHECK\nsudo tee /etc/passwd"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_SECURE_DELETE_CHECK\nshred -u secret.txt"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_POWER_STATE_CHECK\nshutdown -h now"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_POWER_STATE_CHECK\nkill -9 1"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_RECURSIVE_PERMS_CHECK\nchmod -R 777 ./build"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_DOCKER_PRUNE_CHECK\ndocker volume prune -f"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_FIREWALL_WIPE_CHECK\niptables -F"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_CRONTAB_REMOVE_CHECK\ncrontab -r"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# BYPASS_KILLALL_CHECK\nkillall firefox"}}'
+# Cross-bypass: one bypass must NOT silence another check chained with it
+assert_deny no-dangerous-ops '{"tool_input":{"command":"# BYPASS_DISK_FORMAT_CHECK\nmkfs.ext4 /dev/sdb1; killall firefox"}}' "killall"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"# BYPASS_BLOCKDEV_WRITE_CHECK\ndd of=/dev/sda; killall firefox"}}' "killall"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"# BYPASS_KILLALL_CHECK\nshutdown -h now; killall firefox"}}' "power state"
+
+# no-git-amend: push --delete added alongside amend / force-push
+assert_deny no-git-amend '{"tool_input":{"command":"git push --delete origin feature"}}' "push --delete"
+assert_deny no-git-amend '{"tool_input":{"command":"git push -d origin feature"}}' "push --delete"
+assert_deny no-git-amend '{"tool_input":{"command":"git push origin :feature"}}' "push --delete"
+assert_deny no-git-amend '{"tool_input":{"command":"git push origin :refs/heads/feature"}}' "push --delete"
+assert_silent no-git-amend '{"tool_input":{"command":"git push origin feature"}}'
+assert_silent no-git-amend '{"tool_input":{"command":"git push origin main:main"}}'
+assert_silent no-git-amend '{"tool_input":{"command":"# BYPASS_PUSH_DELETE_CHECK\ngit push --delete origin feature"}}'
+# Force-push bypass must NOT silence chained --delete
+assert_deny no-git-amend '{"tool_input":{"command":"# BYPASS_FORCE_PUSH_CHECK\ngit push --force; git push --delete origin x"}}' "push --delete"
+
 assert_deny no-pip-npm "$(jq -n --arg c "pip install foo" '{tool_input:{command:$c}}')" "Use uv instead"
 assert_deny no-pip-npm "$(jq -n --arg c "npm install" '{tool_input:{command:$c}}')" "Use pnpm"
 assert_silent no-pip-npm '{"tool_input":{"command":"uv add foo"}}'

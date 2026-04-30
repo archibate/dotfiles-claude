@@ -12,8 +12,9 @@
     "BASH_MAX_TIMEOUT_MS": "240000",
     "CLAUDE_AUTO_BACKGROUND_TASKS": "1",
     "AUDIT_BACKEND": "both",
-    "AUDIT_CODEX_MODEL": "gpt-5.4-mini",
-    "AUDIT_CODEX_EFFORT": "medium"
+    "AUDIT_CODEX_MODEL": "gpt-5.4",
+    "AUDIT_CODEX_EFFORT": "medium",
+    "AUDIT_CLAUDE_EFFORT": "high"
   },
   "permissions": {
     "defaultMode": "bypassPermissions",
@@ -110,6 +111,16 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/no-devnull-redirect.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/no-dangerous-ops.sh",
             "timeout": 5
           }
         ]

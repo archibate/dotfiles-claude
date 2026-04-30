@@ -40,6 +40,7 @@ AUDIT_DIR = Path("/tmp/claude-audit")
 MAX_SNAPSHOT_BYTES = 5 * 1024 * 1024  # skip files larger than 5 MB
 BINARY_SENTINEL = "\0BINARY\0"
 TOOLBIG_SENTINEL = "\0TOOBIG\0"
+CODEX_PROMPT_FILE = Path(__file__).parent / "audit-fresh-eye-codex.md"
 
 
 # ---------- storage ----------
@@ -358,21 +359,30 @@ def _parse_verdict(raw: str) -> tuple[str, list[dict]]:
 
 def _render_fixes(issues: list[dict]) -> str:
     """Format parsed issues into the stable agent-facing layout. Issues are
-    grouped by file, ordered as the subagent emitted them."""
-    out: list[str] = [
+    grouped by file, ordered as the subagent emitted them. When issues carry
+    a 'source' field (multi-reviewer mode), the source is shown per line and
+    a note about possible overlap is added to the preamble."""
+    sources = {it["source"] for it in issues if it.get("source")}
+    multi = len(sources) > 1
+    preamble = (
         "Suggestions from a fresh-eye audit of this turn's edits. The auditor "
         "sees the diff and can Read/Grep the repo, but not the conversation "
         "or the user's intent — treat each item as a hypothesis to verify, "
-        "not a mandatory fix. Apply genuine issues, dismiss false positives.",
-        "",
-        "FIXES:",
-    ]
+        "not a mandatory fix. Apply genuine issues, dismiss false positives."
+    )
+    if multi:
+        preamble += (
+            " Findings come from two independent reviewers and may overlap "
+            "or duplicate; dedup at your discretion."
+        )
+    out: list[str] = [preamble, "", "FIXES:"]
     last_file: str | None = None
     for it in issues:
         if it["file"] != last_file:
             out.append(f"  {it['file']}:")
             last_file = it["file"]
-        out.append(f"    [{it['category']}] {it['fix']}")
+        src = f" ({it['source']})" if multi and it.get("source") else ""
+        out.append(f"    [{it['category']}]{src} {it['fix']}")
     return "\n".join(out)
 
 
@@ -385,13 +395,147 @@ def _stop_log(sid: str, msg: str) -> None:
         pass
 
 
+def _spawn_audit_claude(diff: str, cwd: str, sid: str) -> str | None:
+    """Spawn `claude -p` with the audit-fresh-eye agent. Returns the raw
+    verdict text (e.g. "CLEAN" or "FIXES\\n...") or None on failure."""
+    env = {
+        **os.environ,
+        "CLAUDE_AUDIT_SUBAGENT": "1",
+        "CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT": "1",
+        "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+    }
+    try:
+        result = subprocess.run(
+            ["claude", "-p", diff,
+             "--agent", "audit-fresh-eye",
+             "--model", "sonnet",
+             "--permission-mode", "dontAsk",
+             "--max-budget-usd", "0.30",
+             "--output-format", "json",
+             "--disable-slash-commands",
+             "--exclude-dynamic-system-prompt-sections",
+             "--no-session-persistence"],
+            cwd=cwd, env=env, capture_output=True, text=True, timeout=240,
+        )
+    except FileNotFoundError:
+        _stop_log(sid, "claude CLI not found on PATH")
+        return None
+    except subprocess.TimeoutExpired:
+        _stop_log(sid, "claude audit timed out")
+        return None
+    except Exception as e:
+        _stop_log(sid, f"claude audit failed: {type(e).__name__}: {e}")
+        return None
+
+    raw_stdout = (result.stdout or "").strip()
+    verdict = raw_stdout
+    try:
+        payload = json.loads(raw_stdout)
+        verdict = (payload.get("result") or "").strip()
+        usage = payload.get("usage") or {}
+        cost = payload.get("total_cost_usd") or payload.get("cost_usd")
+        _stop_log(
+            sid,
+            f"claude usage: in={usage.get('input_tokens', 0)} "
+            f"out={usage.get('output_tokens', 0)} "
+            f"cache_read={usage.get('cache_read_input_tokens', 0)} "
+            f"cache_create={usage.get('cache_creation_input_tokens', 0)} "
+            f"cost={cost}"
+        )
+    except (json.JSONDecodeError, ValueError, AttributeError):
+        _stop_log(sid, "claude stdout was not JSON; treating as raw text")
+    return verdict
+
+
+def _spawn_audit_both(diff: str, cwd: str, sid: str) -> tuple[str, list[dict]]:
+    """Run both backends concurrently. Returns parsed (status, issues) where
+    each issue dict is tagged with 'source' = 'claude' or 'codex'. Status is
+    "FIXES" if either backend produced issues, else "CLEAN"."""
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f_claude = ex.submit(_spawn_audit_claude, diff, cwd, sid)
+        f_codex = ex.submit(_spawn_audit_codex, diff, cwd, sid)
+        v_claude = f_claude.result()
+        v_codex = f_codex.result()
+
+    issues: list[dict] = []
+    for verdict, source in ((v_claude, "claude"), (v_codex, "codex")):
+        if verdict is None:
+            continue
+        _stop_log(sid, f"{source} verdict: {verdict[:300]!r}")
+        _, parsed = _parse_verdict(verdict)
+        for it in parsed:
+            it["source"] = source
+            issues.append(it)
+    return ("FIXES" if issues else "CLEAN"), issues
+
+
+def _spawn_audit_codex(diff: str, cwd: str, sid: str) -> str | None:
+    """Spawn `codex exec` as a fresh-eye auditor. Returns the raw verdict
+    text (e.g. "CLEAN" or "FIXES\\n...") or None on failure."""
+    try:
+        prompt_body = CODEX_PROMPT_FILE.read_text()
+    except OSError as e:
+        _stop_log(sid, f"codex prompt file unreadable: {e}")
+        return None
+
+    out_file = AUDIT_DIR / f"{sid}.codex.out"
+    out_file.unlink(missing_ok=True)
+
+    env = {**os.environ, "CODEX_AUDIT_SUBAGENT": "1"}
+    prompt = f"{prompt_body}\n\n---\n\n{diff}"
+
+    try:
+        result = subprocess.run(
+            ["codex", "exec",
+             "--ephemeral",
+             "--skip-git-repo-check",
+             "--ignore-rules",
+             "-s", "read-only",
+             "-C", cwd,
+             "-o", str(out_file),
+             prompt],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=240,
+        )
+    except FileNotFoundError:
+        _stop_log(sid, "codex CLI not found on PATH")
+        return None
+    except subprocess.TimeoutExpired:
+        _stop_log(sid, "codex audit timed out")
+        return None
+    except Exception as e:
+        _stop_log(sid, f"codex audit failed: {type(e).__name__}: {e}")
+        return None
+
+    _stop_log(sid, f"codex exit={result.returncode}")
+    if not out_file.exists():
+        _stop_log(sid, "codex produced no -o output file")
+        return None
+    try:
+        verdict = out_file.read_text().strip()
+    except OSError as e:
+        _stop_log(sid, f"failed to read codex output: {e}")
+        return None
+    finally:
+        out_file.unlink(missing_ok=True)
+    return verdict
+
+
 def cmd_stop_hook() -> int:
     """Stop hook handler. Spawns a fresh-eye audit subagent over the diff of
     files edited this turn. asyncRewake-compatible:
         exit 0 → silent
         exit 2 → wakes Claude with stderr (the verdict) as a system reminder.
-    Recursion guard via CLAUDE_AUDIT_SUBAGENT env var."""
+    Recursion guard via CLAUDE_AUDIT_SUBAGENT / CODEX_AUDIT_SUBAGENT env var.
+    Backend selected by AUDIT_BACKEND={claude,codex}; defaults to claude."""
     if os.environ.get("CLAUDE_AUDIT_SUBAGENT") == "1":
+        return 0
+    if os.environ.get("CODEX_AUDIT_SUBAGENT") == "1":
         return 0
 
     try:
@@ -426,67 +570,34 @@ def cmd_stop_hook() -> int:
             _stop_log(sid, "claimed JSON had no diffs; skipping audit")
             return 0
 
-        _stop_log(sid, f"spawning audit subagent ({len(diff)} bytes diff)")
+        backend = os.environ.get("AUDIT_BACKEND", "claude").lower()
+        _stop_log(sid, f"spawning audit ({backend}, {len(diff)} bytes diff)")
 
-        env = {
-            **os.environ,
-            "CLAUDE_AUDIT_SUBAGENT": "1",
-            "CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT": "1",
-            "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
-            "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-        }
+        fallback_used = False
+        if backend == "both":
+            status, issues = _spawn_audit_both(diff, cwd, sid)
+        elif backend == "codex":
+            verdict = _spawn_audit_codex(diff, cwd, sid)
+            if verdict is None:
+                _stop_log(sid, "codex unavailable; falling back to claude")
+                fallback_used = True
+                verdict = _spawn_audit_claude(diff, cwd, sid)
+                if verdict is None:
+                    return 0
+            _stop_log(sid, f"verdict: {verdict[:500]!r}")
+            status, issues = _parse_verdict(verdict)
+        else:
+            verdict = _spawn_audit_claude(diff, cwd, sid)
+            if verdict is None:
+                return 0
+            _stop_log(sid, f"verdict: {verdict[:500]!r}")
+            status, issues = _parse_verdict(verdict)
 
-        try:
-            result = subprocess.run(
-                ["claude", "-p", diff,
-                 "--agent", "audit-fresh-eye",
-                 "--model", "sonnet",
-                 "--permission-mode", "dontAsk",
-                 "--max-budget-usd", "0.30",
-                 "--output-format", "json",
-                 "--disable-slash-commands",
-                 "--exclude-dynamic-system-prompt-sections",
-                 "--no-session-persistence"],
-                cwd=cwd,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=240,
-            )
-        except FileNotFoundError:
-            _stop_log(sid, "claude CLI not found on PATH")
-            return 0
-        except subprocess.TimeoutExpired:
-            _stop_log(sid, "subagent timed out")
-            return 0
-        except Exception as e:
-            _stop_log(sid, f"subagent failed: {type(e).__name__}: {e}")
-            return 0
-
-        raw_stdout = (result.stdout or "").strip()
-        verdict = raw_stdout
-        try:
-            payload = json.loads(raw_stdout)
-            verdict = (payload.get("result") or "").strip()
-            usage = payload.get("usage") or {}
-            inp = usage.get("input_tokens", 0)
-            out = usage.get("output_tokens", 0)
-            cache_read = usage.get("cache_read_input_tokens", 0)
-            cache_create = usage.get("cache_creation_input_tokens", 0)
-            cost = payload.get("total_cost_usd") or payload.get("cost_usd")
-            _stop_log(
-                sid,
-                f"usage: in={inp} out={out} cache_read={cache_read} "
-                f"cache_create={cache_create} cost={cost}"
-            )
-        except (json.JSONDecodeError, ValueError, AttributeError):
-            _stop_log(sid, "stdout was not JSON; treating as raw text verdict")
-        _stop_log(sid, f"verdict: {verdict[:500]!r}")
-
-        status, issues = _parse_verdict(verdict)
         if status != "FIXES" or not issues:
             return 0
 
+        if fallback_used:
+            print("(codex audit unavailable; fell back to claude)", file=sys.stderr)
         print(_render_fixes(issues), file=sys.stderr)
         return 2
     finally:

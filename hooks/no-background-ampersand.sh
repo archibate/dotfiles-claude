@@ -14,7 +14,7 @@ bypass_check BYPASS_BACKGROUND_CHECK
 if echo "$command" | grep -qE '[^&]&[[:space:]]*$'; then
     emit_pre_tool_deny 'Do not use & for background execution. Use the run_in_background parameter instead:
   Bash(command="...", run_in_background=true)
-If you have legitimate reason, add comment `# BYPASS_BACKGROUND_CHECK` before the first line of command.'
+If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_BACKGROUND_CHECK` before the first line of command.'
 fi
 
 exit 0

@@ -18,7 +18,7 @@ bypass_check BYPASS_FOO_CHECK
 # detection — grep / regex against $command or $file_path
 
 emit_pre_tool_deny '...
-If you believe this is a false positive, add comment `BYPASS_FOO_CHECK` to the first line of command.'
+If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_FOO_CHECK` before the first line of command.'
 ```
 
 Use `#!/usr/bin/bash` (not `/bin/bash` or `/usr/bin/env bash`). Always `set -euo pipefail`.
@@ -39,7 +39,8 @@ Conventions:
 - Every `no-*` hook that blocks something must accept a bypass marker, so the user has an escape hatch.
 - Marker names are `BYPASS_<SUBJECT>_CHECK` (e.g. `BYPASS_HEAD_READ_CHECK`) or `BYPASS_<SUBJECT>` (e.g. `BYPASS_CAT_WRITE`, `BYPASS_HEREDOC_RESTRICTION`).
 - The deny message always ends with the exact line:
-  ``If you believe this is a false positive, add comment `BYPASS_X` to the first line of command.``
+  ``If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_X` before the first line of command.``
+  The two-branch wording is deliberate: the agent must know that bypass also covers regex misfires (e.g. the trigger token sitting inside a quoted string), not only "I really intend to run this." Without that, the agent gaslights itself into "I don't have a legitimate reason" on a genuine FP and gets stuck.
 - The helper matches anywhere in `$command`. The "first line" phrasing is a user-facing convention — `grep -qF` is deliberately lenient so a marker on any line works.
 
 ### `lib/emit.sh`

@@ -395,6 +395,27 @@ def _stop_log(sid: str, msg: str) -> None:
         pass
 
 
+def _write_result(sid: str, verdict: str, claude_n: int = 0,
+                  codex_n: int = 0, reason: str | None = None) -> None:
+    """Write the terminal-state marker read by ~/.claude/statusline.sh.
+    Atomic via tmp+os.replace so the renderer never reads a partial file.
+    Schema is stable; statusline.sh reads .verdict / .claude_issues / .codex_issues."""
+    AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+    target = AUDIT_DIR / f"{sid}.json.audit-result"
+    tmp = AUDIT_DIR / f"{sid}.json.audit-result.tmp"
+    payload = {
+        "verdict": verdict,
+        "claude_issues": claude_n,
+        "codex_issues": codex_n,
+        "failure_reason": reason,
+    }
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False))
+        os.replace(tmp, target)
+    except OSError as e:
+        _stop_log(sid, f"failed to write audit-result: {e}")
+
+
 def _spawn_audit_claude(diff: str, cwd: str, sid: str) -> str | None:
     """Spawn `claude -p` with the audit-fresh-eye agent. Returns the raw
     verdict text (e.g. "CLEAN" or "FIXES\\n...") or None on failure."""
@@ -453,10 +474,14 @@ def _spawn_audit_claude(diff: str, cwd: str, sid: str) -> str | None:
     return verdict
 
 
-def _spawn_audit_both(diff: str, cwd: str, sid: str) -> tuple[str, list[dict]]:
-    """Run both backends concurrently. Returns parsed (status, issues) where
-    each issue dict is tagged with 'source' = 'claude' or 'codex'. Status is
-    "FIXES" if either backend produced issues, else "CLEAN"."""
+def _spawn_audit_both(
+    diff: str, cwd: str, sid: str
+) -> tuple[str, list[dict], str | None]:
+    """Run both backends concurrently. Returns (status, issues, fail_reason)
+    where each issue dict is tagged with 'source' = 'claude' or 'codex'.
+    Status is 'FAILED' when both backends were unavailable OR when neither
+    produced a parseable verdict (fail_reason distinguishes the two cases),
+    'FIXES' if either produced issues, else 'CLEAN'."""
     import concurrent.futures
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
         f_claude = ex.submit(_spawn_audit_claude, diff, cwd, sid)
@@ -464,16 +489,24 @@ def _spawn_audit_both(diff: str, cwd: str, sid: str) -> tuple[str, list[dict]]:
         v_claude = f_claude.result()
         v_codex = f_codex.result()
 
+    if v_claude is None and v_codex is None:
+        return ("FAILED", [], "both backends unavailable")
+
     issues: list[dict] = []
+    parseable = False
     for verdict, source in ((v_claude, "claude"), (v_codex, "codex")):
         if verdict is None:
             continue
         _stop_log(sid, f"{source} verdict: {verdict[:300]!r}")
-        _, parsed = _parse_verdict(verdict)
+        status, parsed = _parse_verdict(verdict)
+        if status != "UNKNOWN":
+            parseable = True
         for it in parsed:
             it["source"] = source
             issues.append(it)
-    return ("FIXES" if issues else "CLEAN"), issues
+    if not parseable:
+        return ("FAILED", [], "no parseable verdict from either backend")
+    return ("FIXES" if issues else "CLEAN"), issues, None
 
 
 def _spawn_audit_codex(diff: str, cwd: str, sid: str) -> str | None:
@@ -582,36 +615,57 @@ def cmd_stop_hook() -> int:
         diff = render_diff_from_path(pending)
         if not diff:
             _stop_log(sid, "claimed JSON had no diffs; skipping audit")
-            return 0
+            return 0  # no audit ran; leave any prior result-marker alone
 
         backend = os.environ.get("AUDIT_BACKEND", "claude").lower()
         _stop_log(sid, f"spawning audit ({backend}, {len(diff)} bytes diff)")
 
-        fallback_used = False
         if backend == "both":
-            status, issues = _spawn_audit_both(diff, cwd, sid)
+            status, issues, fail_reason = _spawn_audit_both(diff, cwd, sid)
+            if status == "FAILED":
+                _write_result(sid, "failed", reason=fail_reason)
+                return 0
         elif backend == "codex":
             verdict = _spawn_audit_codex(diff, cwd, sid)
+            used_source = "codex"
             if verdict is None:
                 _stop_log(sid, "codex unavailable; falling back to claude")
-                fallback_used = True
                 verdict = _spawn_audit_claude(diff, cwd, sid)
+                used_source = "claude"
                 if verdict is None:
+                    _write_result(sid, "failed",
+                                  reason="codex and claude unavailable")
                     return 0
             _stop_log(sid, f"verdict: {verdict[:500]!r}")
             status, issues = _parse_verdict(verdict)
+            if status == "UNKNOWN":
+                _write_result(sid, "failed",
+                              reason="verdict could not be parsed")
+                return 0
+            for it in issues:
+                it.setdefault("source", used_source)
         else:
             verdict = _spawn_audit_claude(diff, cwd, sid)
             if verdict is None:
+                _write_result(sid, "failed", reason="claude unavailable")
                 return 0
             _stop_log(sid, f"verdict: {verdict[:500]!r}")
             status, issues = _parse_verdict(verdict)
+            if status == "UNKNOWN":
+                _write_result(sid, "failed",
+                              reason="verdict could not be parsed")
+                return 0
+            for it in issues:
+                it.setdefault("source", "claude")
+
+        claude_n = sum(1 for it in issues if it.get("source") == "claude")
+        codex_n = sum(1 for it in issues if it.get("source") == "codex")
 
         if status != "FIXES" or not issues:
+            _write_result(sid, "clean")
             return 0
 
-        if fallback_used:
-            print("(codex audit unavailable; fell back to claude)", file=sys.stderr)
+        _write_result(sid, "fixes", claude_n=claude_n, codex_n=codex_n)
         print(_render_fixes(issues), file=sys.stderr)
         return 2
     finally:

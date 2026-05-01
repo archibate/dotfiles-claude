@@ -19,6 +19,7 @@ Always exits 0 from the hook subcommand — never blocks a tool call.
 """
 
 import argparse
+import calendar
 import fcntl
 import io
 import json
@@ -122,7 +123,11 @@ def cmd_hook() -> int:
     except OSError:
         abs_path = str(p)
 
-    # never audit our own audit dir
+    # /tmp paths are typically one-off scripts (smoke tests, scratch files,
+    # downloaded artifacts) not worth long-term audit attention. The
+    # AUDIT_DIR exclusion below this is now subsumed but kept for clarity.
+    if abs_path.startswith("/tmp/"):
+        return 0
     if abs_path.startswith(str(AUDIT_DIR)):
         return 0
 
@@ -395,11 +400,79 @@ def _stop_log(sid: str, msg: str) -> None:
         pass
 
 
+HISTORY_DIR = Path.home() / ".claude" / "audit-history"
+
+
+def _slug(path: str) -> str:
+    """Mirror ~/.claude/projects/ slug convention: replace '/' and '.' in the
+    cwd with '-'. e.g. /home/ubuntu/.claude → -home-ubuntu--claude."""
+    return path.replace("/", "-").replace(".", "-") or "unknown"
+
+
+def _iso_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _diff_stats(diff: str) -> tuple[int, int, int, list[dict]]:
+    """Count totals + per-file breakdown from a unified diff produced by
+    render_diff_from_path. Returns (files_changed, lines_added, lines_removed,
+    files) where files is a list of {path, lines_added, lines_removed} dicts.
+
+    Uses a small state machine: the area between 'diff --git' and the first
+    '@@' hunk header is the file-header zone (mode/index/+++/--- lines, all
+    skipped). Lines after '@@' are content. This means a content line that
+    happens to start with '+++ ' or '--- ' is correctly counted as added/removed,
+    not mistaken for a header."""
+    files: list[dict] = []
+    cur: dict | None = None
+    in_hunk = False
+    for line in diff.splitlines():
+        if line.startswith("diff --git a/"):
+            if cur:
+                files.append(cur)
+            # 'diff --git a/PATH b/PATH' — split on ' b/' (handles paths w/ spaces)
+            rest = line[len("diff --git a/"):]
+            sep = rest.find(" b/")
+            path = rest[:sep] if sep > 0 else rest
+            cur = {"path": path, "lines_added": 0, "lines_removed": 0}
+            in_hunk = False
+        elif line.startswith("@@"):
+            in_hunk = True
+        elif not in_hunk:
+            continue  # mode/index/+++/--- in the file-header zone
+        elif line.startswith("+"):
+            if cur:
+                cur["lines_added"] += 1
+        elif line.startswith("-"):
+            if cur:
+                cur["lines_removed"] += 1
+    if cur:
+        files.append(cur)
+    return (len(files),
+            sum(f["lines_added"] for f in files),
+            sum(f["lines_removed"] for f in files),
+            files)
+
+
+def _append_history(record: dict, cwd: str, sid: str) -> None:
+    """Append one row to ~/.claude/audit-history/<slug>/<sid>.jsonl, where
+    slug is derived from cwd (mirrors ~/.claude/projects/). Linux O_APPEND
+    with sub-PIPE_BUF writes is kernel-atomic; failures are swallowed."""
+    target = HISTORY_DIR / _slug(cwd or "unknown") / f"{sid or 'unknown'}.jsonl"
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("a") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError as e:
+        _stop_log(sid or "unknown", f"failed to append history: {e}")
+
+
 def _write_result(sid: str, verdict: str, claude_n: int = 0,
                   codex_n: int = 0, reason: str | None = None) -> None:
-    """Write the terminal-state marker read by ~/.claude/statusline.sh.
+    """Write the terminal-state marker read by `cmd_statusline` (which any
+    statusLine renderer can call via `audit-edits.py statusline <sid>`).
     Atomic via tmp+os.replace so the renderer never reads a partial file.
-    Schema is stable; statusline.sh reads .verdict / .claude_issues / .codex_issues."""
+    Schema is stable; readers consume .verdict / .claude_issues / .codex_issues."""
     AUDIT_DIR.mkdir(parents=True, exist_ok=True)
     target = AUDIT_DIR / f"{sid}.json.audit-result"
     tmp = AUDIT_DIR / f"{sid}.json.audit-result.tmp"
@@ -416,9 +489,14 @@ def _write_result(sid: str, verdict: str, claude_n: int = 0,
         _stop_log(sid, f"failed to write audit-result: {e}")
 
 
-def _spawn_audit_claude(diff: str, cwd: str, sid: str) -> str | None:
-    """Spawn `claude -p` with the audit-fresh-eye agent. Returns the raw
-    verdict text (e.g. "CLEAN" or "FIXES\\n...") or None on failure."""
+def _spawn_audit_claude(
+    diff: str, cwd: str, sid: str
+) -> tuple[str | None, dict | None]:
+    """Spawn `claude -p` with the audit-fresh-eye agent. Returns
+    (verdict, usage) — verdict is the raw text ("CLEAN" / "FIXES\\n…") or
+    None on failure; usage is a dict with tokens_in/out/cache_read/cache_create
+    /cost_usd parsed from the --output-format json payload, or None when the
+    payload is missing or unparseable."""
     env = {
         **os.environ,
         "CLAUDE_AUDIT_SUBAGENT": "1",
@@ -446,51 +524,71 @@ def _spawn_audit_claude(diff: str, cwd: str, sid: str) -> str | None:
         )
     except FileNotFoundError:
         _stop_log(sid, "claude CLI not found on PATH")
-        return None
+        return None, None
     except subprocess.TimeoutExpired:
         _stop_log(sid, "claude audit timed out")
-        return None
+        return None, None
     except Exception as e:
         _stop_log(sid, f"claude audit failed: {type(e).__name__}: {e}")
-        return None
+        return None, None
 
     raw_stdout = (result.stdout or "").strip()
     verdict = raw_stdout
+    usage_info: dict | None = None
     try:
         payload = json.loads(raw_stdout)
         verdict = (payload.get("result") or "").strip()
         usage = payload.get("usage") or {}
         cost = payload.get("total_cost_usd") or payload.get("cost_usd")
+        usage_info = {
+            "tokens_in": usage.get("input_tokens", 0),
+            "tokens_out": usage.get("output_tokens", 0),
+            "cache_read": usage.get("cache_read_input_tokens", 0),
+            "cache_create": usage.get("cache_creation_input_tokens", 0),
+            "cost_usd": cost,
+        }
         _stop_log(
             sid,
-            f"claude usage: in={usage.get('input_tokens', 0)} "
-            f"out={usage.get('output_tokens', 0)} "
-            f"cache_read={usage.get('cache_read_input_tokens', 0)} "
-            f"cache_create={usage.get('cache_creation_input_tokens', 0)} "
+            f"claude usage: in={usage_info['tokens_in']} "
+            f"out={usage_info['tokens_out']} "
+            f"cache_read={usage_info['cache_read']} "
+            f"cache_create={usage_info['cache_create']} "
             f"cost={cost}"
         )
     except (json.JSONDecodeError, ValueError, AttributeError):
         _stop_log(sid, "claude stdout was not JSON; treating as raw text")
-    return verdict
+    return verdict, usage_info
 
 
 def _spawn_audit_both(
     diff: str, cwd: str, sid: str
-) -> tuple[str, list[dict], str | None]:
-    """Run both backends concurrently. Returns (status, issues, fail_reason)
-    where each issue dict is tagged with 'source' = 'claude' or 'codex'.
-    Status is 'FAILED' when both backends were unavailable OR when neither
-    produced a parseable verdict (fail_reason distinguishes the two cases),
-    'FIXES' if either produced issues, else 'CLEAN'."""
+) -> tuple[str, list[dict], str | None, float, float, dict | None]:
+    """Run both backends concurrently. Returns (status, issues, fail_reason,
+    claude_dur_s, codex_dur_s, claude_usage) where each issue dict is tagged
+    with 'source'. Status is 'FAILED' when both backends were unavailable OR
+    when neither produced a parseable verdict (fail_reason distinguishes the
+    two cases), 'FIXES' if either produced issues, else 'CLEAN'."""
     import concurrent.futures
+
+    def timed_claude():
+        t0 = time.monotonic()
+        v, u = _spawn_audit_claude(diff, cwd, sid)
+        return v, u, time.monotonic() - t0
+
+    def timed_codex():
+        t0 = time.monotonic()
+        v = _spawn_audit_codex(diff, cwd, sid)
+        return v, time.monotonic() - t0
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-        f_claude = ex.submit(_spawn_audit_claude, diff, cwd, sid)
-        f_codex = ex.submit(_spawn_audit_codex, diff, cwd, sid)
-        v_claude = f_claude.result()
-        v_codex = f_codex.result()
+        f_claude = ex.submit(timed_claude)
+        f_codex = ex.submit(timed_codex)
+        v_claude, claude_usage, claude_dur = f_claude.result()
+        v_codex, codex_dur = f_codex.result()
 
     if v_claude is None and v_codex is None:
-        return ("FAILED", [], "both backends unavailable")
+        return ("FAILED", [], "both backends unavailable",
+                claude_dur, codex_dur, claude_usage)
 
     issues: list[dict] = []
     parseable = False
@@ -505,8 +603,10 @@ def _spawn_audit_both(
             it["source"] = source
             issues.append(it)
     if not parseable:
-        return ("FAILED", [], "no parseable verdict from either backend")
-    return ("FIXES" if issues else "CLEAN"), issues, None
+        return ("FAILED", [], "no parseable verdict from either backend",
+                claude_dur, codex_dur, claude_usage)
+    return (("FIXES" if issues else "CLEAN"), issues, None,
+            claude_dur, codex_dur, claude_usage)
 
 
 def _spawn_audit_codex(diff: str, cwd: str, sid: str) -> str | None:
@@ -620,52 +720,117 @@ def cmd_stop_hook() -> int:
         backend = os.environ.get("AUDIT_BACKEND", "claude").lower()
         _stop_log(sid, f"spawning audit ({backend}, {len(diff)} bytes diff)")
 
+        files_changed, lines_added, lines_removed, files_list = _diff_stats(diff)
+        started_at = _iso_now()
+        claude_dur: float | None = None
+        codex_dur: float | None = None
+        claude_usage: dict | None = None
+        claude_list: list[dict] = []
+        codex_list: list[dict] = []
+
+        def write_row(verdict_label: str, c_n: int, x_n: int,
+                      reason: str | None) -> None:
+            row = {
+                "session_id": sid,
+                "started_at": started_at,
+                "completed_at": _iso_now(),
+                "backend": backend,
+                "claude_model": os.environ.get("AUDIT_CLAUDE_MODEL", "sonnet"),
+                "claude_effort": os.environ.get("AUDIT_CLAUDE_EFFORT"),
+                "codex_model": os.environ.get("AUDIT_CODEX_MODEL"),
+                "codex_effort": os.environ.get("AUDIT_CODEX_EFFORT"),
+                "diff_bytes": len(diff),
+                "files_changed": files_changed,
+                "lines_added": lines_added,
+                "lines_removed": lines_removed,
+                "files": files_list,
+                "verdict": verdict_label,
+                "claude_dur_s": round(claude_dur, 2) if claude_dur is not None else None,
+                "codex_dur_s": round(codex_dur, 2) if codex_dur is not None else None,
+                "claude_issues": c_n,
+                "codex_issues": x_n,
+                "claude_issues_list": claude_list,
+                "codex_issues_list": codex_list,
+                "claude_cost_usd": claude_usage.get("cost_usd") if claude_usage else None,
+                "claude_tokens_in": claude_usage.get("tokens_in") if claude_usage else None,
+                "claude_tokens_out": claude_usage.get("tokens_out") if claude_usage else None,
+                "claude_cache_read": claude_usage.get("cache_read") if claude_usage else None,
+                "claude_cache_create": claude_usage.get("cache_create") if claude_usage else None,
+                "failure_reason": reason,
+            }
+            _append_history(row, cwd, sid)
+
         if backend == "both":
-            status, issues, fail_reason = _spawn_audit_both(diff, cwd, sid)
+            (status, issues, fail_reason,
+             claude_dur, codex_dur, claude_usage) = _spawn_audit_both(diff, cwd, sid)
             if status == "FAILED":
                 _write_result(sid, "failed", reason=fail_reason)
+                write_row("failed", 0, 0, fail_reason)
                 return 0
         elif backend == "codex":
+            t0 = time.monotonic()
             verdict = _spawn_audit_codex(diff, cwd, sid)
+            codex_dur = time.monotonic() - t0
             used_source = "codex"
             if verdict is None:
                 _stop_log(sid, "codex unavailable; falling back to claude")
-                verdict = _spawn_audit_claude(diff, cwd, sid)
+                t1 = time.monotonic()
+                verdict, claude_usage = _spawn_audit_claude(diff, cwd, sid)
+                claude_dur = time.monotonic() - t1
                 used_source = "claude"
                 if verdict is None:
-                    _write_result(sid, "failed",
-                                  reason="codex and claude unavailable")
+                    reason = "codex and claude unavailable"
+                    _write_result(sid, "failed", reason=reason)
+                    write_row("failed", 0, 0, reason)
                     return 0
             _stop_log(sid, f"verdict: {verdict[:500]!r}")
             status, issues = _parse_verdict(verdict)
             if status == "UNKNOWN":
-                _write_result(sid, "failed",
-                              reason="verdict could not be parsed")
+                reason = "verdict could not be parsed"
+                _write_result(sid, "failed", reason=reason)
+                write_row("failed", 0, 0, reason)
                 return 0
             for it in issues:
                 it.setdefault("source", used_source)
         else:
-            verdict = _spawn_audit_claude(diff, cwd, sid)
+            t0 = time.monotonic()
+            verdict, claude_usage = _spawn_audit_claude(diff, cwd, sid)
+            claude_dur = time.monotonic() - t0
             if verdict is None:
-                _write_result(sid, "failed", reason="claude unavailable")
+                reason = "claude unavailable"
+                _write_result(sid, "failed", reason=reason)
+                write_row("failed", 0, 0, reason)
                 return 0
             _stop_log(sid, f"verdict: {verdict[:500]!r}")
             status, issues = _parse_verdict(verdict)
             if status == "UNKNOWN":
-                _write_result(sid, "failed",
-                              reason="verdict could not be parsed")
+                reason = "verdict could not be parsed"
+                _write_result(sid, "failed", reason=reason)
+                write_row("failed", 0, 0, reason)
                 return 0
             for it in issues:
                 it.setdefault("source", "claude")
 
         claude_n = sum(1 for it in issues if it.get("source") == "claude")
         codex_n = sum(1 for it in issues if it.get("source") == "codex")
+        claude_list = [
+            {"file": it.get("file"), "category": it.get("category"),
+             "fix": it.get("fix")}
+            for it in issues if it.get("source") == "claude"
+        ]
+        codex_list = [
+            {"file": it.get("file"), "category": it.get("category"),
+             "fix": it.get("fix")}
+            for it in issues if it.get("source") == "codex"
+        ]
 
         if status != "FIXES" or not issues:
             _write_result(sid, "clean")
+            write_row("clean", claude_n, codex_n, None)
             return 0
 
         _write_result(sid, "fixes", claude_n=claude_n, codex_n=codex_n)
+        write_row("fixes", claude_n, codex_n, None)
         print(_render_fixes(issues), file=sys.stderr)
         return 2
     finally:
@@ -673,6 +838,82 @@ def cmd_stop_hook() -> int:
             pending.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def cmd_statusline(session_id: str, color: bool = True) -> int:
+    """Render the audit segment for a session_id, or empty string. Includes
+    leading whitespace so callers can plain-concat. Mirrors the priority order
+    in the original statusline.sh: in-flight marker > result marker (TTL'd)
+    > nothing. Self-heals stale auditing-markers (dead pid or age > 600s).
+
+    TTLs: clean 60s, fixes 300s, failed 60s.
+    """
+    if not session_id:
+        return 0
+
+    if color:
+        RED = "\033[31m"
+        GREEN = "\033[32m"
+        YELLOW = "\033[33m"
+        CYAN = "\033[36m"
+        RESET = "\033[0m"
+    else:
+        RED = GREEN = YELLOW = CYAN = RESET = ""
+
+    now = int(time.time())
+
+    # 1. In-flight marker
+    for f in sorted(AUDIT_DIR.glob(f"{session_id}.json.auditing-*")):
+        suffix = f.name[len(f"{session_id}.json.auditing-"):]
+        try:
+            pid_str, ts_str = suffix.rsplit("-", 1)
+            pid, ts = int(pid_str), int(ts_str)
+        except ValueError:
+            continue
+        elapsed = now - ts
+        if elapsed > 600:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+            continue
+        try:
+            os.kill(pid, 0)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+            continue
+        sys.stdout.write(f"  {CYAN}auditing… {elapsed}s{RESET}")
+        return 0
+
+    # 2. Result marker
+    result_file = AUDIT_DIR / f"{session_id}.json.audit-result"
+    if not result_file.exists():
+        return 0
+    try:
+        mtime = int(result_file.stat().st_mtime)
+        data = json.loads(result_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        return 0
+    age = now - mtime
+    verdict = data.get("verdict")
+    if verdict == "clean" and age <= 60:
+        sys.stdout.write(f"  {GREEN}audit ✓{RESET}")
+    elif verdict == "fixes" and age <= 300:
+        c = data.get("claude_issues") or 0
+        x = data.get("codex_issues") or 0
+        parts = []
+        if c > 0:
+            parts.append(f"claude:{c}")
+        if x > 0:
+            parts.append(f"codex:{x}")
+        tail = f" {' '.join(parts)}" if parts else ""
+        sys.stdout.write(f"  {YELLOW}audit ⚠{tail}{RESET}")
+    elif verdict == "failed" and age <= 60:
+        sys.stdout.write(f"  {RED}audit ✗{RESET}")
+    return 0
 
 
 def cmd_list() -> int:
@@ -692,6 +933,311 @@ def cmd_list() -> int:
     return 0
 
 
+def cmd_stats(days: int | None, last: int,
+              top_files: int = 5, min_audits: int = 3,
+              slug: str | None = None) -> int:
+    """Aggregate ~/.claude/audit-history/<slug>/<sid>.jsonl files. Walks the
+    directory tree, sorts rows chronologically, and skips malformed lines
+    silently (a torn last line from a crashed write is normal).
+
+    --slug accepts either a path ('/home/ubuntu/.claude') or a slug fragment
+    ('claude', '-home-ubuntu--claude'); inputs are normalized via _slug() then
+    substring-matched against folder names so both forms work."""
+    from statistics import mean, median
+
+    if not HISTORY_DIR.exists():
+        print(f"No audit history at {HISTORY_DIR}.", file=sys.stderr)
+        return 1
+
+    cutoff: float | None = None
+    if days is not None:
+        cutoff = time.time() - days * 86400
+
+    # Normalize the --slug input so users can pass either path-form or slug-form.
+    slug_needle = _slug(slug) if slug else None
+
+    rows: list[dict] = []
+    for jsonl in sorted(HISTORY_DIR.rglob("*.jsonl")):
+        if slug_needle and slug_needle not in jsonl.parent.name:
+            continue
+        try:
+            content = jsonl.read_text()
+        except OSError:
+            continue
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if cutoff is not None:
+                # started_at is in UTC via time.gmtime(); compare as UTC.
+                try:
+                    started = calendar.timegm(time.strptime(
+                        r["started_at"], "%Y-%m-%dT%H:%M:%SZ"))
+                except (KeyError, ValueError):
+                    continue
+                if started < cutoff:
+                    continue
+            rows.append(r)
+    # Rows from rglob are walk-ordered; sort chronologically for "Last N runs".
+    rows.sort(key=lambda r: r.get("started_at") or "")
+
+    if not rows:
+        print("No audit rows in history.")
+        return 0
+
+    n = len(rows)
+    parts = []
+    if days:
+        parts.append(f"last {days}d")
+    if slug_needle:
+        parts.append(f"slug~{slug_needle!r}")
+    label = (", " + ", ".join(parts)) if parts else ""
+    print(f"=== audit history (n={n}{label}) ===\n")
+
+    # --- Verdict mix ---------------------------------------------------------
+    verdict_counts: dict[str, int] = {}
+    for r in rows:
+        v = r.get("verdict") or "?"
+        verdict_counts[v] = verdict_counts.get(v, 0) + 1
+    print("Verdicts:")
+    for v in ("clean", "fixes", "failed"):
+        c = verdict_counts.get(v, 0)
+        if c:
+            print(f"  {v:7s} {c:5d}  ({c / n * 100:5.1f}%)")
+    print()
+
+    def pctile(values: list[float], p: int) -> float:
+        s = sorted(values)
+        k = max(0, min(len(s) - 1, int(p / 100 * len(s))))
+        return s[k]
+
+    def fmt_row(name: str, vals: list[float]) -> str:
+        if not vals:
+            return f"  {name:24s}     n=0"
+        return (f"  {name:24s}  n={len(vals):4d}  "
+                f"p50={pctile(vals, 50):5.0f}s  "
+                f"p90={pctile(vals, 90):5.0f}s  "
+                f"max={max(vals):5.0f}s  mean={mean(vals):5.0f}s")
+
+    # --- Per-backend latency overall ----------------------------------------
+    claude_durs = [r["claude_dur_s"] for r in rows
+                   if r.get("claude_dur_s") is not None]
+    codex_durs = [r["codex_dur_s"] for r in rows
+                  if r.get("codex_dur_s") is not None]
+    print("Per-backend latency:")
+    print(fmt_row("claude", claude_durs))
+    print(fmt_row("codex", codex_durs))
+    print()
+
+    # --- Latency grouped by (backend, model, effort) ------------------------
+    groups: dict[tuple[str, str, str], list[float]] = {}
+    for r in rows:
+        if r.get("claude_dur_s") is not None:
+            key = ("claude", r.get("claude_model") or "?",
+                   r.get("claude_effort") or "default")
+            groups.setdefault(key, []).append(r["claude_dur_s"])
+        if r.get("codex_dur_s") is not None:
+            key = ("codex", r.get("codex_model") or "?",
+                   r.get("codex_effort") or "default")
+            groups.setdefault(key, []).append(r["codex_dur_s"])
+    if len(groups) > 2:
+        print("Latency by (backend, model, effort):")
+        for key in sorted(groups):
+            print(fmt_row(f"{key[0]}/{key[1]}/{key[2]}", groups[key]))
+        print()
+
+    # --- 'both'-mode head-to-head + agreement contingency -------------------
+    both = [r for r in rows
+            if r.get("backend") == "both"
+            and r.get("claude_dur_s") is not None
+            and r.get("codex_dur_s") is not None]
+    if both:
+        c_wins = sum(1 for r in both if r["claude_dur_s"] < r["codex_dur_s"])
+        x_wins = sum(1 for r in both if r["codex_dur_s"] < r["claude_dur_s"])
+        deltas = [r["claude_dur_s"] - r["codex_dur_s"] for r in both]
+        print(f"'both' mode latency head-to-head (n={len(both)}):")
+        print(f"  codex faster:  {x_wins:4d}  ({x_wins / len(both) * 100:.0f}%)")
+        print(f"  claude faster: {c_wins:4d}  ({c_wins / len(both) * 100:.0f}%)")
+        print(f"  median delta:  claude {median(deltas):+.0f}s vs codex")
+        print()
+
+        # Issue-detection 2x2 contingency over both-mode runs (excl. failed)
+        bm = [r for r in both if (r.get("verdict") or "") != "failed"]
+        if bm:
+            both_flag = sum(
+                1 for r in bm
+                if (r.get("claude_issues") or 0) > 0
+                and (r.get("codex_issues") or 0) > 0)
+            claude_only = sum(
+                1 for r in bm
+                if (r.get("claude_issues") or 0) > 0
+                and (r.get("codex_issues") or 0) == 0)
+            codex_only = sum(
+                1 for r in bm
+                if (r.get("claude_issues") or 0) == 0
+                and (r.get("codex_issues") or 0) > 0)
+            both_clean = len(bm) - both_flag - claude_only - codex_only
+
+            cf = both_flag + claude_only  # claude flagged
+            xf = both_flag + codex_only   # codex flagged
+            print(f"Issue-detection in 'both' mode (n={len(bm)}, excl. failed):")
+            print(f"  both flagged:       {both_flag:4d}  "
+                  f"({both_flag / len(bm) * 100:.0f}%)")
+            print(f"  claude only:        {claude_only:4d}  "
+                  f"({claude_only / len(bm) * 100:.0f}%)  "
+                  f"← codex missed")
+            print(f"  codex only:         {codex_only:4d}  "
+                  f"({codex_only / len(bm) * 100:.0f}%)  "
+                  f"← claude missed")
+            print(f"  both clean:         {both_clean:4d}  "
+                  f"({both_clean / len(bm) * 100:.0f}%)")
+            print(f"  flag rate — claude: {cf / len(bm) * 100:5.1f}%   "
+                  f"codex: {xf / len(bm) * 100:5.1f}%")
+
+            # Cohen's kappa: agreement beyond chance
+            po = (both_flag + both_clean) / len(bm)
+            pc = cf / len(bm)
+            px = xf / len(bm)
+            pe = pc * px + (1 - pc) * (1 - px)
+            kappa = (po - pe) / (1 - pe) if pe < 1 else 0
+            print(f"  Cohen's κ:          {kappa:+.2f}  "
+                  f"(0=chance, 1=perfect, <0=worse than chance)")
+
+            # Mean issues per flagged run (per backend)
+            cf_issues = [r["claude_issues"] for r in bm
+                         if (r.get("claude_issues") or 0) > 0]
+            xf_issues = [r["codex_issues"] for r in bm
+                         if (r.get("codex_issues") or 0) > 0]
+            if cf_issues:
+                print(f"  mean issues/flagged: claude {mean(cf_issues):.1f}   "
+                      f"codex {mean(xf_issues) if xf_issues else 0:.1f}")
+            print()
+
+        # Issue-grain overlap (Jaccard) over both-mode FIXES runs that have
+        # persisted issue lists. Older rows without lists are silently skipped.
+        jacc_fc: list[float] = []
+        jacc_f: list[float] = []
+        for r in bm:
+            cl = r.get("claude_issues_list") or []
+            xl = r.get("codex_issues_list") or []
+            if not cl and not xl:
+                continue
+            c_set = {(i.get("file"), i.get("category")) for i in cl}
+            x_set = {(i.get("file"), i.get("category")) for i in xl}
+            union_fc = c_set | x_set
+            if union_fc:
+                jacc_fc.append(len(c_set & x_set) / len(union_fc))
+            cf_set = {i.get("file") for i in cl}
+            xf_set = {i.get("file") for i in xl}
+            union_f = cf_set | xf_set
+            if union_f:
+                jacc_f.append(len(cf_set & xf_set) / len(union_f))
+        if jacc_fc:
+            print(f"Issue-grain overlap (n={len(jacc_fc)} runs with issues):")
+            print(f"  Jaccard@(file,category): mean {mean(jacc_fc):.2f}  "
+                  f"med {median(jacc_fc):.2f}")
+            print(f"  Jaccard@file:            mean {mean(jacc_f):.2f}  "
+                  f"med {median(jacc_f):.2f}")
+            print()
+
+    # --- Cost ----------------------------------------------------------------
+    costs = [r["claude_cost_usd"] for r in rows
+             if r.get("claude_cost_usd") is not None]
+    if costs:
+        print(f"Claude cost (n={len(costs)}):  total ${sum(costs):.2f}   "
+              f"mean ${mean(costs):.4f}/run   max ${max(costs):.4f}")
+        print()
+
+    # --- Top files by issue count -------------------------------------------
+    # Skip rows with verdict 'failed' (no real audit signal). Match issue paths
+    # to files[].path after lstrip('/') normalization (renderer drops leading /
+    # but issue strings keep it).
+    def _norm(p: str | None) -> str:
+        return (p or "").lstrip("/")
+
+    file_stats: dict[str, dict] = {}
+    for r in rows:
+        if (r.get("verdict") or "") == "failed":
+            continue
+        files_in_row = r.get("files") or []
+        if not files_in_row:
+            continue
+        # Pre-issue-list-schema rows can't attribute issues per file; skip
+        # them so they don't inflate `audited` while contributing zero flags.
+        # New rows always carry both keys (possibly as []), so absence = legacy.
+        if "claude_issues_list" not in r and "codex_issues_list" not in r:
+            continue
+        cl = r.get("claude_issues_list") or []
+        xl = r.get("codex_issues_list") or []
+        c_flagged = {_norm(i.get("file")) for i in cl}
+        x_flagged = {_norm(i.get("file")) for i in xl}
+        c_per_file: dict[str, int] = {}
+        for i in cl:
+            f = _norm(i.get("file"))
+            c_per_file[f] = c_per_file.get(f, 0) + 1
+        x_per_file: dict[str, int] = {}
+        for i in xl:
+            f = _norm(i.get("file"))
+            x_per_file[f] = x_per_file.get(f, 0) + 1
+        for fd in files_in_row:
+            path = fd.get("path")
+            if not path:
+                continue
+            s = file_stats.setdefault(path, {
+                "audited": 0,
+                "c_flag_runs": 0, "c_iss": 0,
+                "x_flag_runs": 0, "x_iss": 0,
+            })
+            s["audited"] += 1
+            if path in c_flagged:
+                s["c_flag_runs"] += 1
+            s["c_iss"] += c_per_file.get(path, 0)
+            if path in x_flagged:
+                s["x_flag_runs"] += 1
+            s["x_iss"] += x_per_file.get(path, 0)
+
+    eligible = [(p, s) for p, s in file_stats.items()
+                if s["audited"] >= min_audits]
+    if eligible:
+        eligible.sort(key=lambda kv: kv[1]["c_iss"] + kv[1]["x_iss"], reverse=True)
+        shown = eligible[:top_files]
+        print(f"Top files by issue count (≥{min_audits} audits, top {len(shown)}):")
+        print(f"  {'audits':>6}  {'c_flag':>9}  {'c_iss':>5}  "
+              f"{'x_flag':>9}  {'x_iss':>5}  {'total':>5}  path")
+        for path, s in shown:
+            a = s["audited"]
+            cfr = f"{s['c_flag_runs']}({s['c_flag_runs'] / a * 100:.0f}%)"
+            xfr = f"{s['x_flag_runs']}({s['x_flag_runs'] / a * 100:.0f}%)"
+            total = s["c_iss"] + s["x_iss"]
+            print(f"  {a:>6}  {cfr:>9}  {s['c_iss']:>5}  "
+                  f"{xfr:>9}  {s['x_iss']:>5}  {total:>5}  {path}")
+        print()
+
+    # --- Recent runs ---------------------------------------------------------
+    show = min(last, n)
+    print(f"Last {show} runs:")
+    for r in rows[-last:]:
+        ts = (r.get("started_at") or "?")[:16].replace("T", " ")
+        backend = r.get("backend") or "?"
+        v = r.get("verdict") or "?"
+        c = r.get("claude_dur_s")
+        x = r.get("codex_dur_s")
+        c_s = f"c={c:>3.0f}s" if c is not None else "c=  - "
+        x_s = f"x={x:>3.0f}s" if x is not None else "x=  - "
+        files = r.get("files_changed") or 0
+        plus = r.get("lines_added") or 0
+        minus = r.get("lines_removed") or 0
+        ci = r.get("claude_issues") or 0
+        xi = r.get("codex_issues") or 0
+        print(f"  {ts}  {backend:5s}  {v:6s}  {c_s}  {x_s}  "
+              f"{files}f +{plus}/-{minus}  c{ci}/x{xi}")
+    return 0
+
+
 # ---------- entry ----------
 
 def main() -> int:
@@ -704,6 +1250,23 @@ def main() -> int:
     s.add_argument("-U", "--context", type=int, default=3, help="diff context lines (default 3)")
     s.add_argument("--no-color", action="store_true")
     sub.add_parser("list", help="List recorded sessions")
+    sl = sub.add_parser("statusline",
+                        help="Print audit segment for a session ID")
+    sl.add_argument("session_id", help="session ID to look up audit state for")
+    sl.add_argument("--no-color", action="store_true")
+    st = sub.add_parser("stats", help="Aggregate audit history")
+    st.add_argument("--days", type=int, default=None,
+                    help="filter to last N days (default: all-time)")
+    st.add_argument("--last", type=int, default=10,
+                    help="show N most-recent runs (default 10)")
+    st.add_argument("--top-files", type=int, default=5,
+                    help="show top N files by issue count (default 5)")
+    st.add_argument("--min-audits", type=int, default=3,
+                    help="min audits per file to be eligible (default 3)")
+    st.add_argument("--slug", default=None,
+                    help="filter to slugs containing this fragment "
+                         "(accepts paths like '/home/ubuntu/.claude' or "
+                         "fragments like 'claude' or '-home-ubuntu--claude')")
     args = p.parse_args()
 
     if args.cmd == "hook":
@@ -721,6 +1284,13 @@ def main() -> int:
         return cmd_show(args.session_id, args.context, color)
     if args.cmd == "list":
         return cmd_list()
+    if args.cmd == "statusline":
+        return cmd_statusline(args.session_id, color=not args.no_color)
+    if args.cmd == "stats":
+        return cmd_stats(days=args.days, last=args.last,
+                         top_files=args.top_files,
+                         min_audits=args.min_audits,
+                         slug=args.slug)
     return 0
 
 

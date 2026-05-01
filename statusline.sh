@@ -87,68 +87,11 @@ if [[ -n "$cwd" ]] && git -C "$cwd" rev-parse --git-dir &>/dev/null; then
 fi
 
 # --- audit segment -----------------------------------------------------------
-# Contract with audit-edits.py:
-#   running marker:  /tmp/claude-audit/<sid>.json.auditing-<pid>-<ts>
-#   result marker :  /tmp/claude-audit/<sid>.json.audit-result
-#                    {verdict, claude_issues, codex_issues, failure_reason}
+# Logic and color/TTL contract live in audit-edits.py statusline subcommand.
+# Output already includes leading whitespace; empty string when nothing applies.
 audit_segment=""
-AUDIT_DIR="/tmp/claude-audit"
-
 if [[ -n "$session_id" ]]; then
-  shopt -s nullglob
-  auditing_files=("$AUDIT_DIR/${session_id}.json.auditing-"*)
-  shopt -u nullglob
-
-  for f in "${auditing_files[@]}"; do
-    suffix="${f##*.json.auditing-}"
-    pid="${suffix%-*}"
-    ts="${suffix##*-}"
-    [[ "$pid" =~ ^[0-9]+$ && "$ts" =~ ^[0-9]+$ ]] || continue
-
-    now=$(date +%s)
-    elapsed=$(( now - ts ))
-
-    if (( elapsed > 600 )) || ! kill -0 "$pid" 2>/dev/null; then
-      rm -f "$f" 2>/dev/null || true
-      continue
-    fi
-
-    audit_segment="  ${CYAN}auditing… ${elapsed}s${RESET}"
-    break
-  done
-
-  if [[ -z "$audit_segment" ]]; then
-    result_file="$AUDIT_DIR/${session_id}.json.audit-result"
-    if [[ -f "$result_file" ]]; then
-      mtime=$(stat -c %Y "$result_file" 2>/dev/null || echo 0)
-      now=$(date +%s)
-      age=$(( now - mtime ))
-      verdict=$(jq -r '.verdict // empty' "$result_file" 2>/dev/null || echo "")
-
-      case "$verdict" in
-        clean)
-          (( age <= 60 )) && audit_segment="  ${GREEN}audit ✓${RESET}"
-          ;;
-        fixes)
-          if (( age <= 60 )); then
-            c=$(jq -r '.claude_issues // 0' "$result_file" 2>/dev/null || echo 0)
-            x=$(jq -r '.codex_issues // 0' "$result_file" 2>/dev/null || echo 0)
-            parts=()
-            (( c > 0 )) && parts+=("claude:$c")
-            (( x > 0 )) && parts+=("codex:$x")
-            if (( ${#parts[@]} > 0 )); then
-              audit_segment="  ${YELLOW}audit ⚠ ${parts[*]}${RESET}"
-            else
-              audit_segment="  ${YELLOW}audit ⚠${RESET}"
-            fi
-          fi
-          ;;
-        failed)
-          (( age <= 300 )) && audit_segment="  ${RED}audit ✗${RESET}"
-          ;;
-      esac
-    fi
-  fi
+  audit_segment=$(~/.claude/hooks/audit-edits.py statusline "$session_id" 2>/dev/null || true)
 fi
 
 # --- compose -----------------------------------------------------------------

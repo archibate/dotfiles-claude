@@ -38,6 +38,7 @@
 # !/settings.json
 # !/CLAUDE.md
 /claude-dm.log
+/audit-history
 
 # machine specific settings
 /settings.local.json

@@ -196,16 +196,6 @@
         ]
       },
       {
-        "matcher": "Read|Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/pre-peer-stake-edit.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Skill",
         "hooks": [
           {

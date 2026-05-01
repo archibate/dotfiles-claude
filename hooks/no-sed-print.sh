@@ -8,6 +8,13 @@ source "$(dirname "$0")/lib/read_input.sh"
 read_bash_command
 bypass_check BYPASS_SED_PRINT_CHECK
 
+# Skip when sudo precedes sed — Read runs without elevated privileges so
+# cannot substitute for `sudo sed -n '12,13p' /etc/shadow`. Gap class excludes
+# `;` / `&` / `|` so a stray earlier sudo doesn't silence the check.
+if echo "$command" | grep -qP '\bsudo\s+[^;&|\n]*?\bsed\b'; then
+    exit 0
+fi
+
 # Detect sed -n with numeric line printing on a file (e.g., sed -n '12,13p' file)
 # Pattern: sed -n followed by a number or number range ending in p, then a filename
 # We want to catch: '12p', "12p", 12p, '12,13p', "12,13!p", etc.

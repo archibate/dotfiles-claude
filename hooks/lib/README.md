@@ -51,13 +51,35 @@ Conventions:
 
 - `check_python_unbuffered "$command" "$cwd"` — shared between `python-unbuffered.sh` (PreToolUse) and `python-unbuffered-post.sh` (PostToolUse); returns 0 when a python command lacks unbuffered output.
 
-## Command-position regex
+### `lib/anchors.sh`
 
-Use `(^|&&|;|\|)\s*CMD\b` to match `CMD` at command position without matching it as a substring (`pipenv` shouldn't trigger `pip` rules). Single-pipe `\|` — not `\|\|` — so a command like `foo | cmd` is treated as command-position, matching shell semantics.
+Shared command-position regex anchors. Source it after the other helpers:
+
+- `CMD_ANCHOR_BASIC` — `^` / `&&` / `;` / `|` / `(` / `{` / `do|then|else`. Use for tool-suggestion hooks where sudo doesn't change semantics.
+- `CMD_ANCHOR_SUDO` — basic + optional `sudo`. Use for safety blocks where `sudo cp` is at least as risky as `cp`.
+- `CMD_WRAPPER` — indirect invocation through `bash -c …` / `sh -c …` / `eval …` / `xargs …`. `-c` is required after `bash`/`sh` so script-file invocations (`bash myscript`) are not flagged. Combine via `(${CMD_ANCHOR_SUDO}|${CMD_WRAPPER})`.
+- `CMD_TRAIL` — trailing lookahead allowing whitespace, separator, closing quote, or end-of-string.
+
+Usage:
+
+```bash
+source "$(dirname "$0")/lib/anchors.sh"
+if echo "$command" | grep -qP "(${CMD_ANCHOR_SUDO}|${CMD_WRAPPER})rm${CMD_TRAIL}"; then …
+```
+
+Inherent limitation: regex cannot shell-parse. The tightened WRAPPER (which requires the wrapper tool to sit at command position, not just `\b…\b`) eliminates the most common FP class — `echo "use eval rm here"` no longer trips, because mid-string `eval` is preceded by space, not an anchor char. What still trips: a literal `|` byte followed by a real wrapper invocation, e.g. `grep 'foo|bash -c rm' file` — the regex sees `|bash -c rm` as a pipe-into-wrapper. Bypass markers handle these rare cases.
+
+## Command-position regex (legacy hooks)
+
+Older hooks use `(^|&&|;|\|)\s*CMD\b` directly. New hooks should source `lib/anchors.sh` instead. Single-pipe `\|` — not `\|\|` — so a command like `foo | cmd` is treated as command-position, matching shell semantics.
 
 ## Implicit `git commit` bypass
 
 Hooks that restrict heredocs or `cat` heredocs (`no-heredoc.sh`, `no-cat-write.sh`) exempt any command containing `\bgit\s+commit\b`, because Claude Code's commit protocol prescribes heredocs for commit messages. Other hooks don't need this bypass.
+
+## Implicit `sudo` bypass for "use Read/Write instead" hooks
+
+`no-cat-write.sh`, `no-head-read.sh`, and `no-sed-print.sh` each skip any command where `sudo` precedes the matched tool on the same statement (gap class `[^;&|\n]*?` so a stray earlier sudo like `sudo apt update; head -n 80 /tmp/x` doesn't silence the check). The Read and Write tools run without elevated privileges, so `sudo cat << EOF > <target>`, `sudo head -N <target>`, and `sudo sed -n '<range>p' <target>` have no in-harness substitute regardless of where `<target>` lives — denying them would leave the user with no alternative.
 
 ## Tests
 

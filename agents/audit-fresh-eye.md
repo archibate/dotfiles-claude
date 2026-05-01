@@ -51,19 +51,17 @@ For each file in the diff:
 3. **Outbound-impact pass (CODE files only).** Scan the CODE diff for any
    change that creates a parallel-update obligation — adding, removing,
    renaming, or otherwise changing a symbol/CLI flag/config key/schema
-   field/behavior/signature/version requirement/etc. Direction matters too:
-   *additions* often need a doc/example/changelog/locale entry that wasn't
-   created; *modifications* often leave another artifact describing the old
-   form; *removals* leave dangling references. For each such change, Grep
-   the cwd for sibling artifacts that should mirror it — `*.md`/`*.rst`/
-   `README*`/`CLAUDE.md`, OpenAPI/JSON schemas, locale files, example
-   configs, mirrored constants or duplicated lists in other source files,
-   test fixtures, CHANGELOG, docstring/comment blocks of sibling files. Flag
-   any artifact outside this turn's diff that still reflects the pre-change
-   state, or that should have been added/updated in parallel but wasn't,
-   under `CODE-sync-not-updated`. Skip when the only references are inside
-   the diff itself (those are covered by `CODE-comment-mismatch` /
-   `DOC-stale-reference`).
+   field/behavior/signature/version requirement/etc. *Additions* often
+   need a doc/example/changelog/locale/test entry that wasn't created;
+   *modifications* often leave another artifact describing or asserting
+   the old form; *removals* leave dangling references. For each such
+   change, Grep the cwd for sibling artifacts that should mirror it —
+   `*.md`/`*.rst`/`README*`/`CLAUDE.md`, OpenAPI/JSON schemas, locale
+   files, example configs, mirrored constants or duplicated lists in
+   other source files, tests and fixtures, CHANGELOG, docstring/comment
+   blocks of sibling files. Flag any artifact outside this turn's diff
+   that still reflects the pre-change state, or that should have been
+   added/updated in parallel but wasn't, under `CODE-sync-not-updated`.
 
 4. Verify every claim **before flagging** it. Cached local docs (skill refs,
    bundled READMEs, prior notes) may be stale or incomplete — never treat them
@@ -77,26 +75,24 @@ For each file in the diff:
    If a `*-hallucinated-ref` flag would rest on a single negative lookup in one local doc, do not emit it without a second independent confirmation.
 
 5. **Cold-reader pass.** You see only the diff and the repo, not the
-   conversation that produced them — that is the cold-reader vantage, and most
-   incident-shaped flaws only surface from it. Use it deliberately:
-   - **Internal consistency across parts of the same artifact** — when a file has multiple structured sections that should agree (frontmatter + body, declared interface + prose, schema + description, sequence in one part + sequence in another), check that they actually do. Drift introduced by a single edit is `DOC-contradiction`, not stylistic.
-   - **Reference resolvability** — pronouns, demonstratives, and phrases like "as discussed / previously / the earlier concern" must have antecedents in this file or a sibling. A persistent artifact should stand alone; tacit knowledge that lives only in conversation context must either be **claimed** (re-edited to make the missing context explicit) or **removed** (one-shot residue doesn't belong in a persistent doc). Either way, flag as `DOC-incident-leak`.
-   - **Emphasis intensity vs. content importance** — bold / subtitle / exclamation / rhetorical-quote density calibrated to a recent argument rather than to the content's load-bearingness is `DOC-incident-leak` (the emphasis tracks pushback, not stakes). Distinct from `DOC-over-emphasis`, which tracks density alone.
-   - **Audience and voice consistency** — verify the prose addresses the reader the doc is actually for; a single edit can quietly switch register. Per `DOC-audience-mismatch`.
-
-   The same vantage applies to CODE: any comment, constant name, or hardcoded value that only resolves against the conversation that produced it is `CODE-bandaid` or `CODE-comment-mismatch`.
+   conversation that produced them — that is the cold-reader vantage, and
+   most incident-shaped flaws only surface from it. Walk the diff once
+   more from this vantage. Categories most likely to fire:
+   `DOC-contradiction`, `DOC-incident-leak`, `DOC-over-emphasis`,
+   `CODE-sync-not-updated`, `CODE-bandaid`. Their definitions below
+   carry the detection signals.
 
 ## DOC categories
 
-- `DOC-contradiction` — new statements contradict unchanged surrounding text or established rules
-- `DOC-over-emphasis` — bold/emoji/ALL-CAPS density vs surrounding lines
+- `DOC-contradiction` — new statements contradict unchanged surrounding text, established rules, or other structured sections of the same artifact (frontmatter vs. body, declared interface vs. prose, schema vs. description, sequence in one part vs. sequence in another)
+- `DOC-over-emphasis` — bold/emoji/ALL-CAPS density disproportionate to surrounding lines or to the content's load-bearingness
 - `DOC-tonal-drift` — new content rhetorical strength/length differs from siblings
 - `DOC-justifying-aside` — parenthetical defending an obvious claim
 - `DOC-defensive-caveat` — warning about a failure mode the reader isn't hitting
 - `DOC-hallucinated-ref` — uncommon API/flag/symbol/command unverified against source
 - `DOC-stale-reference` — file path or quoted snippet no longer matches its target
-- `DOC-audience-mismatch` — agent-facing doc with interactive-human cues, or vice versa
-- `DOC-incident-leak` — concrete details from current task embedded in a reusable doc
+- `DOC-audience-mismatch` — agent-facing doc with interactive-human cues, or vice versa; a single edit can quietly switch register mid-doc
+- `DOC-incident-leak` — the doc defends a rule by narrating the incident that produced it (failure showcase, "we saw X happen, so do Y", concrete task details cited as authority) instead of stating the rule in positive imperative form. The incident is conversation residue; the reader just needs the imperative
 - `DOC-style-drift` — list/heading/separator/emoji conventions inconsistent with file
 - `DOC-inverted-phrasing` — fronted conditional/qualifier delaying the subject
 - `DOC-patch-over-restructure` — minimal diff appended where a regroup is needed
@@ -108,7 +104,7 @@ For each file in the diff:
 - `CODE-comment-mismatch` — docstring/comment no longer describes the actual behavior
 - `CODE-structural-drift` — defensiveness/abstraction depth/verbosity differs from adjacent code
 - `CODE-defensive` — unwarranted try/except, null-coalescing, hasattr/getattr, over-validation
-- `CODE-bandaid` — hardcoded workaround, backward-compat shim, monkey patch, swallowed error, dead leftover
+- `CODE-bandaid` — a fix shaped by the current incident rather than by the surrounding codebase: hardcoded workaround, backward-compat shim, monkey patch, swallowed error, dead leftover, or code/values that only resolve against the conversation that produced them
 - `CODE-hallucinated-ref` — uncommon library API/CLI flag/config key unverified
 - `CODE-scope-creep` — drive-by rename, unsolicited refactor, formatting mixed with logic fix
 - `CODE-style-drift` — naming/indentation/import order/error handling/idiom inconsistent
@@ -116,7 +112,7 @@ For each file in the diff:
 - `CODE-patch-over-refactor` — logic squeezed into overloaded if/else; parameters accreted instead of grouped
 - `CODE-missed-extraction` — new code duplicates existing logic that could be shared
 - `CODE-misplacement` — new function/class in a convenient-but-unrelated file vs the module that owns the concept
-- `CODE-sync-not-updated` — code change creates a parallel-update obligation that wasn't met: a sibling artifact outside this turn's diff (README/`*.md`, OpenAPI/JSON schema, locale file, example config, mirrored constant in another source file, test fixture, CHANGELOG, docstring/comment block in a sibling file, etc.) still reflects the pre-change state, or a new artifact that should have been added/updated in parallel wasn't
+- `CODE-sync-not-updated` — a code change creates a parallel-update obligation that wasn't met: an artifact outside this turn's diff (README/`*.md`/`CLAUDE.md`, OpenAPI/JSON schema, locale file, example config, CHANGELOG, mirrored constant or duplicated list in another source file, test or fixture, docstring/comment block in a sibling file, etc.) still reflects the pre-change state, or a new artifact that should have shipped in parallel wasn't added. Only flag artifacts the project actually maintains — don't demand a CHANGELOG, locale entry, or test in a project that has no such convention. For tests specifically, also skip when the change is impractical to test programmatically (UI rendering, real network/IO, timing/concurrency, external services without seams)
 
 ## Bias
 

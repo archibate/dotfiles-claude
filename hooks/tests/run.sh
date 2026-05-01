@@ -2,13 +2,20 @@
 # Test harness for migrated hooks. Deliberately contains trigger patterns;
 # hooks see only the outer `bash /tmp/hook-test.sh` invocation.
 
+# Scrub env that some hooks consult, so tests reproduce the hook behavior a
+# fresh user environment would see (Claude's runtime env can set
+# PYTHONUNBUFFERED, masking deny tests).
+unset PYTHONUNBUFFERED
+
 fail=0
 
 assert_deny() {
   local name="$1" input="$2" pattern="$3"
   local out
   out=$(printf '%s' "$input" | bash ~/.claude/hooks/$name.sh 2>&1)
-  if ! echo "$out" | jq -e ".hookSpecificOutput.permissionDecision == \"deny\" and (.hookSpecificOutput.permissionDecisionReason | contains(\"$pattern\"))" > "$test_out"; then
+  # jq -e returns 0 on empty stdin, so guard explicitly — otherwise a silent
+  # hook would falsely pass an assert_deny check.
+  if [ -z "$out" ] || ! echo "$out" | jq -e ".hookSpecificOutput.permissionDecision == \"deny\" and (.hookSpecificOutput.permissionDecisionReason | contains(\"$pattern\"))" > "$test_out"; then
     echo "FAIL: $name should deny with pattern '$pattern'"
     echo "  got: $out"
     fail=1
@@ -87,6 +94,23 @@ assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_CHECKOUT_DI
 assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_RESTORE_CHECK\ngit restore foo.py"}}'
 # Reset bypass must not silence chained clean -fd
 assert_deny no-destructive-git '{"tool_input":{"command":"# BYPASS_RESET_HARD_CHECK\ngit reset --hard; git clean -fd"}}' "git clean -f"
+
+# git rm -f / --force — destroys uncommitted changes irrecoverably
+assert_deny no-destructive-git '{"tool_input":{"command":"git rm -f foo.py"}}' "git rm -f"
+assert_deny no-destructive-git '{"tool_input":{"command":"git rm --force foo.py"}}' "git rm -f"
+assert_deny no-destructive-git '{"tool_input":{"command":"git rm -rf src/"}}' "git rm -f"
+assert_deny no-destructive-git '{"tool_input":{"command":"git rm -fr src/"}}' "git rm -f"
+# Bare git rm — safe (refuses uncommitted; committed content recoverable)
+assert_silent no-destructive-git '{"tool_input":{"command":"git rm foo.py"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git rm -r src/"}}'
+# --cached only unstages, so -f is safe in that context
+assert_silent no-destructive-git '{"tool_input":{"command":"git rm --cached foo.py"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git rm --cached -f foo.py"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"git rm -f --cached foo.py"}}'
+# Bypass marker
+assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_GIT_RM_FORCE_CHECK\ngit rm -f foo.py"}}'
+# Cross-bypass: rm-force bypass must not silence chained reset --hard
+assert_deny no-destructive-git '{"tool_input":{"command":"# BYPASS_GIT_RM_FORCE_CHECK\ngit rm -f foo; git reset --hard"}}' "reset --hard"
 
 # no-dangerous-ops: every check has its own bypass marker.
 #
@@ -249,6 +273,16 @@ assert_deny no-git-amend '{"tool_input":{"command":"# BYPASS_FORCE_PUSH_CHECK\ng
 assert_deny no-pip-npm "$(jq -n --arg c "pip install foo" '{tool_input:{command:$c}}')" "Use uv instead"
 assert_deny no-pip-npm "$(jq -n --arg c "npm install" '{tool_input:{command:$c}}')" "Use pnpm"
 assert_silent no-pip-npm '{"tool_input":{"command":"uv add foo"}}'
+# Shared anchor lib: sudo + wrapper coverage for pip/npm
+assert_deny no-pip-npm '{"tool_input":{"command":"sudo pip install foo"}}' "Use uv instead"
+assert_deny no-pip-npm '{"tool_input":{"command":"sudo npm install"}}' "Use pnpm"
+assert_deny no-pip-npm '{"tool_input":{"command":"bash -c \"pip install foo\""}}' "Use uv instead"
+assert_deny no-pip-npm '{"tool_input":{"command":"sudo bash -c \"npm install\""}}' "Use pnpm"
+# Substring guards: pipenv / pip-tools / pnpm must NOT trigger
+assert_silent no-pip-npm '{"tool_input":{"command":"pipenv install foo"}}'
+assert_silent no-pip-npm '{"tool_input":{"command":"pip-tools compile"}}'
+assert_silent no-pip-npm '{"tool_input":{"command":"pnpm install"}}'
+assert_silent no-pip-npm '{"tool_input":{"command":"sudo pnpm install"}}'
 
 assert_deny no-worktree-team '{"tool_input":{"isolation":"worktree","team_name":"foo"}}' "worktree silently fails"
 assert_silent no-worktree-team '{"tool_input":{"isolation":"worktree"}}'
@@ -257,9 +291,35 @@ assert_deny no-cat-write "$(jq -n --arg c "cat << EOF ${REDIR} /tmp/x
 hi
 EOF" '{tool_input:{command:$c}}')" "Write tool"
 assert_silent no-cat-write '{"tool_input":{"command":"cat /tmp/x"}}'
+# Shared anchor lib: wrapper coverage for cat heredoc-write
+assert_deny no-cat-write "$(jq -n --arg c "bash -c \"cat << EOF ${REDIR} /tmp/x
+hi
+EOF\"" '{tool_input:{command:$c}}')" "Write tool"
+# sudo coverage: Write runs without elevated privileges, so any
+# `sudo cat << EOF > <target>` (regardless of where <target> lives) has no
+# Write-tool substitute → silent.
+assert_silent no-cat-write "$(jq -n --arg c "sudo cat << EOF ${REDIR} /etc/myapp.conf
+hi
+EOF" '{tool_input:{command:$c}}')"
+assert_silent no-cat-write "$(jq -n --arg c "sudo bash -c \"cat << EOF ${REDIR} /etc/x
+hi
+EOF\"" '{tool_input:{command:$c}}')"
+assert_silent no-cat-write "$(jq -n --arg c "bash -c \"sudo cat << EOF ${REDIR} /etc/x
+hi
+EOF\"" '{tool_input:{command:$c}}')"
+# A stray sudo earlier in a chained command must NOT silence the cat-write check
+assert_deny no-cat-write "$(jq -n --arg c "sudo apt update; cat << EOF ${REDIR} /tmp/x
+hi
+EOF" '{tool_input:{command:$c}}')" "Write tool"
 
 assert_deny no-sed-print "$(jq -n --arg c "sed -n '12,13p' /tmp/x" '{tool_input:{command:$c}}')" "sed -n"
 assert_silent no-sed-print '{"tool_input":{"command":"sed s/a/b/g /tmp/x"}}'
+# sudo coverage: Read runs without elevated privileges, so any
+# `sudo sed -n '12p' <target>` (regardless of where <target> lives) has no
+# Read-tool substitute → silent.
+assert_silent no-sed-print "$(jq -n --arg c "sudo sed -n '12,13p' /etc/shadow" '{tool_input:{command:$c}}')"
+# A stray sudo earlier in a chained command must NOT silence the sed-print check
+assert_deny no-sed-print "$(jq -n --arg c "sudo apt update; sed -n '12,13p' /tmp/x" '{tool_input:{command:$c}}')" "sed -n"
 
 assert_deny python-unbuffered '{"tool_input":{"command":"python3 script.py","run_in_background":true},"cwd":"/tmp"}' "unbuffered output"
 assert_silent python-unbuffered '{"tool_input":{"command":"python3 script.py"}}'
@@ -268,6 +328,12 @@ assert_deny no-head-read '{"tool_input":{"command":"head -n 80 /tmp/x"}}' "Read 
 assert_silent no-head-read '{"tool_input":{"command":"head -c 100 /tmp/x"}}'
 # Command-position regex: piped-into-cmd is also command-position
 assert_deny no-head-read '{"tool_input":{"command":"echo x | head -n 80 /tmp/x"}}' "Read tool"
+# sudo coverage: Read runs without elevated privileges, so any
+# `sudo head -N <target>` (regardless of where <target> lives) has no
+# Read-tool substitute → silent.
+assert_silent no-head-read '{"tool_input":{"command":"sudo head -n 80 /etc/shadow"}}'
+# A stray sudo earlier in a chained command must NOT silence the head-read check
+assert_deny no-head-read '{"tool_input":{"command":"sudo apt update; head -n 80 /tmp/x"}}' "Read tool"
 
 # no-head-tail-pipe: trailing `| head` / `| tail` truncates internal output
 assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "truncate by line position"

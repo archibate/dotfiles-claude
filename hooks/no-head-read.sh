@@ -8,6 +8,13 @@ source "$(dirname "$0")/lib/read_input.sh"
 read_bash_command
 bypass_check BYPASS_HEAD_READ_CHECK
 
+# Skip when sudo precedes head — Read runs without elevated privileges so
+# cannot substitute for `sudo head -3 /etc/shadow`. Gap class excludes
+# `;` / `&` / `|` so a stray earlier sudo doesn't silence the check.
+if echo "$command" | grep -qP '\bsudo\s+[^;&|\n]*?\bhead\b'; then
+    exit 0
+fi
+
 # Detect head with line count reading a file: head -N file, head -n N file, head --lines=N file
 # Patterns: head -80, head -n 80, head --lines=80, head -n80
 # Only match head at command position (start of line or after && ; |), not inside strings

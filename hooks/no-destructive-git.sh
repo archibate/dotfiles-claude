@@ -5,6 +5,10 @@
 #   - git restore <path>        (discards working-tree, without --staged)
 #   - git clean -f / -fd        (deletes untracked files — may be user WIP)
 #   - git branch -D             (force-deletes branch with unmerged commits)
+#   - git rm -f                 (overrides the safety check that refuses to
+#                                delete files with uncommitted changes;
+#                                bare `git rm` is safe — git refuses, and
+#                                committed content is recoverable from history)
 #
 # Each check carries its own bypass marker so unrelated chained commands
 # don't silence each other.
@@ -57,6 +61,20 @@ if echo "$command" | grep -qP 'git\s+restore\b' \
     && ! has_bypass_marker BYPASS_RESTORE_CHECK; then
     emit_pre_tool_deny 'Do not use git restore <path> without --staged. It discards working-tree changes.
 If you have legitimate reason, add comment `# BYPASS_RESTORE_CHECK` before the first line of command.'
+    exit 0
+fi
+
+# git rm -f / --force (overrides safety check on uncommitted changes)
+# Plain `git rm` is safe: git refuses to delete files with uncommitted
+# modifications, and committed content is always recoverable from history.
+# `--cached` is also safe — it only unstages, doesn't touch the filesystem,
+# so `git rm --cached -f` is exempted from this check.
+if echo "$command" | grep -qP 'git\s+rm\b[^|;&]*\s(-[a-zA-Z]*f[a-zA-Z]*|--force)\b' \
+    && ! echo "$command" | grep -qP 'git\s+rm\b[^|;&]*\s--cached\b' \
+    && ! has_bypass_marker BYPASS_GIT_RM_FORCE_CHECK; then
+    emit_pre_tool_deny 'Do not use git rm -f / --force. It overrides git'"'"'s safety check and deletes files with uncommitted modifications — those changes are then unrecoverable (git only has the last committed version).
+Plain `git rm <file>` refuses uncommitted changes (safe). If you intend to discard those modifications, commit / stash them first, then `git rm`.
+If you have legitimate reason, add comment `# BYPASS_GIT_RM_FORCE_CHECK` before the first line of command.'
     exit 0
 fi
 

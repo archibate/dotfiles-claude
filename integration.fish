@@ -49,6 +49,9 @@ function claude-with
             set -fx ANTHROPIC_AUTH_TOKEN $EVOLINK_API_KEY
         case qwen
             set -fx ANTHROPIC_AUTH_TOKEN $LLAMA_API_KEY
+        case gpt
+            # codex-to-claude proxy: ChatGPT OAuth backend, no real token needed.
+            set -fx ANTHROPIC_AUTH_TOKEN dummy
         case '*'
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
@@ -78,6 +81,10 @@ end
 
 function qwen
     claude-with qwen $argv
+end
+
+function gpt
+    claude-with gpt $argv
 end
 
 function commit

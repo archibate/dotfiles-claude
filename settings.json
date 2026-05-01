@@ -302,6 +302,16 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/inject-git-status.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/inject-system-load.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/inject-peer-activity.sh",
+            "timeout": 5
           }
         ]
       }

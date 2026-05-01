@@ -125,7 +125,7 @@ case "$interpreter" in
         ;;
 esac
 
-printf -v reason '%s >%s lines detected for %s. Use Write tool + temp file instead:\n  %s\nIf this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `%s` before the first line of command.' \
-    "$detection_type" "$max_lines" "$interpreter" "$example" "$bypass_marker"
+printf -v reason '%s >%s lines detected for %s. Use Write tool + temp file instead:\n  %s' \
+    "$detection_type" "$max_lines" "$interpreter" "$example"
 
-emit_pre_tool_deny "$reason"
+emit_pre_tool_deny_bypassable "$bypass_marker" "$reason"

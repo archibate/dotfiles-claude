@@ -88,16 +88,17 @@ dm_answer() {
 # Forks a background daemon that waits for the agent's current turn to end,
 # then injects the slash command followed by a wake-up notification at
 # peer-idle (see the daemon block below for why deferring is required).
-# Allowlist: /compact, /context. Other commands either destroy the session
-# (/clear, /exit), or are already callable via the Skill tool (/loop,
+# Allowlist: /compact, /context, /rename. Other commands either destroy the
+# session (/clear, /exit), or are already callable via the Skill tool (/loop,
 # /schedule, custom skills). Refuses if the input box already has a draft or
 # modal, or if the box state is unparseable.
 dm_self() {
   local cmd="$1"
   [[ "$cmd" == /* ]] || die "not a slash command: $cmd"
-  case "$cmd" in
-    /compact|/context) ;;
-    *) die "self-DM allowlist is /compact, /context (got: $cmd)" ;;
+  local base="${cmd%% *}"
+  case "$base" in
+    /compact|/context|/rename) ;;
+    *) die "self-DM allowlist is /compact, /context, /rename (got: $cmd)" ;;
   esac
 
   local target; target=$(self_target) || die "self_target failed (must run inside a tmux pane)"

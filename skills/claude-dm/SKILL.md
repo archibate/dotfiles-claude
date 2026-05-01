@@ -48,6 +48,8 @@ claude-dm self   /<slash>                      # queue a user-only slash command
 
 `<target>` is `session:window.pane` on the current socket (e.g. `HOME:8.1`).
 
+`list` marks the current session's row with a trailing `*` on the ADDR column (e.g. `_claude:7.1*`). Strip the `*` before passing the addr to other verbs. Self detection only fires when `$CLAUDE_DM_SOCKET` matches the socket from `$TMUX`.
+
 ## Peer states
 
 `peer_state` reports one of five values, shown in `status` and used by every gate:
@@ -135,27 +137,24 @@ claude-dm answer HOME:6.1 2         # option 2 ("Yes, and don't ask again")
 claude-dm answer HOME:6.1 3         # option 3 ("No")
 ```
 
+## Self-DM
+
 Self-trigger a user-only slash command on the current pane:
 ```bash
 claude-dm self /context             # see context-window usage on next turn
 claude-dm self /compact             # pre-emptive compaction before heavy work
+claude-dm self /rename              # auto-name session from conversation history
+claude-dm self "/rename my-session" # rename to a specific name
 ```
 
 `self` resolves the current pane via `$TMUX_PANE` and the socket from `$TMUX`.
-Allowlist is hard: only `/compact` and `/context`. The synchronous box check up
-front refuses if a draft or modal is already present (the same `peer_box_state`
-check that protects peer DMs).
+The synchronous box check up front refuses if a draft or modal is already present
+(the same `peer_box_state` check that protects peer DMs).
 
-`self` returns immediately and forks a background daemon that waits for the
-agent's current turn to end, then sends the slash command followed by a
-`<notification>claude-dm self /<slash> dispatched; output above</notification>`
-user message. Sequencing them at peer-idle is critical: keystrokes mid-turn
-land in a live input box and get submitted prematurely (slash output orphaned,
-notification arrives as an interrupt). Deferring to idle makes them behave as
-if the user had typed them post-turn — so the slash runs cleanly and its
-output bundles into the notification, which arrives as one real user turn
-carrying both. The daemon re-checks the box state at idle and aborts silently
-if a draft or modal appeared while waiting. Bound: 5 minute timeout.
+`self` returns immediately. The slash command fires after the current turn
+ends; its output arrives in the next user-turn alongside a
+`<notification>claude-dm self /<slash> dispatched; output above</notification>`.
+Aborts silently if a draft or modal appears before fire time.
 
 ## Audit trail
 

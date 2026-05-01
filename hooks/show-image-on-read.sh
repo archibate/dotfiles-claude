@@ -2,8 +2,10 @@
 # PostToolUse hook: display images in Kitty terminal after Read tool on image files
 set -euo pipefail
 
-# Resolve repo root relative to this hook script (hooks/ and skills/ share same parent)
-repo_root=$(dirname "$(dirname "$(readlink -f "$0")")")
+# Resolve repo root relative to this hook script (hooks/ and skills/ share
+# same parent). Using `cd && pwd -P` instead of `readlink -f` because BSD
+# readlink (macOS) doesn't accept -f.
+repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 show_image_script="$repo_root/skills/show-image/scripts/show_image.py"
 
 source "$(dirname "$0")/lib/read_input.sh"

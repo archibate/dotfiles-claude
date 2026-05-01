@@ -13,9 +13,8 @@ bypass_check BYPASS_DEVNULL_CHECK
 #   &>/dev/null, &>>/dev/null
 # The common denominator is `>` followed by optional whitespace then `/dev/null`.
 if echo "$command" | grep -qP '>\s*/dev/null\b'; then
-    emit_pre_tool_deny 'Do not redirect to /dev/null — noise is cheaper than blindness.
-Remove the `>/dev/null` / `2>/dev/null` so output reaches the agent.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_DEVNULL_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_DEVNULL_CHECK 'Do not redirect to /dev/null — noise is cheaper than blindness.
+Remove the `>/dev/null` / `2>/dev/null` so output reaches the agent.'
 fi
 
 exit 0

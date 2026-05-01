@@ -164,6 +164,56 @@ jina pdf 2301.12345                                    # arXiv ID shorthand
 jina pdf https://example.com/paper.pdf --type figure,table
 ```
 
+### Read academic papers (arXiv)
+
+The URL form determines what you get — pick deliberately:
+
+| Goal | Command |
+|---|---|
+| Abstract + metadata only | `jina read arxiv.org/abs/<ID>` |
+| Full paper body as markdown | `jina read arxiv.org/pdf/<ID>` |
+| Figures / tables / equations | `jina pdf <ID>` |
+| BibTeX citation | `jina bibtex "<title>"` |
+| Save raw PDF | `curl -L -o paper.pdf arxiv.org/pdf/<ID>` |
+
+```bash
+# Find candidates
+jina search --arxiv "diffusion transformer" -n 10 --json | jq -r '.results[] | "\(.title)\t\(.url)"'
+
+# Abstract + metadata (~2 KB)
+jina read https://arxiv.org/abs/1706.03762
+
+# Full paper as markdown (~40 KB for a conference paper)
+jina read https://arxiv.org/pdf/1706.03762 > paper.md
+
+# Figures and tables
+jina pdf 1706.03762 --type figure,table
+
+# Citation
+jina bibtex "Attention Is All You Need" --author Vaswani
+```
+
+### Read academic papers (SSRN)
+
+SSRN sits behind a Cloudflare bot challenge — `jina read` and plain `curl` return **403** on both abstract pages (`papers.cfm?abstract_id=…`) and PDF endpoints (`Delivery.cfm`).
+
+What works (tiered by effort):
+
+1. **`jina search --ssrn` snippets.** Each hit's JSON record has title, abstract excerpt, date, and `ssrn_id`. Often sufficient for triage and citation scaffolding.
+2. **`scrapling` skill on the abstract page.** `scrapling extract stealthy-fetch --solve-cloudflare` returns the full abstract, authors, citation block, and the resolved PDF download URL as markdown.
+3. **PDF body text.** `scrapling`'s CLI `stealthy-fetch` does **not** succeed on the `Delivery.cfm` URL — its Cloudflare DOM solver expects an HTML response, not a binary PDF. Getting the PDF text needs a Python `StealthySession` that hits the abstract page first, reuses cookies to download the PDF, then feeds the bytes to the **`pdf`** skill.
+4. `jina bibtex "<title>"` resolves citations independently of SSRN.
+
+```bash
+# Tier 1: search snippets
+jina search --ssrn "corporate governance" -n 5 --json | jq -r '.results[] | "\(.ssrn_id)\t\(.title)\n  \(.snippet)"'
+
+# Tier 2: abstract page via scrapling (Cloudflare bypass)
+scrapling extract stealthy-fetch \
+  "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=<SSRN_ID>" \
+  /tmp/ssrn.md --solve-cloudflare --timeout 60000
+```
+
 ### Other
 
 ```bash
@@ -200,6 +250,9 @@ jina search "query" && echo "ok" || echo "failed: $?"
 | Read a web page | **`/read-url`** skill |
 | Find STEM papers | `jina search --arxiv` |
 | Find social-science / finance papers | `jina search --ssrn` |
+| Read paper abstract / metadata | `jina read` (`/abs/` URL) |
+| Download full paper as markdown | `jina read` (`/pdf/` URL) |
+| Save raw PDF | `curl -L` |
 | Generic web search | `jina search` |
 | Fallback if `jina` service unreachable | **WebSearch** (built-in) |
 

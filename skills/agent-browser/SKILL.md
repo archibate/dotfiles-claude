@@ -30,7 +30,7 @@ The CLI uses Chrome/Chromium via CDP directly. Install via `npm i -g agent-brows
 - API alternatives available (e.g. GitHub CLI, Bilibili API, Gmail MCP)
 - Unit & intergration test that already runs programmatically
 - Shared cookies, login states with user global browser - prefer Chrome MCP or /chrome-cdp skill
-- Web scrape - Use jina.ai MCP or /scrapling skill for efficiency
+- Web scrape - Use /jina-ai or /scrapling skill for efficiency
 
 ## Core Workflow
 

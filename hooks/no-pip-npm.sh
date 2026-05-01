@@ -25,7 +25,7 @@ if [ -z "${CONDA_PREFIX:-}" ] && echo "$command" | grep -qP "${ANCHORS}pip3?${CM
     emit_pre_tool_deny 'Use uv instead of pip.
   pip install pkg  →  uv add pkg (project) or uv pip install pkg (venv)
   pip freeze       →  uv pip freeze
-If you have legitimate reason, add comment `# BYPASS_PACKAGE_MANAGER_CHECK` before the first line of command.'
+If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_PACKAGE_MANAGER_CHECK` before the first line of command.'
     exit 0
 fi
 
@@ -35,7 +35,7 @@ if echo "$command" | grep -qP "${ANCHORS}npm${CMD_TRAIL}"; then
     emit_pre_tool_deny 'Use pnpm instead of npm.
   npm install  →  pnpm install
   npm run      →  pnpm run
-If you have legitimate reason, add comment `# BYPASS_PACKAGE_MANAGER_CHECK` before the first line of command.'
+If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_PACKAGE_MANAGER_CHECK` before the first line of command.'
     exit 0
 fi
 

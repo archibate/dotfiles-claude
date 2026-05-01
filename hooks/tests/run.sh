@@ -111,6 +111,14 @@ assert_silent no-destructive-git '{"tool_input":{"command":"git rm -f --cached f
 assert_silent no-destructive-git '{"tool_input":{"command":"# BYPASS_GIT_RM_FORCE_CHECK\ngit rm -f foo.py"}}'
 # Cross-bypass: rm-force bypass must not silence chained reset --hard
 assert_deny no-destructive-git '{"tool_input":{"command":"# BYPASS_GIT_RM_FORCE_CHECK\ngit rm -f foo; git reset --hard"}}' "reset --hard"
+# Anchor-lib upgrade: ssh / sudo-flag wrappers + FP fixes
+assert_deny no-destructive-git '{"tool_input":{"command":"ssh host git reset --hard HEAD~1"}}' "reset --hard"
+assert_deny no-destructive-git '{"tool_input":{"command":"ssh user@host git clean -fd"}}' "git clean -f"
+assert_deny no-destructive-git '{"tool_input":{"command":"sudo -n git rm -f foo.py"}}' "git rm -f"
+assert_deny no-destructive-git '{"tool_input":{"command":"bash -c \"git checkout -- foo.py\""}}' "checkout --"
+# FP fixes — string mentions are no longer flagged
+assert_silent no-destructive-git '{"tool_input":{"command":"echo do not git reset --hard"}}'
+assert_silent no-destructive-git '{"tool_input":{"command":"grep -r \"git rm -f\" ./docs"}}'
 
 # no-dangerous-ops: every check has its own bypass marker.
 #
@@ -122,6 +130,11 @@ assert_deny no-dangerous-ops '{"tool_input":{"command":"parted /dev/sda mklabel 
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sgdisk -Z /dev/sda"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"wipefs -a /dev/sdb"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo cryptsetup luksFormat /dev/sda1"}}' "luksFormat"
+# Anchor-lib upgrade: ssh / sudo-flag wrappers + FP fixes
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host mkfs.ext4 /dev/sdb1"}}' "disk-format"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo -u root mkfs.ext4 /dev/sdb1"}}' "disk-format"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo do not run mkfs.ext4 on prod"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"grep -r parted ./docs"}}'
 # --dry-run exempts
 assert_silent no-dangerous-ops '{"tool_input":{"command":"parted --dry-run /dev/sda mklabel gpt"}}'
 assert_silent no-dangerous-ops '{"tool_input":{"command":"mkfs.ext4 --dry-run /dev/sdb1"}}'
@@ -178,7 +191,28 @@ assert_silent no-dangerous-ops '{"tool_input":{"command":"cat /etc/passwd > /tmp
 assert_deny no-dangerous-ops '{"tool_input":{"command":"shred -u secret.txt"}}' "shred"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"srm -r /tmp/junk"}}' "shred"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"wipe -rf /tmp/junk"}}' "shred"
+# Anchor-lib coverage: sudo + bash -c wrappers still trigger
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo srm -r /tmp/junk"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"bash -c \"shred -u /tmp/x\""}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"xargs srm"}}' "shred"
+# CMD_ANCHOR_SUDO with flags: `sudo -n`, `sudo -u root`, `sudo --non-interactive`
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo -n srm -r /tmp/junk"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo -u root srm -r /tmp/junk"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo --non-interactive srm /tmp/x"}}' "shred"
+# CMD_WRAPPER_SSH coverage: `ssh [opts] host srm/shred/wipe`
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host srm /tmp/x"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh user@host shred -u /etc/foo"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh -p 22 host wipe -rf /tmp/x"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh -i key.pem -o StrictHostKeyChecking=no host srm /x"}}' "shred"
 # `wipefs` is the disk-format check, not secure-delete (already asserted above)
+# Anchor-lib FP fixes — these previously tripped the bare \b match:
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo do not srm /tmp/x"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"ls /tmp/srm-cache"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# TODO: shred old logs later\nls"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"grep -r wipe ./docs"}}'
+# ssh-but-no-secure-delete is silent; ssh inside a string is not command position
+assert_silent no-dangerous-ops '{"tool_input":{"command":"ssh host ls /tmp"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo do not ssh into prod"}}'
 #
 # 5. Power-state operations
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo shutdown -h now"}}' "power state"
@@ -197,6 +231,11 @@ assert_deny no-dangerous-ops '{"tool_input":{"command":"kill -9 -1"}}' "power st
 assert_silent no-dangerous-ops '{"tool_input":{"command":"git init"}}'
 assert_silent no-dangerous-ops '{"tool_input":{"command":"systemctl restart nginx"}}'
 assert_silent no-dangerous-ops '{"tool_input":{"command":"kill 1234"}}'
+# Anchor-lib upgrade: ssh / sudo-flag wrappers + FP fixes
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host shutdown -h now"}}' "power state"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo -n reboot"}}' "power state"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo about to reboot the cluster"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"grep poweroff /var/log/messages"}}'
 #
 # 6. Recursive permission/ownership
 assert_deny no-dangerous-ops '{"tool_input":{"command":"chmod -R 777 ./build"}}' "Recursive"
@@ -204,6 +243,9 @@ assert_deny no-dangerous-ops '{"tool_input":{"command":"chmod -Rfv 644 ./src"}}'
 assert_deny no-dangerous-ops '{"tool_input":{"command":"chown -R root:root /opt/app"}}' "Recursive"
 assert_silent no-dangerous-ops '{"tool_input":{"command":"chmod 755 ./script.sh"}}'
 assert_silent no-dangerous-ops '{"tool_input":{"command":"chmod -h u+x foo"}}'
+# Anchor-lib upgrade: ssh wrapper + FP fix
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host chmod -R 777 /opt/app"}}' "Recursive"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo never run chmod -R on system paths"}}'
 #
 # 7. Docker prune
 assert_deny no-dangerous-ops '{"tool_input":{"command":"docker system prune -af --volumes"}}' "docker"
@@ -211,6 +253,9 @@ assert_deny no-dangerous-ops '{"tool_input":{"command":"docker volume prune -f"}
 assert_deny no-dangerous-ops '{"tool_input":{"command":"docker image prune -a"}}' "docker"
 assert_silent no-dangerous-ops '{"tool_input":{"command":"docker ps"}}'
 assert_silent no-dangerous-ops '{"tool_input":{"command":"docker rm specific-container"}}'
+# Anchor-lib upgrade: ssh wrapper + FP fix
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host docker volume prune -f"}}' "docker"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo do not run docker volume prune"}}'
 #
 # 8. Firewall wipe
 assert_deny no-dangerous-ops '{"tool_input":{"command":"iptables -F"}}' "firewall"
@@ -221,6 +266,9 @@ assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo ufw reset"}}' "fire
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo ufw --force reset"}}' "firewall"
 assert_silent no-dangerous-ops '{"tool_input":{"command":"iptables -L"}}'
 assert_silent no-dangerous-ops '{"tool_input":{"command":"iptables -A INPUT -j ACCEPT"}}'
+# Anchor-lib upgrade: ssh wrapper (locking yourself out of remote!) + FP fix
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host iptables -F"}}' "firewall"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo iptables -F locks you out"}}'
 #
 # 9. crontab -r
 assert_deny no-dangerous-ops '{"tool_input":{"command":"crontab -r"}}' "crontab"
@@ -228,12 +276,19 @@ assert_deny no-dangerous-ops '{"tool_input":{"command":"crontab -ri"}}' "crontab
 assert_deny no-dangerous-ops '{"tool_input":{"command":"crontab --remove"}}' "crontab"
 assert_silent no-dangerous-ops '{"tool_input":{"command":"crontab -l"}}'
 assert_silent no-dangerous-ops '{"tool_input":{"command":"crontab -e"}}'
+# Anchor-lib upgrade: ssh wrapper + FP fix
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host crontab -r"}}' "crontab"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo do not run crontab -r"}}'
 #
 # 10. killall
 assert_deny no-dangerous-ops '{"tool_input":{"command":"killall firefox"}}' "killall"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo killall -9 chrome"}}' "killall"
 assert_silent no-dangerous-ops '{"tool_input":{"command":"pkill -f myapp"}}'
 assert_silent no-dangerous-ops '{"tool_input":{"command":"pgrep firefox"}}'
+# Anchor-lib upgrade: ssh wrapper + FP fix
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host killall nginx"}}' "killall"
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo do not killall in prod"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"grep killall /var/log"}}'
 #
 # Unrelated commands
 assert_silent no-dangerous-ops '{"tool_input":{"command":"ls /etc"}}'
@@ -269,6 +324,14 @@ assert_silent no-git-amend '{"tool_input":{"command":"git push origin main:main"
 assert_silent no-git-amend '{"tool_input":{"command":"# BYPASS_PUSH_DELETE_CHECK\ngit push --delete origin feature"}}'
 # Force-push bypass must NOT silence chained --delete
 assert_deny no-git-amend '{"tool_input":{"command":"# BYPASS_FORCE_PUSH_CHECK\ngit push --force; git push --delete origin x"}}' "push --delete"
+# Anchor-lib upgrade: ssh / sudo-flag wrappers + FP fixes
+assert_deny no-git-amend '{"tool_input":{"command":"ssh host git commit --amend"}}' "git commit --amend"
+assert_deny no-git-amend '{"tool_input":{"command":"ssh host git push --force"}}' "push --force"
+assert_deny no-git-amend '{"tool_input":{"command":"sudo -n git push --delete origin feature"}}' "push --delete"
+assert_deny no-git-amend '{"tool_input":{"command":"bash -c \"git commit --amend\""}}' "git commit --amend"
+# FP fixes — string mentions are no longer flagged
+assert_silent no-git-amend '{"tool_input":{"command":"echo do not git push --force"}}'
+assert_silent no-git-amend '{"tool_input":{"command":"grep -r \"git commit --amend\" ./docs"}}'
 
 assert_deny no-pip-npm "$(jq -n --arg c "pip install foo" '{tool_input:{command:$c}}')" "Use uv instead"
 assert_deny no-pip-npm "$(jq -n --arg c "npm install" '{tool_input:{command:$c}}')" "Use pnpm"
@@ -339,7 +402,7 @@ assert_deny no-head-read '{"tool_input":{"command":"sudo apt update; head -n 80 
 assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "truncate by line position"
 assert_deny no-head-tail-pipe '{"tool_input":{"command":"cat /tmp/x | tail -n 5"}}' "truncate by line position"
 assert_deny no-head-tail-pipe '{"tool_input":{"command":"git log | head -20"}}' "BYPASS_HEAD_TAIL_CHECK"
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "If you have legitimate reason"
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "If this is a legitimate use"
 assert_silent no-head-tail-pipe '{"tool_input":{"command":"ls"}}'
 # Bare `head -n N <file>` lacks a leading pipe — separate hook (no-head-read) handles it
 assert_silent no-head-tail-pipe '{"tool_input":{"command":"head -n 5 /tmp/x"}}'
@@ -388,13 +451,18 @@ assert_deny no-git-amend '{"tool_input":{"command":"# BYPASS_FORCE_PUSH_CHECK\ng
 assert_silent python-unbuffered '{"tool_input":{"command":"# BYPASS_UNBUFFERED_CHECK\npython3 script.py","run_in_background":true},"cwd":"/tmp"}'
 # Empty command should be silent (no-background-ampersand previously had no guard)
 assert_silent no-background-ampersand '{"tool_input":{"command":""}}'
-# Unified hint wording — every bypass hint now reads "If you have legitimate reason"
-assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "If you have legitimate reason"
-assert_deny no-background-ampersand "$(jq -n --arg c "sleep 10 ${AMP}" '{tool_input:{command:$c}}')" "If you have legitimate reason"
+# Unified hint wording — every bypass hint now opens with "If this is a legitimate
+# use, or a false-positive match (...)" so the agent knows the bypass marker also
+# covers regex misfires (e.g. pattern matched inside a quoted string), not only
+# "I really mean to do this" cases.
+assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "If this is a legitimate use"
+assert_deny no-background-ampersand "$(jq -n --arg c "sleep 10 ${AMP}" '{tool_input:{command:$c}}')" "If this is a legitimate use"
 assert_deny no-cat-write "$(jq -n --arg c "cat << EOF ${REDIR} /tmp/x
 hi
-EOF" '{tool_input:{command:$c}}')" "If you have legitimate reason"
-assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "If you have legitimate reason"
+EOF" '{tool_input:{command:$c}}')" "If this is a legitimate use"
+assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "If this is a legitimate use"
+# FP-aware branch must be in the message too
+assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "false-positive match"
 
 # no-schedule-wakeup-deadzone: delays in [300,1800] denied (inclusive boundaries)
 assert_deny no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":600,"reason":"x"}}' "dead zone"

@@ -58,6 +58,10 @@ claude-with() {
         qwen)
             token="$LLAMA_API_KEY"
             ;;
+        gpt)
+            # codex-to-claude proxy: ChatGPT OAuth backend, no real token needed.
+            token="dummy"
+            ;;
         *)
             echo "claude-with: unknown provider '$provider'" >&2
             return 1
@@ -88,6 +92,10 @@ evolink() {
 
 qwen() {
     claude-with qwen "$@"
+}
+
+gpt() {
+    claude-with gpt "$@"
 }
 
 commit() {

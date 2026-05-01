@@ -18,6 +18,7 @@ if echo "$command" | grep -qP '(^|[^|])\|\s*(head|tail)\b[^|]*$'; then
 Prefer the producer'"'"'s native limit (semantic — short-circuits work):
   rg / grep   →  -m N
   fd          →  --max-results N
+  git log     →  -n N
 
 If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_HEAD_TAIL_CHECK` before the first line of command.'
 fi

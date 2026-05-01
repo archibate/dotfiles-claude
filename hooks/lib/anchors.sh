@@ -46,10 +46,32 @@
 # pipe-into-wrapper. Bypass marker is the documented escape — see lib/README.md.
 
 CMD_ANCHOR_BASIC='(^|&&|;|\||\(|\{)\s*((do|then|else)\s+)?'
-CMD_ANCHOR_SUDO="${CMD_ANCHOR_BASIC}(sudo\s+)?"
+# CMD_ANCHOR_SUDO accepts an optional `sudo` invocation including any sudo
+# flags. With-arg short opts (-C -D -g -h -p -r -t -T -u -U) consume their
+# argument; bare `-flag` (including combined `-nE`, attached `-uroot`, and
+# long `--non-interactive`) consume one token. This catches `sudo srm`,
+# `sudo -n srm`, `sudo -u root srm`, `sudo --non-interactive srm`. Not
+# modeled: `--longopt value` (use `--longopt=value`).
+CMD_ANCHOR_SUDO="${CMD_ANCHOR_BASIC}(sudo\s+((-[CDghprtTuU]\s+\S+|-\S+)\s+)*)?"
 # CMD_WRAPPER reuses CMD_ANCHOR_SUDO so the wrapper itself must be at command
 # position. Catches `sudo bash -c rm`, `; eval rm`, `do bash -c rm`. Also
 # eliminates the `echo "use eval rm here"` FP class — `eval` in mid-string
 # is preceded by a space, not an anchor, so it no longer triggers.
 CMD_WRAPPER="${CMD_ANCHOR_SUDO}((bash|sh)\s+(-\S+\s+)*-c\s+|eval\s+|xargs\s+(-\S+\s+)*)"'['\''"]?(sudo\s+)?'
+
+# CMD_WRAPPER_SSH — ssh-wrapped invocation: `ssh [options] host CMD`.
+# Use as an additional alternation alongside CMD_WRAPPER for safety blocks
+# where remote execution is also a hazard (e.g. `ssh host srm /x` destroys
+# data just as irrecoverably as a local `srm`). DO NOT add to tool-suggestion
+# hooks (no-cat-write, no-head-read, no-sed-print, no-pip-npm) — Read/Write
+# operate locally and have no remote substitute, so blocking ssh-wrapped
+# forms would leave the user with no alternative.
+#
+# The option-eater handles `-X arg` for short opts that take an argument
+# (-b -B -c -D -e -E -F -I -i -J -L -l -m -O -o -p -Q -R -S -W -w) and bare
+# `-flag` (including combined forms like `-CAfN` and attached `-p22`).
+# Not modeled: `--longopt value` (use `--longopt=value`), trailing `--`,
+# quoted hostnames with spaces, mid-host options like `ssh host -i key cmd`.
+CMD_WRAPPER_SSH="${CMD_ANCHOR_SUDO}ssh\s+((-[bBcDeEFIiJLlmOopQRSWw]\s+\S+|-\S+)\s+)*\S+\s+"'['\''"]?(sudo\s+)?'
+
 CMD_TRAIL='(?=[\s;&|'\''"]|$)'

@@ -56,8 +56,9 @@ Conventions:
 Shared command-position regex anchors. Source it after the other helpers:
 
 - `CMD_ANCHOR_BASIC` — `^` / `&&` / `;` / `|` / `(` / `{` / `do|then|else`. Use for tool-suggestion hooks where sudo doesn't change semantics.
-- `CMD_ANCHOR_SUDO` — basic + optional `sudo`. Use for safety blocks where `sudo cp` is at least as risky as `cp`.
+- `CMD_ANCHOR_SUDO` — basic + optional `sudo` *with its flags* (e.g. `sudo -n cmd`, `sudo -u root cmd`). Use for safety blocks where `sudo cp` is at least as risky as `cp`.
 - `CMD_WRAPPER` — indirect invocation through `bash -c …` / `sh -c …` / `eval …` / `xargs …`. `-c` is required after `bash`/`sh` so script-file invocations (`bash myscript`) are not flagged. Combine via `(${CMD_ANCHOR_SUDO}|${CMD_WRAPPER})`.
+- `CMD_WRAPPER_SSH` — opt-in extension for `ssh [opts] host CMD`. Add via `(${CMD_ANCHOR_SUDO}|${CMD_WRAPPER}|${CMD_WRAPPER_SSH})` *only* on safety blocks where remote execution is also a hazard (e.g. secure-delete, host poweroff). DO NOT use on tool-suggestion hooks (`no-cat-write`, `no-head-read`, `no-sed-print`, `no-pip-npm`) — Read/Write/uv operate locally and have no remote substitute.
 - `CMD_TRAIL` — trailing lookahead allowing whitespace, separator, closing quote, or end-of-string.
 
 Usage:

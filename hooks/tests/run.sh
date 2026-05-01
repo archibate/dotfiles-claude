@@ -178,7 +178,28 @@ assert_silent no-dangerous-ops '{"tool_input":{"command":"cat /etc/passwd > /tmp
 assert_deny no-dangerous-ops '{"tool_input":{"command":"shred -u secret.txt"}}' "shred"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"srm -r /tmp/junk"}}' "shred"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"wipe -rf /tmp/junk"}}' "shred"
+# Anchor-lib coverage: sudo + bash -c wrappers still trigger
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo srm -r /tmp/junk"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"bash -c \"shred -u /tmp/x\""}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"xargs srm"}}' "shred"
+# CMD_ANCHOR_SUDO with flags: `sudo -n`, `sudo -u root`, `sudo --non-interactive`
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo -n srm -r /tmp/junk"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo -u root srm -r /tmp/junk"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo --non-interactive srm /tmp/x"}}' "shred"
+# CMD_WRAPPER_SSH coverage: `ssh [opts] host srm/shred/wipe`
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh host srm /tmp/x"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh user@host shred -u /etc/foo"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh -p 22 host wipe -rf /tmp/x"}}' "shred"
+assert_deny no-dangerous-ops '{"tool_input":{"command":"ssh -i key.pem -o StrictHostKeyChecking=no host srm /x"}}' "shred"
 # `wipefs` is the disk-format check, not secure-delete (already asserted above)
+# Anchor-lib FP fixes — these previously tripped the bare \b match:
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo do not srm /tmp/x"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"ls /tmp/srm-cache"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"# TODO: shred old logs later\nls"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"grep -r wipe ./docs"}}'
+# ssh-but-no-secure-delete is silent; ssh inside a string is not command position
+assert_silent no-dangerous-ops '{"tool_input":{"command":"ssh host ls /tmp"}}'
+assert_silent no-dangerous-ops '{"tool_input":{"command":"echo do not ssh into prod"}}'
 #
 # 5. Power-state operations
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo shutdown -h now"}}' "power state"

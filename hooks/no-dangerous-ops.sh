@@ -26,6 +26,7 @@ set -euo pipefail
 source "$(dirname "$0")/lib/bypass.sh"
 source "$(dirname "$0")/lib/emit.sh"
 source "$(dirname "$0")/lib/read_input.sh"
+source "$(dirname "$0")/lib/anchors.sh"
 
 read_bash_command
 
@@ -93,10 +94,16 @@ fi
 
 # ----------------------------------------------------------------------------
 # Secure-delete tools — `shred`, `srm`, `wipe`. Irreversible by design.
-# `wipefs` is a different tool (handled in the disk-format check above) — this
-# regex requires a word boundary AFTER `wipe` so it does not match `wipefs`.
+# Anchored to command position via lib/anchors.sh so the check fires only when
+# the tool is actually invoked — comments, paths containing the substring
+# (e.g. `/tmp/srm-cache`), and arguments mentioning the word (e.g.
+# `echo "do not srm"`) no longer false-positive.
+# `wipefs` is a different tool (handled in the disk-format check above) —
+# CMD_TRAIL requires a separator after `wipe`, so `wipefs` cannot match here.
+# Includes CMD_WRAPPER_SSH because remote secure-erase (`ssh host srm /x`)
+# destroys data just as irrecoverably as a local one.
 # ----------------------------------------------------------------------------
-if echo "$command" | grep -qP '\b(shred|srm|wipe)\b' \
+if echo "$command" | grep -qP "(${CMD_ANCHOR_SUDO}|${CMD_WRAPPER}|${CMD_WRAPPER_SSH})(shred|srm|wipe)${CMD_TRAIL}" \
     && ! has_bypass_marker BYPASS_SECURE_DELETE_CHECK; then
     emit_pre_tool_deny 'Do not use shred / srm / wipe — secure-erase tools destroy data with no recovery path. Filesystem-level snapshots, journals, and backups cannot recover what these tools overwrite.
 Plain `rm` (or `trash`) is reversible from snapshots/backups in most environments. Only use secure-erase when you have a documented compliance requirement.

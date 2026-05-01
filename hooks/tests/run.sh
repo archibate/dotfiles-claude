@@ -521,6 +521,40 @@ assert_context pep723-script "$pep723_missing" "PEP 723"
 
 assert_silent pep723-script '{"tool_input":{"file_path":"/tmp/x.txt","content":"hello"}}'
 
+echo ""
+echo "=== UserPromptSubmit hooks ==="
+
+# inject-time: always emits a "Message time: ..." additionalContext.
+out=$(bash ~/.claude/hooks/inject-time.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | startswith("Message time:")' > "$test_out" \
+  && echo "OK:   inject-time fires" \
+  || { echo "FAIL: inject-time: $out"; fail=1; }
+
+# inject-git-status: emits "Git status:" context inside a repo, silent outside,
+# and silent on a repeat fire when status hasn't changed (cached at
+# /tmp/claude-git-status/<SID>). Hook depends on cwd, so pin both explicitly.
+sid="test-$$"
+rm -f "/tmp/claude-git-status/$sid"
+gs_in="{\"session_id\":\"$sid\"}"
+
+out=$(cd ~/.claude && printf '%s' "$gs_in" | bash ~/.claude/hooks/inject-git-status.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | startswith("Git status")' > "$test_out" \
+  && echo "OK:   inject-git-status fires inside repo (first time)" \
+  || { echo "FAIL: inject-git-status first fire: $out"; fail=1; }
+
+# Second fire with same status → cache hit → silent
+out=$(cd ~/.claude && printf '%s' "$gs_in" | bash ~/.claude/hooks/inject-git-status.sh)
+[ -z "$out" ] \
+  && echo "OK:   inject-git-status silent on unchanged status" \
+  || { echo "FAIL: inject-git-status repeat fire: $out"; fail=1; }
+
+out=$(cd /tmp && printf '%s' "$gs_in" | bash ~/.claude/hooks/inject-git-status.sh)
+[ -z "$out" ] \
+  && echo "OK:   inject-git-status silent outside repo" \
+  || { echo "FAIL: inject-git-status outside repo: $out"; fail=1; }
+
+rm -f "/tmp/claude-git-status/$sid"
+
 rm -f "$test_out"
 
 echo ""

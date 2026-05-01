@@ -46,6 +46,7 @@ Conventions:
 ### `lib/emit.sh`
 
 - `emit_pre_tool_deny "reason"` — emits the PreToolUse deny JSON.
+- `emit_pre_tool_warn "hint"` — emits the PreToolUse allow JSON with `additionalContext`. Use for non-blocking advisories where a hard-deny would be too noisy. (No callers in tree right now; reserved.)
 - `emit_post_tool_context "ctx"` — emits PostToolUse additionalContext JSON.
 
 ### `lib/check-python-unbuffered.sh`
@@ -89,7 +90,7 @@ Hooks that restrict heredocs or `cat` heredocs (`no-heredoc.sh`, `no-cat-write.s
 
 - `assert_deny <hook> <json> <pattern>` — hook must emit deny JSON whose reason contains `<pattern>`.
 - `assert_silent <hook> <json>` — hook must produce no output.
-- `assert_context <hook> <json> <pattern>` — PostToolUse: hook must emit additionalContext containing `<pattern>`.
+- `assert_context <hook> <json> <pattern>` — hook must emit `additionalContext` containing `<pattern>`. Works for PostToolUse, UserPromptSubmit, and PreToolUse (warn-and-allow).
 
 For any new blocking hook, add at minimum:
 - trigger case → deny

@@ -522,6 +522,164 @@ assert_context pep723-script "$pep723_missing" "PEP 723"
 assert_silent pep723-script '{"tool_input":{"file_path":"/tmp/x.txt","content":"hello"}}'
 
 echo ""
+echo "=== PreToolUse: peer-stake (cross-session edit serialization) ==="
+
+# Hash matches the hook's hashing scheme: sha1sum of the path, first 16 chars.
+stake_path="/tmp/peer-stake-test-$$"
+stake_hash=$(printf '%s' "$stake_path" | sha1sum | cut -c1-16)
+stake_dir_test="/tmp/claude-read-stake/$stake_hash"
+sid_a="peer-a-$$"
+sid_b="peer-b-$$"
+rm -rf "$stake_dir_test"
+
+# 1. Edit on file with no stakes anywhere → silent (allow).
+in_edit_a_clean=$(jq -n --arg p "$stake_path" --arg s "$sid_a" \
+  '{tool_name:"Edit",tool_input:{file_path:$p},session_id:$s}')
+assert_silent pre-peer-stake-edit "$in_edit_a_clean"
+
+# 2. Read by A → silent + creates A's stake file.
+in_read_a=$(jq -n --arg p "$stake_path" --arg s "$sid_a" \
+  '{tool_name:"Read",tool_input:{file_path:$p},session_id:$s}')
+out=$(printf '%s' "$in_read_a" | bash ~/.claude/hooks/pre-peer-stake-edit.sh 2>&1)
+if [ -z "$out" ] && [ -f "$stake_dir_test/$sid_a" ]; then
+  echo "OK:   pre-peer-stake-edit Read records stake"
+else
+  exists="no"; [ -f "$stake_dir_test/$sid_a" ] && exists="yes"
+  echo "FAIL: pre-peer-stake-edit Read: out='$out' stake_exists=$exists"
+  fail=1
+fi
+
+# 3. Edit by peer B with A's fresh stake → deny mentioning A's session id.
+in_edit_b=$(jq -n --arg p "$stake_path" --arg s "$sid_b" \
+  '{tool_name:"Edit",tool_input:{file_path:$p},session_id:$s}')
+assert_deny pre-peer-stake-edit "$in_edit_b" "$sid_a"
+
+# 4. Edit by A (own stake, no foreign) → silent allow. Sweep is now the
+# PostToolUse success path's job (see 5j); PreToolUse leaves stakes intact so
+# the failure path retains diagnostic state.
+in_edit_a=$(jq -n --arg p "$stake_path" --arg s "$sid_a" \
+  '{tool_name:"Edit",tool_input:{file_path:$p},session_id:$s}')
+assert_silent pre-peer-stake-edit "$in_edit_a"
+
+# 5. Foreign stake older than TTL → ignored, allow.
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_a"
+touch -d "70 seconds ago" "$stake_dir_test/$sid_a"
+out=$(printf '%s' "$in_edit_b" | bash ~/.claude/hooks/pre-peer-stake-edit.sh 2>&1)
+if [ -z "$out" ]; then
+  echo "OK:   pre-peer-stake-edit stale stake ignored (TTL)"
+else
+  echo "FAIL: pre-peer-stake-edit stale: out='$out'"
+  fail=1
+fi
+
+# 5b. FIFO fairness: when B's own stake is OLDER than A's, B reads first and
+# wins priority. Without this, two concurrently-reading peers mutually deny.
+rm -rf "$stake_dir_test"
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_a"  # A staked now
+: > "$stake_dir_test/$sid_b"
+touch -d "10 seconds ago" "$stake_dir_test/$sid_b"  # B older
+out=$(printf '%s' "$in_edit_b" | bash ~/.claude/hooks/pre-peer-stake-edit.sh 2>&1)
+if [ -z "$out" ]; then
+  echo "OK:   pre-peer-stake-edit FIFO: older own stake allows edit"
+else
+  echo "FAIL: pre-peer-stake-edit FIFO older-self: out='$out'"
+  fail=1
+fi
+
+# 5c. Reverse FIFO inside the hard band: A's stake is older than B's
+# (but still <HARD_TTL) → B yields to A.
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_b"
+: > "$stake_dir_test/$sid_a"
+touch -d "5 seconds ago" "$stake_dir_test/$sid_a"  # A older, still in hard band
+assert_deny pre-peer-stake-edit "$in_edit_b" "auto-expires"
+
+# 5d. Stale own stake (past TTL) must not grant FIFO priority — fresh foreign
+# wins, and B is denied the same way as if it had no stake at all.
+rm -rf "$stake_dir_test"
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_a"
+: > "$stake_dir_test/$sid_b"
+touch -d "70 seconds ago" "$stake_dir_test/$sid_b"  # B's own stake is stale
+assert_deny pre-peer-stake-edit "$in_edit_b" "auto-expires"
+
+# 5e. Tiebreaker: same mtime → lex-smaller SID wins. sid_a < sid_b, so when
+# both stake at exactly the same second, A wins and B is denied. Without this,
+# a 1-second mtime tie would let both peers proceed and live-race on Edit.
+rm -rf "$stake_dir_test"
+mkdir -p "$stake_dir_test"
+ts=$(date +%s)
+: > "$stake_dir_test/$sid_a"
+: > "$stake_dir_test/$sid_b"
+touch -d "@$ts" "$stake_dir_test/$sid_a" "$stake_dir_test/$sid_b"
+assert_deny pre-peer-stake-edit "$in_edit_b" "auto-expires"
+
+# 5f. Reverse tiebreaker side: A editing with B as foreign at same mtime →
+# A wins (sid_a < sid_b) → silent allow.
+rm -rf "$stake_dir_test"
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_a"
+: > "$stake_dir_test/$sid_b"
+touch -d "@$ts" "$stake_dir_test/$sid_a" "$stake_dir_test/$sid_b"
+assert_silent pre-peer-stake-edit "$in_edit_a"
+
+# 5g. SOFT band: foreign stake aged past HARD_TTL → silent allow + sweep.
+# Outside the active drafting window we trust the tool's own "File has been
+# modified" error to surface the rare collision.
+rm -rf "$stake_dir_test"
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_a"
+touch -d "30 seconds ago" "$stake_dir_test/$sid_a"
+assert_silent pre-peer-stake-edit "$in_edit_b"
+
+# 5h. Subagent bypass: CLAUDE_AUDIT_SUBAGENT=1 disables the hook so the audit
+# reviewer's reads/edits don't deny their own parent session's next Edit.
+rm -rf "$stake_dir_test"
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_a"
+out=$(printf '%s' "$in_edit_b" | CLAUDE_AUDIT_SUBAGENT=1 bash ~/.claude/hooks/pre-peer-stake-edit.sh 2>&1)
+[ -z "$out" ] \
+  && echo "OK:   pre-peer-stake-edit subagent bypass (CLAUDE_AUDIT_SUBAGENT)" \
+  || { echo "FAIL: pre-peer-stake-edit subagent bypass: out='$out'"; fail=1; }
+out=$(printf '%s' "$in_edit_b" | CODEX_AUDIT_SUBAGENT=1 bash ~/.claude/hooks/pre-peer-stake-edit.sh 2>&1)
+[ -z "$out" ] \
+  && echo "OK:   pre-peer-stake-edit subagent bypass (CODEX_AUDIT_SUBAGENT)" \
+  || { echo "FAIL: pre-peer-stake-edit codex subagent bypass: out='$out'"; fail=1; }
+
+# 6. Standard "If this is a legitimate use" / false-positive hint must appear
+# in the deny message, matching the convention shared by all blocking hooks.
+# Clear stake dir so B has no own stake → any fresh foreign denies B.
+rm -rf "$stake_dir_test"
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_a"
+assert_deny pre-peer-stake-edit "$in_edit_b" "If this is a legitimate use"
+rm -rf "$stake_dir_test"
+mkdir -p "$stake_dir_test"
+: > "$stake_dir_test/$sid_a"
+assert_deny pre-peer-stake-edit "$in_edit_b" "false-positive match"
+
+# 7. Per-session bypass sentinel silences the hook for THAT session only.
+bypass_dir="/tmp/claude-peer-stake-bypass"
+rm -rf "$bypass_dir"
+mkdir -p "$bypass_dir"
+
+# Bypass for B (the editor) → silent.
+: > "$stake_dir_test/$sid_a"
+: > "$bypass_dir/$sid_b"
+assert_silent pre-peer-stake-edit "$in_edit_b"
+
+# Bypass for A (the holder) must NOT silence B's edit — still deny.
+rm -f "$bypass_dir/$sid_b"
+: > "$bypass_dir/$sid_a"
+: > "$stake_dir_test/$sid_a"
+assert_deny pre-peer-stake-edit "$in_edit_b" "$sid_a"
+
+rm -rf "$bypass_dir"
+rm -rf "$stake_dir_test"
+
+echo ""
 echo "=== UserPromptSubmit hooks ==="
 
 # inject-time: always emits a "Message time: ..." additionalContext.

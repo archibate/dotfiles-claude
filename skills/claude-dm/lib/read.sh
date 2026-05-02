@@ -2,12 +2,21 @@
 # Read-only verbs: roster, peek, tail.
 
 # Emit TSV: addr, pid, state(idle|busy), sessionId, title
+# Self-row gets a trailing '*' on ADDR (display-only marker; strip before
+# passing to other verbs). Self is detected only when $CLAUDE_DM_SOCKET
+# matches the socket from $TMUX; cross-socket runs show no marker.
 dm_roster() {
+  local self_addr=""
+  if [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" && "${TMUX%%,*}" == "$SOCKET" ]]; then
+    self_addr=$(tm display-message -p -t "$TMUX_PANE" \
+      '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || true)
+  fi
+
   tm list-panes -a \
       -F '#{pane_pid}	#{session_name}:#{window_index}.#{pane_index}	#{pane_current_command}	#{pane_title}' \
     | awk -F'\t' '$3=="claude"' \
     | while IFS=$'\t' read -r pane_pid addr _cmd title; do
-        local state cpid sid
+        local state cpid sid marker=""
         case "$title" in
           '✳'*) state='idle'  ;;
           *)    state='busy'  ;;
@@ -15,7 +24,8 @@ dm_roster() {
         cpid=$(pane_to_claude_pid "$pane_pid")
         [[ -n "$cpid" ]] || continue
         sid=$(pid_to_sid "$cpid" || true)
-        printf '%s\t%s\t%s\t%s\t%s\n' "$addr" "$cpid" "$state" "$sid" "$title"
+        [[ -n "$self_addr" && "$addr" == "$self_addr" ]] && marker="*"
+        printf '%s%s\t%s\t%s\t%s\t%s\n' "$addr" "$marker" "$cpid" "$state" "$sid" "$title"
       done
 }
 

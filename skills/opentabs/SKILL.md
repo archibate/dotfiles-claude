@@ -4,6 +4,7 @@ description: Call real web APIs (Slack, Discord, GitHub, Jira, Notion, Figma, AW
 allowed-tools:
   - Bash(*mcpcall.py*:*)
   - Bash(opentabs:*)
+disable-model-invocation: true
 ---
 
 # OpenTabs

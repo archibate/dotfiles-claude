@@ -51,9 +51,8 @@ if echo "$command" | grep -qP '(^|&&|;|\|)\s*sed\s+-n\s+['"'"'"]?\d+[,.!]\d*p['"
         example='  Read(file_path="<path>", offset=<start_line-1>, limit=<num_lines>)'
     fi
 
-    emit_pre_tool_deny "Use Read tool with offset and limit instead of sed -n for reading specific lines.
-${example}
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment \`# BYPASS_SED_PRINT_CHECK\` before the first line of command."
+    emit_pre_tool_deny_bypassable BYPASS_SED_PRINT_CHECK "Use Read tool with offset and limit instead of sed -n for reading specific lines.
+${example}"
 fi
 
 exit 0

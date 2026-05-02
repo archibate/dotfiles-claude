@@ -43,18 +43,16 @@ ANCHORS="(${CMD_ANCHOR_SUDO}|${CMD_WRAPPER}|${CMD_WRAPPER_SSH})"
 if echo "$command" | grep -qP "${ANCHORS}(mkfs(\.[a-zA-Z0-9]+)?|parted|fdisk|gdisk|sgdisk|cfdisk|wipefs)\b" \
     && ! echo "$command" | grep -qP '\-\-dry-run\b' \
     && ! has_bypass_marker BYPASS_DISK_FORMAT_CHECK; then
-    emit_pre_tool_deny 'Do not run disk-format / partition-edit tools (mkfs, parted, fdisk, gdisk, sgdisk, cfdisk, wipefs) — formatting or rewriting a partition table is irrecoverable on the wrong target.
-Run with `--dry-run` first to preview, and verify the device with `lsblk -f` (confirm size matches the user'"'"'s expected disk and no partition is mounted).
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_DISK_FORMAT_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_DISK_FORMAT_CHECK 'Do not run disk-format / partition-edit tools (mkfs, parted, fdisk, gdisk, sgdisk, cfdisk, wipefs) — formatting or rewriting a partition table is irrecoverable on the wrong target.
+Run with `--dry-run` first to preview, and verify the device with `lsblk -f` (confirm size matches the user'"'"'s expected disk and no partition is mounted).'
     exit 0
 fi
 
 if echo "$command" | grep -qP "${ANCHORS}cryptsetup\b[^|;&]*\b(luksFormat|erase|reencrypt)\b" \
     && ! echo "$command" | grep -qP '\-\-dry-run\b' \
     && ! has_bypass_marker BYPASS_DISK_FORMAT_CHECK; then
-    emit_pre_tool_deny 'Do not run cryptsetup luksFormat / erase / reencrypt — these destroy the LUKS header or rewrite the encrypted volume; lost headers are unrecoverable without an external backup.
-Back up the header first (`cryptsetup luksHeaderBackup`) and verify the device with `lsblk -f`.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_DISK_FORMAT_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_DISK_FORMAT_CHECK 'Do not run cryptsetup luksFormat / erase / reencrypt — these destroy the LUKS header or rewrite the encrypted volume; lost headers are unrecoverable without an external backup.
+Back up the header first (`cryptsetup luksHeaderBackup`) and verify the device with `lsblk -f`.'
     exit 0
 fi
 
@@ -73,9 +71,8 @@ if (echo "$command" | grep -qP "\bof=/dev/${SAFE_DEV}\S" \
     || echo "$command" | grep -qP "\btee\b[^|;&]*\s/dev/${SAFE_DEV}\S" \
     || echo "$command" | grep -qP "\b(cp|mv|install)\b[^|;&]*\s/dev/${SAFE_DEV}\S+\s*(\$|[|;&])") \
     && ! has_bypass_marker BYPASS_BLOCKDEV_WRITE_CHECK; then
-    emit_pre_tool_deny 'Do not write to a /dev/<device>. The hazard is the target, not the tool — `dd of=`, `> /dev/X`, `tee /dev/X`, and `cp/mv/install … /dev/X` all share the same failure mode: one wrong letter overwrites a live disk. Switching tools does not make it safer.
-Verify with `lsblk -f` that the device path is correct and no partition is mounted; confirm the size matches the user'"'"'s expected disk before bypassing.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_BLOCKDEV_WRITE_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_BLOCKDEV_WRITE_CHECK 'Do not write to a /dev/<device>. The hazard is the target, not the tool — `dd of=`, `> /dev/X`, `tee /dev/X`, and `cp/mv/install … /dev/X` all share the same failure mode: one wrong letter overwrites a live disk. Switching tools does not make it safer.
+Verify with `lsblk -f` that the device path is correct and no partition is mounted; confirm the size matches the user'"'"'s expected disk before bypassing.'
     exit 0
 fi
 
@@ -92,9 +89,8 @@ if (echo "$command" | grep -qP "\bof=${SYS_PATH}\S" \
     || echo "$command" | grep -qP "\btee\b[^|;&]*\s${SYS_PATH}\S" \
     || echo "$command" | grep -qP "\b(cp|mv|install)\b[^|;&]*\s${SYS_PATH}\S+\s*(\$|[|;&])") \
     && ! has_bypass_marker BYPASS_SYSPATH_WRITE_CHECK; then
-    emit_pre_tool_deny 'Do not write to /etc, /proc, /sys, or /boot. These paths control system/kernel state — one bad write can break boot, networking, login, or kernel parameters. The hazard is the target, not the tool.
-For /etc edits prefer `sudoedit`. For kernel params prefer `sysctl -w net.foo=bar` over raw `> /proc/sys/...`. Confirm the exact path with `ls -l` and the change with the user before bypassing.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_SYSPATH_WRITE_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_SYSPATH_WRITE_CHECK 'Do not write to /etc, /proc, /sys, or /boot. These paths control system/kernel state — one bad write can break boot, networking, login, or kernel parameters. The hazard is the target, not the tool.
+For /etc edits prefer `sudoedit`. For kernel params prefer `sysctl -w net.foo=bar` over raw `> /proc/sys/...`. Confirm the exact path with `ls -l` and the change with the user before bypassing.'
     exit 0
 fi
 
@@ -111,9 +107,8 @@ fi
 # ----------------------------------------------------------------------------
 if echo "$command" | grep -qP "${ANCHORS}(shred|srm|wipe)${CMD_TRAIL}" \
     && ! has_bypass_marker BYPASS_SECURE_DELETE_CHECK; then
-    emit_pre_tool_deny 'Do not use shred / srm / wipe — secure-erase tools destroy data with no recovery path. Filesystem-level snapshots, journals, and backups cannot recover what these tools overwrite.
-Plain `rm` (or `trash`) is reversible from snapshots/backups in most environments. Only use secure-erase when you have a documented compliance requirement.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_SECURE_DELETE_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_SECURE_DELETE_CHECK 'Do not use shred / srm / wipe — secure-erase tools destroy data with no recovery path. Filesystem-level snapshots, journals, and backups cannot recover what these tools overwrite.
+Plain `rm` (or `trash`) is reversible from snapshots/backups in most environments. Only use secure-erase when you have a documented compliance requirement.'
     exit 0
 fi
 
@@ -127,9 +122,8 @@ if (echo "$command" | grep -qP "${ANCHORS}(shutdown|reboot|poweroff|halt)\b" \
     || echo "$command" | grep -qP "${ANCHORS}systemctl\s+(poweroff|reboot|halt|kexec|hibernate|suspend)\b" \
     || echo "$command" | grep -qP "${ANCHORS}kill\s+(-9|-KILL|-SIGKILL)\s+-?1\b") \
     && ! has_bypass_marker BYPASS_POWER_STATE_CHECK; then
-    emit_pre_tool_deny 'Do not change the host power state (shutdown / reboot / poweroff / halt / init 0|1|6 / systemctl poweroff|reboot|halt|kexec / kill -9 1) — these terminate the host and on remote/shared machines you may have no way back in.
-Confirm hostname with `hostname` and `who` for other logged-in users before bypassing; for service restarts prefer `systemctl restart <unit>` instead.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_POWER_STATE_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_POWER_STATE_CHECK 'Do not change the host power state (shutdown / reboot / poweroff / halt / init 0|1|6 / systemctl poweroff|reboot|halt|kexec / kill -9 1) — these terminate the host and on remote/shared machines you may have no way back in.
+Confirm hostname with `hostname` and `who` for other logged-in users before bypassing; for service restarts prefer `systemctl restart <unit>` instead.'
     exit 0
 fi
 
@@ -139,9 +133,8 @@ fi
 # ----------------------------------------------------------------------------
 if echo "$command" | grep -qP "${ANCHORS}(chmod|chown)\b[^|;&]*\s-[a-zA-Z]*R[a-zA-Z]*\b" \
     && ! has_bypass_marker BYPASS_RECURSIVE_PERMS_CHECK; then
-    emit_pre_tool_deny 'Do not use chmod -R / chown -R. Recursive permission or ownership changes silently rewrite metadata for every file in the tree — one wrong path can lock out a user, break system services, or corrupt package-manager invariants.
-Test on a single file first, scope the recursion to the smallest possible subtree, and never recurse from `/` or `$HOME`. Consider `find <dir> -type f -exec chmod 644 {} +` for filtered changes.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_RECURSIVE_PERMS_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_RECURSIVE_PERMS_CHECK 'Do not use chmod -R / chown -R. Recursive permission or ownership changes silently rewrite metadata for every file in the tree — one wrong path can lock out a user, break system services, or corrupt package-manager invariants.
+Test on a single file first, scope the recursion to the smallest possible subtree, and never recurse from `/` or `$HOME`. Consider `find <dir> -type f -exec chmod 644 {} +` for filtered changes.'
     exit 0
 fi
 
@@ -151,9 +144,8 @@ fi
 # ----------------------------------------------------------------------------
 if echo "$command" | grep -qP "${ANCHORS}docker\s+(system|volume|image|container|network)\s+prune\b" \
     && ! has_bypass_marker BYPASS_DOCKER_PRUNE_CHECK; then
-    emit_pre_tool_deny 'Do not run docker {system,volume,image,container,network} prune. Pruning removes resources without confirmation; volume prune discards data volumes that may be the only copy of stateful container data.
-List candidates first (`docker volume ls -f dangling=true`, `docker ps -a --filter status=exited`) and remove specific items by name.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_DOCKER_PRUNE_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_DOCKER_PRUNE_CHECK 'Do not run docker {system,volume,image,container,network} prune. Pruning removes resources without confirmation; volume prune discards data volumes that may be the only copy of stateful container data.
+List candidates first (`docker volume ls -f dangling=true`, `docker ps -a --filter status=exited`) and remove specific items by name.'
     exit 0
 fi
 
@@ -167,9 +159,8 @@ if (echo "$command" | grep -qP "${ANCHORS}ip6?tables\b[^|;&]*\s(-[a-zA-Z]*[FX][a
     || echo "$command" | grep -qP "${ANCHORS}nft\s+flush\s+ruleset\b" \
     || echo "$command" | grep -qP "${ANCHORS}ufw\s+(--force\s+)?reset\b") \
     && ! has_bypass_marker BYPASS_FIREWALL_WIPE_CHECK; then
-    emit_pre_tool_deny 'Do not flush firewall rules. `iptables -F`, `nft flush ruleset`, and `ufw reset` can lock you out of remote machines instantly — the SSH session itself relies on the rules you are about to remove.
-Save current rules first (`iptables-save > /tmp/rules.bak`) and schedule a revert (`echo iptables-restore < /tmp/rules.bak | at now+5min`) before flushing.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_FIREWALL_WIPE_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_FIREWALL_WIPE_CHECK 'Do not flush firewall rules. `iptables -F`, `nft flush ruleset`, and `ufw reset` can lock you out of remote machines instantly — the SSH session itself relies on the rules you are about to remove.
+Save current rules first (`iptables-save > /tmp/rules.bak`) and schedule a revert (`echo iptables-restore < /tmp/rules.bak | at now+5min`) before flushing.'
     exit 0
 fi
 
@@ -178,9 +169,8 @@ fi
 # ----------------------------------------------------------------------------
 if echo "$command" | grep -qP "${ANCHORS}crontab\b[^|;&]*\s(-[a-zA-Z]*r[a-zA-Z]*|--remove)\b" \
     && ! has_bypass_marker BYPASS_CRONTAB_REMOVE_CHECK; then
-    emit_pre_tool_deny 'Do not run `crontab -r`. It deletes the entire user crontab with no confirmation and no backup.
-Run `crontab -l > backup.cron` first, then `crontab -e` to remove specific entries.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_CRONTAB_REMOVE_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_CRONTAB_REMOVE_CHECK 'Do not run `crontab -r`. It deletes the entire user crontab with no confirmation and no backup.
+Run `crontab -l > backup.cron` first, then `crontab -e` to remove specific entries.'
     exit 0
 fi
 
@@ -189,9 +179,8 @@ fi
 # ----------------------------------------------------------------------------
 if echo "$command" | grep -qP "${ANCHORS}killall\b" \
     && ! has_bypass_marker BYPASS_KILLALL_CHECK; then
-    emit_pre_tool_deny 'Do not use `killall` — it kills every matching process system-wide, including unrelated ones from other users or sessions.
-Safer: `pgrep -af <pattern>` first to see exactly which PIDs match, then `kill <PID>` for the specific target. Or `pkill -f <pattern>` when the full command-line pattern is unique.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_KILLALL_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_KILLALL_CHECK 'Do not use `killall` — it kills every matching process system-wide, including unrelated ones from other users or sessions.
+Safer: `pgrep -af <pattern>` first to see exactly which PIDs match, then `kill <PID>` for the specific target. Or `pkill -f <pattern>` when the full command-line pattern is unique.'
     exit 0
 fi
 

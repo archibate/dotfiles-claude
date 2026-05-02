@@ -28,7 +28,7 @@ Write:
   esc    <target> [--force]                       send Escape (emergency interrupt / modal cancel)
   answer <target> <key> [--force]                 reply to modal (1/2/3/y/n/a); requires state=modal
   self   /<slash>                                 queue an allowlisted slash command on the current pane
-                                                  (allowlist: /compact, /context); refuses unless input box is empty
+                                                  (allowlist: /compact, /context, /rename); refuses unless input box is empty
 
 Env:
   CLAUDE_DM_SOCKET=$SOCKET

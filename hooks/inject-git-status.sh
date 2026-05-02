@@ -1,5 +1,4 @@
 #!/usr/bin/bash
-# BYPASS_DEVNULL_CHECK
 set -euo pipefail
 
 # Read payload from stdin to extract session_id. Default to "unknown" if stdin

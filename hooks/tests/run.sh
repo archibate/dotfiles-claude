@@ -402,7 +402,7 @@ assert_deny no-head-read '{"tool_input":{"command":"sudo apt update; head -n 80 
 assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "truncate by line position"
 assert_deny no-head-tail-pipe '{"tool_input":{"command":"cat /tmp/x | tail -n 5"}}' "truncate by line position"
 assert_deny no-head-tail-pipe '{"tool_input":{"command":"git log | head -20"}}' "BYPASS_HEAD_TAIL_CHECK"
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "If this is a legitimate use"
+assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "If legitimate or false-positive"
 assert_silent no-head-tail-pipe '{"tool_input":{"command":"ls"}}'
 # Bare `head -n N <file>` lacks a leading pipe — separate hook (no-head-read) handles it
 assert_silent no-head-tail-pipe '{"tool_input":{"command":"head -n 5 /tmp/x"}}'
@@ -451,18 +451,19 @@ assert_deny no-git-amend '{"tool_input":{"command":"# BYPASS_FORCE_PUSH_CHECK\ng
 assert_silent python-unbuffered '{"tool_input":{"command":"# BYPASS_UNBUFFERED_CHECK\npython3 script.py","run_in_background":true},"cwd":"/tmp"}'
 # Empty command should be silent (no-background-ampersand previously had no guard)
 assert_silent no-background-ampersand '{"tool_input":{"command":""}}'
-# Unified hint wording — every bypass hint now opens with "If this is a legitimate
-# use, or a false-positive match (...)" so the agent knows the bypass marker also
-# covers regex misfires (e.g. pattern matched inside a quoted string), not only
-# "I really mean to do this" cases.
-assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "If this is a legitimate use"
-assert_deny no-background-ampersand "$(jq -n --arg c "sleep 10 ${AMP}" '{tool_input:{command:$c}}')" "If this is a legitimate use"
+# Unified hint wording — every bypass hint emitted by emit_pre_tool_deny_bypassable
+# now opens with "If legitimate or false-positive, prepend `# BYPASS_X` to the Bash
+# command." The two-branch wording lets the agent know the bypass marker also covers
+# regex misfires (e.g. pattern matched inside a quoted string), not only "I really
+# mean to do this" cases.
+assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "If legitimate or false-positive"
+assert_deny no-background-ampersand "$(jq -n --arg c "sleep 10 ${AMP}" '{tool_input:{command:$c}}')" "If legitimate or false-positive"
 assert_deny no-cat-write "$(jq -n --arg c "cat << EOF ${REDIR} /tmp/x
 hi
-EOF" '{tool_input:{command:$c}}')" "If this is a legitimate use"
-assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "If this is a legitimate use"
+EOF" '{tool_input:{command:$c}}')" "If legitimate or false-positive"
+assert_deny no-heredoc "$(jq -n --arg c "$heredoc_cmd" '{tool_input:{command:$c}}')" "If legitimate or false-positive"
 # FP-aware branch must be in the message too
-assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "false-positive match"
+assert_deny no-devnull-redirect "$(jq -n --arg c "ls ${REDIR}${DEV}" '{tool_input:{command:$c}}')" "false-positive"
 
 # no-schedule-wakeup-deadzone: delays in [300,1800] denied (inclusive boundaries)
 assert_deny no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":600,"reason":"x"}}' "dead zone"
@@ -554,6 +555,113 @@ out=$(cd /tmp && printf '%s' "$gs_in" | bash ~/.claude/hooks/inject-git-status.s
   || { echo "FAIL: inject-git-status outside repo: $out"; fail=1; }
 
 rm -f "/tmp/claude-git-status/$sid"
+
+# inject-system-load: silent when thresholds pinned impossibly high,
+# fires when a single path is forced low (DISK below — see trip block
+# for why DISK is the deterministic forcing signal). Other paths in
+# each assertion are pinned to the opposite extreme so a real elevated
+# metric on the test box can't leak across assertions.
+SILENT_ENV=(
+  SYSLOAD_CPU_FACTOR=999
+  SYSLOAD_MEM_PCT=101
+  SYSLOAD_SWAP_PCT=101
+  SYSLOAD_DISK_PCT=101
+  SYSLOAD_GPU_UTIL=101
+  SYSLOAD_GPU_MEM=101
+)
+TRIP_ENV=(
+  SYSLOAD_CPU_FACTOR=999
+  SYSLOAD_MEM_PCT=101
+  SYSLOAD_SWAP_PCT=101
+  SYSLOAD_DISK_PCT=0
+  SYSLOAD_GPU_UTIL=101
+  SYSLOAD_GPU_MEM=101
+)
+
+# Use a unique per-run session_id so the cooldown cache starts clean and
+# can't bleed across harness invocations.
+sysl_sid="syslt-$$"
+sysl_in="{\"session_id\":\"$sysl_sid\"}"
+sysl_cache="/tmp/claude-system-load/$sysl_sid"
+rm -f "$sysl_cache"
+
+out=$(env "${SILENT_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
+[ -z "$out" ] \
+  && echo "OK:   inject-system-load silent when no threshold tripped" \
+  || { echo "FAIL: inject-system-load should be silent: $out"; fail=1; }
+
+# Force DISK trip: %used from `df -P /` is always >0 on a mounted root
+# (filesystem metadata + journal alone exceed 1%), so DISK_PCT=0 reliably
+# trips. Avoid the MEM/SWAP paths for forcing — both compute %used via
+# integer division, which floors to 0 on a high-RAM box (≥200 GB) when
+# absolute usage is <1% of total, making those tests non-deterministic on
+# lightly-loaded CI runners.
+out=$(env "${TRIP_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("DISK")' > "$test_out" \
+  && echo "OK:   inject-system-load fires on DISK trip (first fire)" \
+  || { echo "FAIL: inject-system-load DISK trip: $out"; fail=1; }
+
+# Cooldown: same elevated state on a repeat fire matches the cached
+# bucketed signature → silent, even though DISK is still tripping.
+out=$(env "${TRIP_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
+[ -z "$out" ] \
+  && echo "OK:   inject-system-load silent on repeat (cooldown cache hit)" \
+  || { echo "FAIL: inject-system-load should be silent on repeat: $out"; fail=1; }
+
+# Returning to clean state writes empty signature; no emit, but cache
+# now invalidates so a subsequent re-trip would emit again.
+out=$(env "${SILENT_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
+[ -z "$out" ] \
+  && echo "OK:   inject-system-load silent on elevated→clean transition" \
+  || { echo "FAIL: inject-system-load clean-after-trip: $out"; fail=1; }
+
+# Re-trip after going clean: cache mismatch → emits again.
+out=$(env "${TRIP_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("DISK")' > "$test_out" \
+  && echo "OK:   inject-system-load fires again after returning to elevated" \
+  || { echo "FAIL: inject-system-load re-trip: $out"; fail=1; }
+
+rm -f "$sysl_cache"
+
+# inject-peer-activity: surfaces busy peer Claude sessions sharing the repo.
+# Override hooks (PEER_ACTIVITY_TEST_*) bypass the live tmux/git lookups so the
+# filter logic is tested deterministically without spawning a tmux server.
+
+# 1. No tmux: TMUX_PANE unset → silent (real-world: user runs Claude outside tmux)
+out=$(env -u TMUX_PANE bash ~/.claude/hooks/inject-peer-activity.sh </dev/null)
+[ -z "$out" ] \
+  && echo "OK:   inject-peer-activity silent without tmux" \
+  || { echo "FAIL: inject-peer-activity should be silent without tmux: $out"; fail=1; }
+
+# 2. Idle peer in same repo → silent (no collision risk)
+peers_idle=$'claude\t_claude:5.1\t/home/ubuntu/.claude\t✳ idle-task'
+out=$(PEER_ACTIVITY_TEST_SELF_ADDR=_claude:6.1 \
+      PEER_ACTIVITY_TEST_SELF_ROOT=/home/ubuntu/.claude \
+      PEER_ACTIVITY_TEST_PANES="$peers_idle" \
+      bash ~/.claude/hooks/inject-peer-activity.sh </dev/null)
+[ -z "$out" ] \
+  && echo "OK:   inject-peer-activity silent on idle-only peer" \
+  || { echo "FAIL: inject-peer-activity should be silent on idle peer: $out"; fail=1; }
+
+# 3. Busy peer in same repo → emits context citing peer addr + task
+peers_busy=$'claude\t_claude:6.1\t/home/ubuntu/.claude\t⠂ peer-activity-awareness-hook
+claude\t_claude:6.2\t/home/ubuntu/.claude\t⠐ sysload-test-disk-forcing
+claude\t_claude:7.1\t/home/ubuntu/.claude/skills\t⠂ subdir-task
+claude\t_claude:5.1\t/home/ubuntu/.claude\t✳ idle-task
+fish\trql2:1.1\t/home/ubuntu/.claude\t~/rql2 - fish
+claude\trql2:3.1\t/home/ubuntu/rql2\t⠂ unrelated-busy'
+out=$(PEER_ACTIVITY_TEST_SELF_ADDR=_claude:6.1 \
+      PEER_ACTIVITY_TEST_SELF_ROOT=/home/ubuntu/.claude \
+      PEER_ACTIVITY_TEST_PANES="$peers_busy" \
+      bash ~/.claude/hooks/inject-peer-activity.sh </dev/null)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("_claude:6.2") and contains("sysload-test-disk-forcing") and contains("_claude:7.1") and contains("subdir-task")' > "$test_out" \
+  && echo "OK:   inject-peer-activity fires on busy peers in repo" \
+  || { echo "FAIL: inject-peer-activity busy peers: $out"; fail=1; }
+# Cross-check exclusions: self, idle, non-claude pane, unrelated repo all absent
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext
+    | (contains("_claude:6.1") or contains("_claude:5.1") or contains("rql2:1.1") or contains("rql2:3.1")) | not' > "$test_out" \
+  && echo "OK:   inject-peer-activity excludes self/idle/non-claude/other-repo" \
+  || { echo "FAIL: inject-peer-activity exclusion: $out"; fail=1; }
 
 rm -f "$test_out"
 

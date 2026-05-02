@@ -20,11 +20,10 @@ cwd=$(echo "$input" | jq -r '.cwd // "."')
 
 source "$(dirname "$0")/lib/check-python-unbuffered.sh"
 if check_python_unbuffered "$command" "$cwd"; then
-    emit_pre_tool_deny 'Background python task must use unbuffered output.
+    emit_pre_tool_deny_bypassable BYPASS_UNBUFFERED_CHECK 'Background python task must use unbuffered output.
 Claude launches processes with stdout as a pipe, causing Python to buffer output instead of flushing in real time — making it look stuck or empty.
 Either: PYTHONUNBUFFERED=1 uv run python script.py
-    or: uv run python -u script.py
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_UNBUFFERED_CHECK` before the first line of command.'
+    or: uv run python -u script.py'
 fi
 
 exit 0

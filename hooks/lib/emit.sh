@@ -33,6 +33,17 @@ emit_pre_tool_deny() {
     }'
 }
 
+# emit_pre_tool_deny_bypassable <marker> <reason> — append the standard
+# "how to bypass" footer to <reason> and emit the deny. Centralizes the
+# boilerplate so wording stays consistent across hooks. The footer is worded
+# to disambiguate "command" as the literal Bash tool command string (which
+# the bypass scanner reads), not the script file the command happens to run.
+emit_pre_tool_deny_bypassable() {
+    local marker="$1" reason="$2"
+    emit_pre_tool_deny "${reason}
+If legitimate or false-positive, append \`# ${marker}\` to the Bash command."
+}
+
 # emit_pre_tool_warn "hint" — non-blocking advisory: lets the tool call proceed
 # (permissionDecision: allow) while injecting `hint` into Claude's context so
 # it can react if the call fails downstream. Use when the hook has useful but

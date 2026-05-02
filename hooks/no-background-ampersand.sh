@@ -12,9 +12,8 @@ bypass_check BYPASS_BACKGROUND_CHECK
 # Match: command& or command & but not && (logical AND)
 # Also catches multi-line commands where & appears at end of a line
 if echo "$command" | grep -qE '[^&]&[[:space:]]*$'; then
-    emit_pre_tool_deny 'Do not use & for background execution. Use the run_in_background parameter instead:
-  Bash(command="...", run_in_background=true)
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_BACKGROUND_CHECK` before the first line of command.'
+    emit_pre_tool_deny_bypassable BYPASS_BACKGROUND_CHECK 'Do not use & for background execution. Use the run_in_background parameter instead:
+  Bash(command="...", run_in_background=true)'
 fi
 
 exit 0

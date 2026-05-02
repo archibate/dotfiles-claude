@@ -17,8 +17,7 @@ bypass_check BYPASS_FOO_CHECK
 
 # detection — grep / regex against $command or $file_path
 
-emit_pre_tool_deny '...
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_FOO_CHECK` before the first line of command.'
+emit_pre_tool_deny_bypassable BYPASS_FOO_CHECK '<hook-specific reason>'
 ```
 
 Use `#!/usr/bin/bash` (not `/bin/bash` or `/usr/bin/env bash`). Always `set -euo pipefail`.
@@ -38,14 +37,16 @@ Use `#!/usr/bin/bash` (not `/bin/bash` or `/usr/bin/env bash`). Always `set -euo
 Conventions:
 - Every `no-*` hook that blocks something must accept a bypass marker, so the user has an escape hatch.
 - Marker names are `BYPASS_<SUBJECT>_CHECK` (e.g. `BYPASS_HEAD_READ_CHECK`) or `BYPASS_<SUBJECT>` (e.g. `BYPASS_CAT_WRITE`, `BYPASS_HEREDOC_RESTRICTION`).
-- The deny message always ends with the exact line:
-  ``If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_X` before the first line of command.``
-  The two-branch wording is deliberate: the agent must know that bypass also covers regex misfires (e.g. the trigger token sitting inside a quoted string), not only "I really intend to run this." Without that, the agent gaslights itself into "I don't have a legitimate reason" on a genuine FP and gets stuck.
-- The helper matches anywhere in `$command`. The "first line" phrasing is a user-facing convention — `grep -qF` is deliberately lenient so a marker on any line works.
+- For Bash-command hooks, use `emit_pre_tool_deny_bypassable <MARKER> "<reason>"` (in `lib/emit.sh`). It appends the canonical bypass footer:
+  ``If legitimate or false-positive, prepend `# BYPASS_X` to the Bash command.``
+  The two-branch wording ("legitimate or false-positive") is deliberate: the agent must know that bypass also covers regex misfires (e.g. the trigger token sitting inside a quoted string), not only "I really intend to run this." Without that, the agent gaslights itself into "I don't have a legitimate reason" on a genuine FP and gets stuck.
+- For non-Bash hooks (e.g. `no-schedule-skill.sh`, `no-schedule-wakeup-deadzone.sh` — markers belong in `Skill` args / `ScheduleWakeup.reason`, not a Bash command), inline a location-specific bypass instruction in `emit_pre_tool_deny` directly. Don't call `emit_pre_tool_deny_bypassable` — its footer references "the Bash command", which would be wrong for those tools.
+- The helper matches the marker anywhere in `$command` (literal `tool_input.command`, not the script body the command happens to run). `grep -qF` is deliberately lenient so a marker on any line of a multi-line command works.
 
 ### `lib/emit.sh`
 
 - `emit_pre_tool_deny "reason"` — emits the PreToolUse deny JSON.
+- `emit_pre_tool_deny_bypassable MARKER "reason"` — same, but appends the canonical bypass footer (`If legitimate or false-positive, prepend \`# MARKER\` to the Bash command.`). Use this in every Bash-command `no-*` hook so wording stays consistent. Skip for non-Bash hooks like `no-schedule-skill.sh` / `no-schedule-wakeup-deadzone.sh` — their bypass markers live in tool-specific JSON fields, not in a Bash command, so the canned footer would mis-direct the agent.
 - `emit_pre_tool_warn "hint"` — emits the PreToolUse allow JSON with `additionalContext`. Use for non-blocking advisories where a hard-deny would be too noisy. (No callers in tree right now; reserved.)
 - `emit_post_tool_context "ctx"` — emits PostToolUse additionalContext JSON.
 
@@ -96,6 +97,6 @@ For any new blocking hook, add at minimum:
 - trigger case → deny
 - non-trigger case → silent
 - bypass marker → silent
-- deny message contains the standard "If you believe this is a false positive" hint
+- deny message contains the canonical bypass footer (`If legitimate or false-positive` — emitted automatically by `emit_pre_tool_deny_bypassable`)
 
 The harness encodes `&`, `>`, `/dev/null` via local shell vars (`AMP`, `REDIR`, `DEV`) so the test file itself doesn't trip outer hooks when Claude edits it.

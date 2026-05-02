@@ -46,11 +46,9 @@ file_path=$(echo "$command" | grep -oE '>\s*[^<>|& ]+' | head -1 | sed 's/^>\s*/
 if [ -n "$file_path" ]; then
     example=$(printf '  Write("%s", <content>)' "$file_path")
     reason="Use Write tool instead of cat heredoc for file writes.
-${example}
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment \`# BYPASS_CAT_WRITE\` before the first line of command."
+${example}"
 else
-    reason='Use Write tool instead of cat heredoc for file writes.
-If this is a legitimate use, or a false-positive match (e.g. the pattern appears inside a string, comment, or filename, not as an executed command), add comment `# BYPASS_CAT_WRITE` before the first line of command.'
+    reason='Use Write tool instead of cat heredoc for file writes.'
 fi
 
-emit_pre_tool_deny "$reason"
+emit_pre_tool_deny_bypassable BYPASS_CAT_WRITE "$reason"

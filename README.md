@@ -4,17 +4,11 @@ Personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) configura
 
 ## Install
 
-Prerequisites: `claude`, `git`, `jq`, `uv`, `node`, `npx` (ships with `npm`). The setup script aborts upfront with install hints if any are missing — install Claude Code first via:
-
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-```
-
-Then run:
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/archibate/dotfiles-claude/main/setup.sh | bash
 ```
+
+> Prerequisites: `claude`, `git`, `jq`, `uv`, `node`, `npm`.
 
 The setup script is idempotent — re-run the same one-liner anytime to pull updates (it does `git pull --ff-only` on the existing checkout).
 
@@ -48,5 +42,21 @@ For reference, my personal configs that pair well with this setup:
 - **skills/** — 40 skill packs (browser automation, translation, shader dev, and more)
 - **plugins/** — installed plugins via marketplaces (`claude-hud`, `claude-plugins-official`, `openai-codex`)
 - **integration.sh / .fish** — `claude` wrapper, model shortcuts, and `commit` helper
-- **integration-providers.sh / .fish** — optional shortcuts that route claude through third-party Anthropic-compatible endpoints.
+- **integration-providers.sh / .fish** — optional shortcuts that route claude through third-party Anthropic-compatible endpoints (see the file header for the provider list and prerequisites; the `gpt` shortcut needs the [codex-to-claude](https://github.com/archibate/codex-to-claude) proxy running locally).
 - **CLAUDE.md** — global coding preferences and rules
+
+## Audit Hook
+
+An audit stop hook fires on Claude's final response after several edits, to review correctness and AI slop patterns, both in code and docs.
+
+It starts `claude` and `codex` headless; when issues are flagged, it reports to the main agent to ask it to fix them.
+
+> Bypass `codex` if not installed or not logged in.
+
+After used for a couple of weeks, you may show history audit stats:
+
+```bash
+~/.claude/hooks/audit-edits.py stats
+```
+
+Tweak `"env"` in `~/.claude/settings.json` to edit `"AUDIT_BACKEND": "both"` to `none|claude|codex|both` to configure.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="git@github.com:archibate/dotfiles-claude.git"
+REPO="https://github.com/archibate/dotfiles-claude.git"
 TARGET="$HOME/.claude"
 
 # ANSI colors — only when stderr/stdout is a real terminal, otherwise leave
@@ -44,15 +44,51 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 if [ -d "$TARGET/.git" ]; then
+    # Refuse to pull when the existing checkout points at a different repo.
+    # Exact-match the canonical github.com URL forms (HTTPS, SSH, ssh://),
+    # with or without the .git suffix. Anything else — fork on another host,
+    # mirror, similarly-named repo — is rejected so the install never
+    # silently pulls from a remote it doesn't manage.
+    current_remote=$(git -C "$TARGET" remote get-url origin 2>/dev/null || true)
+    case "$current_remote" in
+        https://github.com/archibate/dotfiles-claude|\
+        https://github.com/archibate/dotfiles-claude.git|\
+        git@github.com:archibate/dotfiles-claude|\
+        git@github.com:archibate/dotfiles-claude.git|\
+        ssh://git@github.com/archibate/dotfiles-claude|\
+        ssh://git@github.com/archibate/dotfiles-claude.git)
+            ;;
+        *)
+            echo "${RED}${BOLD}✗ ${TARGET} is already a git checkout, but 'origin' is:${RESET}" >&2
+            echo "    ${current_remote:-<unset>}" >&2
+            echo "${YELLOW}This installer manages ${REPO}.${RESET}" >&2
+            echo "${YELLOW}Either back up ${TARGET} and re-run, or repoint origin:${RESET}" >&2
+            echo "  ${CYAN}git -C ${TARGET} remote set-url origin ${REPO}${RESET}" >&2
+            exit 1
+            ;;
+    esac
     echo "${BLUE}↻ Updating existing checkout at ${TARGET}…${RESET}"
     git -C "$TARGET" pull --ff-only
 elif [ -d "$TARGET" ]; then
-    echo "${BLUE}↻ Adopting existing ${TARGET} as a git checkout…${RESET}"
-    git -C "$TARGET" init
-    git -C "$TARGET" remote add origin "$REPO" 2>/dev/null ||
-        git -C "$TARGET" remote set-url origin "$REPO"
-    git -C "$TARGET" fetch origin
-    git -C "$TARGET" checkout -f -B main origin/main
+    # Existing non-git directory — typically a vanilla Claude Code install
+    # carrying credentials, sessions, plugins, and edited settings. The
+    # previous `git checkout -f -B main` here clobbered all of that. Back
+    # it up to a timestamped sibling, clone fresh, then restore everything
+    # the fresh clone doesn't already ship (i.e. all gitignored runtime
+    # state — sessions, credentials, history, installed plugins, etc.).
+    # Locally-edited copies of tracked files (e.g. settings.json tweaks)
+    # are NOT restored; they remain in the backup for the user to merge.
+    backup="${TARGET}.bak.$(date +%Y%m%d-%H%M%S)"
+    echo "${YELLOW}↻ Existing ${TARGET} found (no git checkout).${RESET}"
+    echo "${YELLOW}  Moving to ${backup} and cloning fresh; runtime state will be restored.${RESET}"
+    mv "$TARGET" "$backup"
+    git clone "$REPO" "$TARGET"
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --ignore-existing "$backup/" "$TARGET/"
+    else
+        cp -an "$backup/." "$TARGET/"
+    fi
+    echo "${GREEN}  ✓ runtime state restored; original preserved at ${backup}${RESET}"
 else
     echo "${BLUE}↻ Cloning ${REPO} → ${TARGET}…${RESET}"
     git clone "$REPO" "$TARGET"

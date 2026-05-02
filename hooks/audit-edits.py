@@ -679,7 +679,7 @@ def cmd_stop_hook() -> int:
         exit 0 → silent
         exit 2 → wakes Claude with stderr (the verdict) as a system reminder.
     Recursion guard via CLAUDE_AUDIT_SUBAGENT / CODEX_AUDIT_SUBAGENT env var.
-    Backend selected by AUDIT_BACKEND={claude,codex,both}; defaults to claude."""
+    Backend selected by AUDIT_BACKEND={none,claude,codex,both}; defaults to claude."""
     if os.environ.get("CLAUDE_AUDIT_SUBAGENT") == "1":
         return 0
     if os.environ.get("CODEX_AUDIT_SUBAGENT") == "1":
@@ -718,6 +718,9 @@ def cmd_stop_hook() -> int:
             return 0  # no audit ran; leave any prior result-marker alone
 
         backend = os.environ.get("AUDIT_BACKEND", "claude").lower()
+        if backend == "none":
+            _stop_log(sid, "AUDIT_BACKEND=none; skipping audit")
+            return 0
         _stop_log(sid, f"spawning audit ({backend}, {len(diff)} bytes diff)")
 
         files_changed, lines_added, lines_removed, files_list = _diff_stats(diff)

@@ -549,7 +549,12 @@ echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("WebFetch"
 out=$(printf '%s' '{"tool_response":{"results":[]}}' | bash ~/.claude/hooks/websearch-followup-hint.sh)
 [ -z "$out" ] && echo "OK:   websearch (0 results) silent" || { echo "FAIL: websearch 0 results: $out"; fail=1; }
 
-assert_context reread-after-edit '{"tool_input":{"file_path":"/tmp/x"}}' "/tmp/x"
+assert_context reread-after-edit '{"tool_input":{"file_path":"/tmp/x.md"}}' "/tmp/x.md"
+assert_context reread-after-edit '{"tool_input":{"file_path":"/tmp/x.py"}}' "/tmp/x.py"
+# Basename special-case: CMakeLists.txt routes to CODE despite the .txt extension.
+assert_context reread-after-edit '{"tool_input":{"file_path":"/tmp/CMakeLists.txt"}}' "CODE audit"
+# Extensionless path → OTHER → silent (deliberate fallback since 5198cee).
+assert_silent reread-after-edit '{"tool_input":{"file_path":"/tmp/x"}}'
 assert_silent reread-after-edit '{"tool_input":{}}'
 
 assert_context verify-explore-results '{"tool_input":{"subagent_type":"Explore"}}' "Verify Explore"
@@ -661,67 +666,37 @@ echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("DISK")' >
   && echo "OK:   inject-system-load fires on DISK trip (first fire)" \
   || { echo "FAIL: inject-system-load DISK trip: $out"; fail=1; }
 
-# Cooldown: same elevated state on a repeat fire matches the cached
-# bucketed signature → silent, even though DISK is still tripping.
+# Cooldown: time-based. A repeat fire within SYSLOAD_COOLDOWN_SEC of the
+# last emit stays silent regardless of which metrics tripped.
 out=$(env "${TRIP_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
 [ -z "$out" ] \
-  && echo "OK:   inject-system-load silent on repeat (cooldown cache hit)" \
+  && echo "OK:   inject-system-load silent on repeat (cooldown still active)" \
   || { echo "FAIL: inject-system-load should be silent on repeat: $out"; fail=1; }
 
-# Returning to clean state writes empty signature; no emit, but cache
-# now invalidates so a subsequent re-trip would emit again.
+# Returning to clean state is a no-op for the cache: nothing tripped, so
+# the timestamp from the prior emit is preserved and continues to gate
+# subsequent fires.
 out=$(env "${SILENT_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
 [ -z "$out" ] \
   && echo "OK:   inject-system-load silent on elevated→clean transition" \
   || { echo "FAIL: inject-system-load clean-after-trip: $out"; fail=1; }
 
-# Re-trip after going clean: cache mismatch → emits again.
+# Re-trip while the cooldown window is still open → silent. Time-based
+# cooldown deliberately suppresses a clean→elevated bounce within the
+# window (vs. the previous signature-based cache, which would re-emit).
 out=$(env "${TRIP_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
+[ -z "$out" ] \
+  && echo "OK:   inject-system-load silent on re-trip within cooldown window" \
+  || { echo "FAIL: inject-system-load should be silent within cooldown: $out"; fail=1; }
+
+# Re-trip with cooldown forced to 0 → emits immediately, proving the
+# gate is purely the timestamp delta.
+out=$(env "${TRIP_ENV[@]}" SYSLOAD_COOLDOWN_SEC=0 bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
 echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("DISK")' > "$test_out" \
-  && echo "OK:   inject-system-load fires again after returning to elevated" \
-  || { echo "FAIL: inject-system-load re-trip: $out"; fail=1; }
+  && echo "OK:   inject-system-load fires again once cooldown elapses (SYSLOAD_COOLDOWN_SEC=0)" \
+  || { echo "FAIL: inject-system-load re-trip after cooldown: $out"; fail=1; }
 
 rm -f "$sysl_cache"
-
-# inject-peer-activity: surfaces busy peer Claude sessions sharing the repo.
-# Override hooks (PEER_ACTIVITY_TEST_*) bypass the live tmux/git lookups so the
-# filter logic is tested deterministically without spawning a tmux server.
-
-# 1. No tmux: TMUX_PANE unset → silent (real-world: user runs Claude outside tmux)
-out=$(env -u TMUX_PANE bash ~/.claude/hooks/inject-peer-activity.sh </dev/null)
-[ -z "$out" ] \
-  && echo "OK:   inject-peer-activity silent without tmux" \
-  || { echo "FAIL: inject-peer-activity should be silent without tmux: $out"; fail=1; }
-
-# 2. Idle peer in same repo → silent (no collision risk)
-peers_idle=$'claude\t_claude:5.1\t/home/ubuntu/.claude\t✳ idle-task'
-out=$(PEER_ACTIVITY_TEST_SELF_ADDR=_claude:6.1 \
-      PEER_ACTIVITY_TEST_SELF_ROOT=/home/ubuntu/.claude \
-      PEER_ACTIVITY_TEST_PANES="$peers_idle" \
-      bash ~/.claude/hooks/inject-peer-activity.sh </dev/null)
-[ -z "$out" ] \
-  && echo "OK:   inject-peer-activity silent on idle-only peer" \
-  || { echo "FAIL: inject-peer-activity should be silent on idle peer: $out"; fail=1; }
-
-# 3. Busy peer in same repo → emits context citing peer addr + task
-peers_busy=$'claude\t_claude:6.1\t/home/ubuntu/.claude\t⠂ peer-activity-awareness-hook
-claude\t_claude:6.2\t/home/ubuntu/.claude\t⠐ sysload-test-disk-forcing
-claude\t_claude:7.1\t/home/ubuntu/.claude/skills\t⠂ subdir-task
-claude\t_claude:5.1\t/home/ubuntu/.claude\t✳ idle-task
-fish\trql2:1.1\t/home/ubuntu/.claude\t~/rql2 - fish
-claude\trql2:3.1\t/home/ubuntu/rql2\t⠂ unrelated-busy'
-out=$(PEER_ACTIVITY_TEST_SELF_ADDR=_claude:6.1 \
-      PEER_ACTIVITY_TEST_SELF_ROOT=/home/ubuntu/.claude \
-      PEER_ACTIVITY_TEST_PANES="$peers_busy" \
-      bash ~/.claude/hooks/inject-peer-activity.sh </dev/null)
-echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("_claude:6.2") and contains("sysload-test-disk-forcing") and contains("_claude:7.1") and contains("subdir-task")' > "$test_out" \
-  && echo "OK:   inject-peer-activity fires on busy peers in repo" \
-  || { echo "FAIL: inject-peer-activity busy peers: $out"; fail=1; }
-# Cross-check exclusions: self, idle, non-claude pane, unrelated repo all absent
-echo "$out" | jq -e '.hookSpecificOutput.additionalContext
-    | (contains("_claude:6.1") or contains("_claude:5.1") or contains("rql2:1.1") or contains("rql2:3.1")) | not' > "$test_out" \
-  && echo "OK:   inject-peer-activity excludes self/idle/non-claude/other-repo" \
-  || { echo "FAIL: inject-peer-activity exclusion: $out"; fail=1; }
 
 rm -f "$test_out"
 

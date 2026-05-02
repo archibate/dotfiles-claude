@@ -12,7 +12,7 @@
 
 `/tui fullscreen` or `CLAUDE_CODE_NO_FLICKER=1`
 
-`PageUp`, `PageDown` or mouse wheel to virtual scroll, superior than terminal built-in.
+`PageUp`, `PageDown` or mouse wheel to virtual scroll, superior to terminal built-in.
 
 mouse drag to copy text selection, OSC 52 clipboard protocol (Kitty).
 
@@ -20,7 +20,7 @@ mouse drag to copy text selection, OSC 52 clipboard protocol (Kitty).
 
 plus `"autoScrollEnabled": false` in settings.
 
-`/focus` mode, reduce cogonition overhead.
+`/focus` mode, reduce cognition overhead.
 
 # C-o: view detailed transcript
 
@@ -43,13 +43,13 @@ long context is not only expensive, but also reduce 'IQ': too noisy, cannot focu
 
 # /compact frequently, no wait for auto-compact
 
-if you worry lost permanant, /compact. this makes mind clean with prior knowledge and key findings perserved.
+if you worry about losing things permanently, /compact. this makes the mind clean with prior knowledge and key findings preserved.
 
 # ask to start subagent for things you only need conclusion, no steps, save context
 
 # /rewind (esc esc) to correct
 
-will rewind code changes, saves context (for both token cost and cogonition overhead)
+will rewind code changes, saves context (for both token cost and cognition overhead)
 
 # /context to visualize
 
@@ -81,7 +81,7 @@ ask "merge to main worktree" after implementation complete.
 
 # prefer --bypass-permissions
 
-claude is smart enough, will proactively pause and ask confirmation on dangerous irrevertible operations.
+claude is smart enough, will proactively pause and ask confirmation on dangerous irreversible operations.
 
 ```json
   "permissions": {
@@ -89,7 +89,7 @@ claude is smart enough, will proactively pause and ask confirmation on dangerous
   },
 ```
 
-saves tons of 'Yes', relief your brain.
+saves tons of 'Yes', relieves your brain.
 
 may also try, auto-mode for Max subscription users (I did use that).
 
@@ -123,7 +123,7 @@ or ask agent to start in background, they will use `run_in_background: true`.
 
 # prompt 5-min TTL mitigation
 
-- what is prompt cache? cache invalidates in 5-min. cached tokens are cheaper, 0.1x cost. write tokens (for new arrivial inputs and outputs) to cache costs 0.25x, so 1.25x for cache-miss on whole context, if you didn't response in 5-min.
+- what is prompt cache? cache invalidates in 5-min. cached tokens are cheaper, 0.1x cost. write tokens (for new arriving inputs and outputs) to cache costs 0.25x, so 1.25x for cache-miss on whole context, if you didn't respond in 5-min.
 - keep-alive `/loop 5m`
 - `CLAUDE_AUTO_BACKGROUND_TASKS=1` for auto-background agents
 - `BASH_MAX_TIMEOUT_MS=240000` replace default 10 min timeout
@@ -131,7 +131,7 @@ or ask agent to start in background, they will use `run_in_background: true`.
 
 # new feature: Monitor tool
 
-Monitor proactively triggers on background Bash output matching expression, and default to have 5-min timeout, exactly TTL boundaries (Anthropic purposingly).
+Monitor proactively triggers on background Bash output matching expression, and default to have 5-min timeout, exactly TTL boundaries (Anthropic purposely).
 
 can ask claude to output a single space when nothing to report to prevent flood.
 
@@ -149,15 +149,15 @@ install claude-hud or `/statusline`
 
 # /ultraplan and /ultrareview (for subscribers, but I don't use it, no sense to me)
 
-# 'manually' orgnize your project documentation (some people say memory)
+# 'manually' organize your project documentation (some people say memory)
 
 auto-memory and auto-dream are trash to me, I don't use it
 
-I'd maintain CLAUDE.md + references doc 'manually' (by asking claude to refactor, of cause).
+I'd maintain CLAUDE.md + references doc 'manually' (by asking claude to refactor, of course).
 
-I've a `/doc-audit` skill to check docs are up-to-date to code, sync when out-date.
+I've a `/doc-audit` skill to check docs are up-to-date to code, sync when out-of-date.
 
-reduces claude cogonition overhead, no risk on losing intent and clarification repeatly in each new conversation.
+reduces claude cognition overhead, no risk of losing intent and clarification repeatedly in each new conversation.
 
 # `/init` is trash
 
@@ -169,7 +169,7 @@ no better than not having one and let claude `Explore` to discover itself on eac
 
 # install plugin-dev plugin
 
-/skill-develpoment and /hook-development skill useful for developing
+/skill-development and /hook-development skill useful for developing
 
 # `/skillify` from leaked source
 

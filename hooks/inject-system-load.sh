@@ -4,12 +4,11 @@
 # launching heavy work (builds, training, parallel agents, pueue jobs)
 # when the box is already loaded.
 #
-# Cooldown: each tripped metric contributes a coarse bucket token
-# (mem 5%, swap 10%, load decile, GPU 10%-util/5%-mem, disk exact %,
-# hog process-name only) joined into a signature and cached per
-# session_id. If the signature matches the previous emit (state hasn't
-# materially changed), the hook stays silent — avoiding repeated
-# re-emissions for steady-state high load.
+# Cooldown: time-based, per session_id. After an emit, suppress further
+# load warnings for SYSLOAD_COOLDOWN_SEC seconds regardless of how the
+# metrics shift. The cache file holds a single epoch timestamp at
+# /tmp/claude-system-load/<session_id>; on each invocation we exit silent
+# if (now - cached) < cooldown, otherwise emit and refresh the timestamp.
 #
 # Thresholds are env-overridable (also lets tests force trip/silent paths):
 #   SYSLOAD_CPU_FACTOR   load5 / nproc threshold (default 0.7)
@@ -18,6 +17,7 @@
 #   SYSLOAD_DISK_PCT     disk %used threshold on / (default 90)
 #   SYSLOAD_GPU_UTIL     per-GPU %util threshold (default 70)
 #   SYSLOAD_GPU_MEM      per-GPU mem% threshold (default 80)
+#   SYSLOAD_COOLDOWN_SEC seconds to suppress repeat emits  (default 600)
 set -euo pipefail
 export LC_ALL=C
 
@@ -33,6 +33,7 @@ SWAP_THRESH="${SYSLOAD_SWAP_PCT:-50}"
 DISK_THRESH="${SYSLOAD_DISK_PCT:-90}"
 GPU_UTIL_THRESH="${SYSLOAD_GPU_UTIL:-70}"
 GPU_MEM_THRESH="${SYSLOAD_GPU_MEM:-80}"
+COOLDOWN_SEC="${SYSLOAD_COOLDOWN_SEC:-600}"
 
 # Read session_id from stdin (same pattern as inject-git-status). Default
 # to "unknown" if stdin is a TTY (manual run) or jq fails on non-JSON.
@@ -44,7 +45,6 @@ SID=$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "unknown"' 2>/dev/null) || 
 [ -z "$SID" ] && SID="unknown"
 
 WARN=()
-SIG=()  # parallel bucketed signature for cooldown cache
 LOAD_TRIPPED=0
 
 # --- CPU 5-min load avg ---
@@ -53,9 +53,6 @@ LOAD5=$(awk '{print $2}' /proc/loadavg)
 LOAD_THRESH=$(awk -v n="$NPROC" -v f="$CPU_FACTOR" 'BEGIN{printf "%.2f", n*f}')
 if awk -v l="$LOAD5" -v t="$LOAD_THRESH" 'BEGIN{exit !(l+0>t+0)}'; then
   WARN+=("CPU: load5=${LOAD5} on ${NPROC} cores (warn>${LOAD_THRESH})")
-  # Bucket: floor(load5 / (0.1 * nproc)) — decile of utilization fraction
-  LOAD_BUCKET=$(awk -v l="$LOAD5" -v n="$NPROC" 'BEGIN{printf "%d", int(l*10/n)}')
-  SIG+=("cpu:${LOAD_BUCKET}")
   LOAD_TRIPPED=1
 fi
 
@@ -75,7 +72,6 @@ if [ "$MEM_TOTAL" -gt 0 ]; then
     USED_GB=$(awk -v u="$MEM_USED" 'BEGIN{printf "%.1f", u/1048576}')
     TOT_GB=$(awk -v t="$MEM_TOTAL" 'BEGIN{printf "%.1f", t/1048576}')
     WARN+=("MEM: ${MEM_PCT}% used (${USED_GB}/${TOT_GB} GiB)")
-    SIG+=("mem:$((MEM_PCT / 5 * 5))")
   fi
 fi
 
@@ -85,7 +81,6 @@ if [ "$SWAP_TOTAL" -gt 0 ]; then
   if [ "$SWAP_PCT" -gt "$SWAP_THRESH" ]; then
     SU_GB=$(awk -v u="$SWAP_USED" 'BEGIN{printf "%.1f", u/1048576}')
     WARN+=("SWAP: ${SWAP_PCT}% used (${SU_GB} GiB) — thrashing risk")
-    SIG+=("swap:$((SWAP_PCT / 10 * 10))")
   fi
 fi
 
@@ -93,9 +88,6 @@ fi
 DISK_PCT=$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5+0}')
 if [ -n "$DISK_PCT" ] && [ "$DISK_PCT" -gt "$DISK_THRESH" ]; then
   WARN+=("DISK /: ${DISK_PCT}% used")
-  # Disk %used drifts very slowly; `df`'s native 1% granularity is
-  # already coarse enough — no further bucketing.
-  SIG+=("disk:${DISK_PCT}")
 fi
 
 # --- GPU (if nvidia-smi present) ---
@@ -114,7 +106,6 @@ if command -v nvidia-smi >/dev/null 2>&1; then
       mpct=$((mused * 100 / mtotal))
       if [ "$util" -gt "$GPU_UTIL_THRESH" ] || [ "$mpct" -gt "$GPU_MEM_THRESH" ]; then
         WARN+=("GPU${idx}: ${util}% util, mem ${mpct}% (${mused}/${mtotal} MiB)")
-        SIG+=("gpu${idx}:u$((util / 10 * 10))m$((mpct / 5 * 5))")
       fi
     done <<< "$GPU_INFO"
   fi
@@ -134,30 +125,33 @@ if [ "$LOAD_TRIPPED" -eq 1 ]; then
     HOG_ETIMES=$(echo "$HOG_LINE" | awk '{print $3}')
     HOG_COMM=$(echo "$HOG_LINE" | awk '{print $4}')
     WARN+=("Hog: PID ${HOG_PID} ${HOG_COMM} @ ${HOG_PCPU}% avg CPU for ${HOG_ETIMES}s")
-    # Signature uses comm only — pcpu/etimes drift every turn for the
-    # same long-running process, which would defeat the cooldown.
-    SIG+=("hog:${HOG_COMM}")
   fi
 fi
 
-# --- Cooldown: skip if bucketed signature matches last emit for this session.
-#     Always write the new signature (including empty), so the cache tracks
-#     transitions correctly: clean→elevated and elevated→clean both invalidate. ---
-SIG_STR=$(IFS=,; echo "${SIG[*]:-}")
+# Nothing tripped → silent, but leave the cache alone. A re-trip within the
+# cooldown window is still suppressed (the prior emit's timestamp is what
+# gates it). The point of NOT refreshing on clean ticks is to anchor the
+# cooldown to the last *emit* (T_last_emit + COOLDOWN_SEC) rather than the
+# last invocation — otherwise every clean prompt would push the next emit
+# further out, effectively never re-emitting on a steadily-flapping box.
+[ "${#WARN[@]}" -eq 0 ] && exit 0
+
+# --- Cooldown: time-based. Suppress repeat emits within COOLDOWN_SEC of the
+#     last one for this session, regardless of which metrics tripped. ---
 CACHE_DIR=/tmp/claude-system-load
 CACHE_FILE="${CACHE_DIR}/${SID}"
 mkdir -p "$CACHE_DIR"
-CACHED=""
-[ -f "$CACHE_FILE" ] && CACHED=$(cat "$CACHE_FILE")
-if [ "$CACHED" = "$SIG_STR" ]; then
-  exit 0
+NOW=$(date +%s)
+if [ -f "$CACHE_FILE" ]; then
+  LAST=$(cat "$CACHE_FILE" 2>/dev/null || echo 0)
+  [[ "$LAST" =~ ^[0-9]+$ ]] || LAST=0
+  if [ $((NOW - LAST)) -lt "$COOLDOWN_SEC" ]; then
+    exit 0
+  fi
 fi
 TMP="${CACHE_FILE}.tmp.$$"
-printf '%s' "$SIG_STR" > "$TMP"
+printf '%s' "$NOW" > "$TMP"
 mv "$TMP" "$CACHE_FILE"
-
-# Empty signature → state went from elevated to clean; cache updated, no emit.
-[ "${#WARN[@]}" -eq 0 ] && exit 0
 
 CTX="System load elevated — be careful before launching heavy work (builds, training, parallel agents, pueue):"
 for line in "${WARN[@]}"; do

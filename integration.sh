@@ -32,6 +32,12 @@ haiku() {
 }
 
 commit() {
+    if command -v gitleaks >/dev/null 2>&1; then
+        if ! gitleaks detect --no-banner; then
+            echo "gitleaks detected secrets, aborting commit" >&2
+            return 1
+        fi
+    fi
     local extra=""
     if [ $# -gt 0 ]; then
         extra=" Additional user note to help you understand: $*"

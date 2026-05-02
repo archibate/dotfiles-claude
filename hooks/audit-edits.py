@@ -373,7 +373,11 @@ def _render_fixes(issues: list[dict]) -> str:
         "Suggestions from a fresh-eye audit of this turn's edits. The auditor "
         "sees the diff and can Read/Grep the repo, but not the conversation "
         "or the user's intent — treat each item as a hypothesis to verify, "
-        "not a mandatory fix. Apply genuine issues, dismiss false positives."
+        "not a mandatory fix. Apply genuine issues, dismiss false positives. "
+        "Before applying audit suggestions or cargo-culting patterns from "
+        "existing code, verify you understand the original purpose. Dismiss "
+        "false-positive findings with a brief justification rather than "
+        "silently applying."
     )
     if multi:
         preamble += (

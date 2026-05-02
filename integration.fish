@@ -31,6 +31,12 @@ function haiku
 end
 
 function commit
+    if command -sq gitleaks
+        if not gitleaks detect --no-banner
+            echo "gitleaks detected secrets, aborting commit" >&2
+            return 1
+        end
+    end
     set -l extra ""
     if set -q argv[1]
         set extra " Additional user note to help you understand: $argv"

@@ -21,7 +21,8 @@ ANCHORS="(${CMD_ANCHOR_SUDO}|${CMD_WRAPPER})"
 # `pip3?` matches `pip` or `pip3`; CMD_TRAIL ensures it's a complete token
 # (so `pipenv` and `pip-tools` don't trigger).
 # Skip inside an active conda env — conda users may need pip for conda-managed interpreters.
-if [ -z "${CONDA_PREFIX:-}" ] && echo "$command" | grep -qP "${ANCHORS}pip3?${CMD_TRAIL}"; then
+# Skip if uv isn't installed — no point suggesting an unavailable alternative.
+if [ -z "${CONDA_PREFIX:-}" ] && command -v uv >/dev/null 2>&1 && echo "$command" | grep -qP "${ANCHORS}pip3?${CMD_TRAIL}"; then
     emit_pre_tool_deny_bypassable BYPASS_PACKAGE_MANAGER_CHECK 'Use uv instead of pip.
   pip install pkg  →  uv add pkg (project) or uv pip install pkg (venv)
   pip freeze       →  uv pip freeze'
@@ -30,7 +31,8 @@ fi
 
 # Detect npm usage (npm install, npm run, npm ci, etc.)
 # CMD_TRAIL ensures `pnpm` (substring `npm`) doesn't trigger.
-if echo "$command" | grep -qP "${ANCHORS}npm${CMD_TRAIL}"; then
+# Skip if pnpm isn't installed — no point suggesting an unavailable alternative.
+if command -v pnpm >/dev/null 2>&1 && echo "$command" | grep -qP "${ANCHORS}npm${CMD_TRAIL}"; then
     emit_pre_tool_deny_bypassable BYPASS_PACKAGE_MANAGER_CHECK 'Use pnpm instead of npm.
   npm install  →  pnpm install
   npm run      →  pnpm run'

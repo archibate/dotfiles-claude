@@ -14,10 +14,6 @@ function claude-simple
     end
 end
 
-function claude-bare
-    command claude --bare --settings ~/.claude/bare-settings.json $argv
-end
-
 function opus
     claude --model opus $argv
 end
@@ -32,59 +28,6 @@ end
 
 function haiku
     claude --model haiku $argv
-end
-
-function claude-with
-    set -l provider $argv[1]
-    switch $provider
-        case glm
-            set -fx ANTHROPIC_AUTH_TOKEN $ZAI_API_KEY
-        case deepseek
-            set -fx ANTHROPIC_AUTH_TOKEN $DEEPSEEK_API_KEY
-        case aigcdesk
-            set -fx ANTHROPIC_AUTH_TOKEN $AIGCDESK_API_KEY
-        case openrouter
-            set -fx ANTHROPIC_AUTH_TOKEN $OPENROUTER_API_KEY
-        case evolink
-            set -fx ANTHROPIC_AUTH_TOKEN $EVOLINK_API_KEY
-        case qwen
-            set -fx ANTHROPIC_AUTH_TOKEN $LLAMA_API_KEY
-        case gpt
-            # codex-to-claude proxy: ChatGPT OAuth backend, no real token needed.
-            set -fx ANTHROPIC_AUTH_TOKEN dummy
-        case '*'
-            echo "claude-with: unknown provider '$provider'" >&2
-            return 1
-    end
-    claude --settings ~/.claude/providers/$provider.json $argv[2..]
-end
-
-function glm
-    claude-with glm $argv
-end
-
-function deepseek
-    claude-with deepseek $argv
-end
-
-function aigcdesk
-    claude-with aigcdesk $argv
-end
-
-function openrouter
-    claude-with openrouter $argv
-end
-
-function evolink
-    claude-with evolink $argv
-end
-
-function qwen
-    claude-with qwen $argv
-end
-
-function gpt
-    claude-with gpt $argv
 end
 
 function commit

@@ -25,6 +25,8 @@ Specialized tools available:
 - `pdftotext` — PDF text extraction
 - `sqlite3` — SQLite CLI
 - `hyperfine` — command benchmarking
+- `rsync` — file sync/transfer
+- `gitleaks` — secret scanning
 
 ---
 

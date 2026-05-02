@@ -481,6 +481,66 @@ assert_silent no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":"abc","
 assert_deny no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":"600","reason":"x"}}' "dead zone"
 
 echo ""
+echo "=== PreToolUse defaulting hooks ==="
+
+# explore-model-sonnet: only inject model="sonnet" when the calling main agent
+# is itself running on opus. Sonnet/Haiku parents (and undeterminable sessions)
+# pass through untouched.
+em_dir=$(mktemp -d)
+em_opus="$em_dir/opus.jsonl"
+em_haiku="$em_dir/haiku.jsonl"
+em_synth="$em_dir/synth.jsonl"
+em_unread="$em_dir/missing.jsonl"
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-opus-4-7"}}' > "$em_opus"
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-haiku-4-5-20251001"}}' > "$em_haiku"
+# synthetic-only transcript: no real model recorded yet → should fall back to silent
+printf '%s\n' '{"type":"assistant","message":{"model":"<synthetic>"}}' > "$em_synth"
+
+# 1. Opus parent + no model → inject sonnet
+out=$(printf '%s' "$(jq -nc --arg t "$em_opus" '{transcript_path:$t,tool_input:{subagent_type:"Explore",prompt:"x"}}')" | bash ~/.claude/hooks/explore-model-sonnet.sh)
+echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "allow" and .hookSpecificOutput.updatedInput.model == "sonnet"' > "$test_out" \
+  && echo "OK:   explore-model-sonnet injects sonnet for opus parent" \
+  || { echo "FAIL: explore-model-sonnet opus-parent inject: $out"; fail=1; }
+
+# 2. Haiku parent + no model → silent (don't downgrade haiku→sonnet)
+out=$(printf '%s' "$(jq -nc --arg t "$em_haiku" '{transcript_path:$t,tool_input:{subagent_type:"Explore",prompt:"x"}}')" | bash ~/.claude/hooks/explore-model-sonnet.sh)
+[ -z "$out" ] \
+  && echo "OK:   explore-model-sonnet silent for haiku parent" \
+  || { echo "FAIL: explore-model-sonnet should be silent for haiku parent: $out"; fail=1; }
+
+# 3. Opus parent + explicit model already set → silent (don't override caller)
+out=$(printf '%s' "$(jq -nc --arg t "$em_opus" '{transcript_path:$t,tool_input:{subagent_type:"Explore",prompt:"x",model:"haiku"}}')" | bash ~/.claude/hooks/explore-model-sonnet.sh)
+[ -z "$out" ] \
+  && echo "OK:   explore-model-sonnet silent when caller set model" \
+  || { echo "FAIL: explore-model-sonnet should respect caller model: $out"; fail=1; }
+
+# 4. Non-Explore subagent → silent regardless of parent model
+out=$(printf '%s' "$(jq -nc --arg t "$em_opus" '{transcript_path:$t,tool_input:{subagent_type:"Plan",prompt:"x"}}')" | bash ~/.claude/hooks/explore-model-sonnet.sh)
+[ -z "$out" ] \
+  && echo "OK:   explore-model-sonnet silent for non-Explore subagent" \
+  || { echo "FAIL: explore-model-sonnet should be silent for non-Explore: $out"; fail=1; }
+
+# 5. Missing transcript_path → silent (can't determine parent model, fail closed)
+out=$(printf '%s' '{"tool_input":{"subagent_type":"Explore","prompt":"x"}}' | bash ~/.claude/hooks/explore-model-sonnet.sh)
+[ -z "$out" ] \
+  && echo "OK:   explore-model-sonnet silent without transcript_path" \
+  || { echo "FAIL: explore-model-sonnet should be silent without transcript: $out"; fail=1; }
+
+# 6. Unreadable transcript_path → silent
+out=$(printf '%s' "$(jq -nc --arg t "$em_unread" '{transcript_path:$t,tool_input:{subagent_type:"Explore",prompt:"x"}}')" | bash ~/.claude/hooks/explore-model-sonnet.sh)
+[ -z "$out" ] \
+  && echo "OK:   explore-model-sonnet silent on unreadable transcript" \
+  || { echo "FAIL: explore-model-sonnet should be silent on unreadable transcript: $out"; fail=1; }
+
+# 7. Synthetic-only transcript (no real assistant model yet) → silent
+out=$(printf '%s' "$(jq -nc --arg t "$em_synth" '{transcript_path:$t,tool_input:{subagent_type:"Explore",prompt:"x"}}')" | bash ~/.claude/hooks/explore-model-sonnet.sh)
+[ -z "$out" ] \
+  && echo "OK:   explore-model-sonnet silent on synthetic-only transcript" \
+  || { echo "FAIL: explore-model-sonnet should be silent on synthetic-only: $out"; fail=1; }
+
+rm -rf "$em_dir"
+
+echo ""
 echo "=== PostToolUse regression ==="
 
 out=$(printf '%s' '{"tool_response":{"results":[{"url":"https://x","title":"X"}]}}' | bash ~/.claude/hooks/websearch-followup-hint.sh)

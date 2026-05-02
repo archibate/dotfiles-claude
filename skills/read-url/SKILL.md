@@ -8,11 +8,13 @@ description: >
   truncated, summarized, or refused results.
 allowed-tools:
   - Bash(npx defuddle*:*)
+  - Bash(pnpx defuddle*:*)
   - Bash(defuddle*:*)
   - Bash(curl:*)
   - Bash(jq:*)
   - Bash(rg:*)
   - Bash(npm view:*)
+  - Bash(pnpm view:*)
   - Bash(gh repo view:*)
   - Bash(gh gist view:*)
   - Bash(gh issue view:*)

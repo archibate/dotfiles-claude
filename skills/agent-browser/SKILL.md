@@ -7,6 +7,7 @@ description: >
   automation.
 allowed-tools:
   - Bash(npx agent-browser:*)
+  - Bash(pnpx agent-browser:*)
   - Bash(agent-browser:*)
 ---
 

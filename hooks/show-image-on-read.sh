@@ -15,6 +15,10 @@ read_file_path
 ext=$(echo "$file_path" | sed 's/.*\.//' | tr '[:upper:]' '[:lower:]')
 
 if [[ "$ext" =~ ^(png|jpg|jpeg|gif|webp|bmp|svg|ico|tiff|tif)$ ]]; then
-    # Errors suppressed so a missing Kitty terminal doesn't block the Read result
-    uv run "$show_image_script" "$file_path" 2>/dev/null || true
+    # show_image.py uses `kitty @` remote control + `kitten icat`. Skip the
+    # uv-run cold start when kitty isn't on PATH — there's nothing to display to.
+    if command -v kitty >/dev/null 2>&1; then
+        # Errors suppressed so a non-kitty parent terminal doesn't block the Read result
+        uv run "$show_image_script" "$file_path" 2>/dev/null || true
+    fi
 fi

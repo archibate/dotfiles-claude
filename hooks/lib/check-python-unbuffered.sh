@@ -26,8 +26,10 @@ check_python_unbuffered() {
         has_python=true
     fi
 
-    # Just invocation: resolve recipe to check for python
-    if echo "$command" | grep -qP '\bjust\b'; then
+    # Just invocation: resolve recipe to check for python.
+    # Skip if `just` isn't installed — `just --show` would fail per-target and
+    # we'd waste subprocesses returning empty strings on every Bash call.
+    if echo "$command" | grep -qP '\bjust\b' && command -v just >/dev/null 2>&1; then
         # Extract targets: words after 'just' that don't start with -
         local targets
         targets=$(echo "$command" | sed 's/.*\bjust\b//' | tr -s ' ' '\n' | grep -v '^\s*$' | grep -v '^-' | head -5)

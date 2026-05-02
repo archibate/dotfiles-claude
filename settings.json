@@ -307,11 +307,6 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/inject-system-load.sh",
             "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/inject-peer-activity.sh",
-            "timeout": 5
           }
         ]
       }
@@ -363,5 +358,6 @@
   "teammateMode": "auto",
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "advisorModel": "opus"
 }

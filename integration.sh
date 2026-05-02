@@ -15,10 +15,6 @@ claude-simple() {
     fi
 }
 
-claude-bare() {
-    command claude --bare --settings ~/.claude/bare-settings.json "$@"
-}
-
 opus() {
     claude --model opus "$@"
 }
@@ -33,69 +29,6 @@ sonnet() {
 
 haiku() {
     claude --model haiku "$@"
-}
-
-claude-with() {
-    local provider="$1"
-    shift
-    local token
-    case "$provider" in
-        glm)
-            token="$ZAI_API_KEY"
-            ;;
-        deepseek)
-            token="$DEEPSEEK_API_KEY"
-            ;;
-        aigcdesk)
-            token="$AIGCDESK_API_KEY"
-            ;;
-        openrouter)
-            token="$OPENROUTER_API_KEY"
-            ;;
-        evolink)
-            token="$EVOLINK_API_KEY"
-            ;;
-        qwen)
-            token="$LLAMA_API_KEY"
-            ;;
-        gpt)
-            # codex-to-claude proxy: ChatGPT OAuth backend, no real token needed.
-            token="dummy"
-            ;;
-        *)
-            echo "claude-with: unknown provider '$provider'" >&2
-            return 1
-            ;;
-    esac
-    ANTHROPIC_AUTH_TOKEN="$token" claude --settings ~/.claude/providers/"$provider".json "$@"
-}
-
-glm() {
-    claude-with glm "$@"
-}
-
-deepseek() {
-    claude-with deepseek "$@"
-}
-
-aigcdesk() {
-    claude-with aigcdesk "$@"
-}
-
-openrouter() {
-    claude-with openrouter "$@"
-}
-
-evolink() {
-    claude-with evolink "$@"
-}
-
-qwen() {
-    claude-with qwen "$@"
-}
-
-gpt() {
-    claude-with gpt "$@"
 }
 
 commit() {

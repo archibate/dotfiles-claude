@@ -79,8 +79,8 @@ For each file in the diff:
    most incident-shaped flaws only surface from it. Walk the diff once
    more from this vantage. Categories most likely to fire:
    `DOC-contradiction`, `DOC-incident-leak`, `DOC-over-emphasis`,
-   `CODE-sync-not-updated`, `CODE-bandaid`. Their definitions below
-   carry the detection signals.
+   `DOC-duplicates-source`, `CODE-sync-not-updated`, `CODE-bandaid`.
+   Their definitions below carry the detection signals.
 
 ## DOC categories
 
@@ -91,6 +91,7 @@ For each file in the diff:
 - `DOC-defensive-caveat` — warning about a failure mode the reader isn't hitting
 - `DOC-hallucinated-ref` — uncommon API/flag/symbol/command unverified against source
 - `DOC-stale-reference` — file path or quoted snippet no longer matches its target
+- `DOC-duplicates-source` — doc enumerates 2+ concrete identifiers (CLI/function/env-var/path names) that already appear in a source file the doc names or links to; the source is the single point of truth and edits there won't propagate. Suppress when the enumeration is inside a code-block invocation example or when no separate source-of-truth file exists. Cheap detection: (a) diff hunk is in a doc file (`*.md`/`*.rst`/`README*`/`CHANGELOG*`/`*.txt`), (b) added text contains 2+ identifiers separated by commas/slashes/backticks within one sentence or list item, (c) same hunk or its immediate context names a file path that exists in the repo. Confirm by Reading the referenced file's first ~40 lines and checking ≥ 2 of the enumerated identifiers appear there
 - `DOC-audience-mismatch` — agent-facing doc with interactive-human cues, or vice versa; a single edit can quietly switch register mid-doc
 - `DOC-incident-leak` — the doc defends a rule by narrating the incident that produced it (failure showcase, "we saw X happen, so do Y", concrete task details cited as authority) instead of stating the rule in positive imperative form. The incident is conversation residue; the reader just needs the imperative
 - `DOC-style-drift` — list/heading/separator/emoji conventions inconsistent with file

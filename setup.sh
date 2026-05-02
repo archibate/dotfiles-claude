@@ -4,18 +4,102 @@ set -euo pipefail
 REPO="git@github.com:archibate/dotfiles-claude.git"
 TARGET="$HOME/.claude"
 
+# ANSI colors — only when stderr/stdout is a real terminal, otherwise leave
+# the output clean for logs and pipes.
+if [ -t 1 ] && [ -t 2 ]; then
+    BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
+    RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'
+    BLUE=$'\033[34m'; CYAN=$'\033[36m'
+else
+    BOLD=""; DIM=""; RESET=""
+    RED=""; GREEN=""; YELLOW=""; BLUE=""; CYAN=""
+fi
+
+# Hard dependencies. `claude` runs the harness this whole config targets;
+# `git` clones/updates this repo below; `jq` parses every PreToolUse/PostToolUse
+# hook payload; `uv` runs audit-edits.py (Stop hook + PreToolUse Write/Edit/
+# MultiEdit); `node` runs the codex plugin's lifecycle/stop hooks; `npx`
+# launches one-shot skill helpers like `npx defuddle`, `npx -y mcporter`,
+# `npx skills`, `npx agent-browser`. Without these, install fails or hooks
+# error on every tool call.
+missing=()
+for dep in claude git jq uv node npx; do
+    command -v "$dep" >/dev/null 2>&1 || missing+=("$dep")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+    echo "${RED}${BOLD}✗ Required dependencies not installed:${RESET} ${RED}${missing[*]}${RESET}" >&2
+    echo "${YELLOW}${BOLD}Install hints:${RESET}" >&2
+    echo "  ${CYAN}claude${RESET} → ${DIM}curl -fsSL https://claude.ai/install.sh | bash${RESET}" >&2
+    echo "  ${CYAN}git${RESET}    → ${DIM}https://git-scm.com/downloads${RESET}  (apt/brew/pacman install git)" >&2
+    echo "  ${CYAN}jq${RESET}     → ${DIM}https://jqlang.org/download/${RESET}  (apt/brew/pacman install jq)" >&2
+    echo "  ${CYAN}uv${RESET}     → ${DIM}https://docs.astral.sh/uv/getting-started/installation/${RESET}" >&2
+    echo "  ${CYAN}node${RESET}   → ${DIM}https://nodejs.org/${RESET}  (apt/brew/pacman install nodejs)" >&2
+    echo "  ${CYAN}npx${RESET}    → ${DIM}ships with npm (apt/brew/pacman install npm)${RESET}" >&2
+    if command -v claude >/dev/null 2>&1; then
+        echo >&2
+        echo "${YELLOW}Or let claude CLI handle the rest:${RESET}" >&2
+        echo "  ${CYAN}claude \"install these tools on my system: ${missing[*]}\"${RESET}" >&2
+    fi
+    exit 1
+fi
+
 if [ -d "$TARGET/.git" ]; then
+    echo "${BLUE}↻ Updating existing checkout at ${TARGET}…${RESET}"
     git -C "$TARGET" pull --ff-only
 elif [ -d "$TARGET" ]; then
+    echo "${BLUE}↻ Adopting existing ${TARGET} as a git checkout…${RESET}"
     git -C "$TARGET" init
     git -C "$TARGET" remote add origin "$REPO" 2>/dev/null ||
         git -C "$TARGET" remote set-url origin "$REPO"
     git -C "$TARGET" fetch origin
     git -C "$TARGET" checkout -f -B main origin/main
 else
+    echo "${BLUE}↻ Cloning ${REPO} → ${TARGET}…${RESET}"
     git clone "$REPO" "$TARGET"
 fi
 
-echo "Shell integration (add to your rc file):"
-echo "  bash/zsh: source ~/.claude/integration.sh"
-echo "  fish:     source ~/.claude/integration.fish"
+# Install plugins declared as enabled in settings.json. `enabledPlugins: true`
+# only flips the on/off bit for already-installed plugins — it never triggers
+# a download. So on a fresh machine we have to issue `claude plugin install`
+# explicitly for each one.
+SETTINGS="$TARGET/settings.json"
+if [ -f "$SETTINGS" ]; then
+    installed_json="$TARGET/plugins/installed_plugins.json"
+    if [ -f "$installed_json" ]; then
+        installed=$(jq -r '.plugins | keys[]' "$installed_json" 2>/dev/null || true)
+    else
+        installed=""
+    fi
+
+    enabled=$(jq -r '.enabledPlugins // {} | to_entries[] | select(.value == true) | .key' "$SETTINGS")
+    to_install=()
+    while IFS= read -r p; do
+        [ -z "$p" ] && continue
+        if ! grep -qxF "$p" <<< "$installed"; then
+            to_install+=("$p")
+        fi
+    done <<< "$enabled"
+
+    if [ "${#to_install[@]}" -gt 0 ]; then
+        echo
+        echo "${BLUE}${BOLD}Installing ${#to_install[@]} plugin(s) declared in settings.json…${RESET}"
+        for p in "${to_install[@]}"; do
+            echo "  ${CYAN}↻ ${p}${RESET}"
+            if ! claude plugin install "$p"; then
+                echo "    ${YELLOW}⚠ failed; continuing${RESET}" >&2
+            fi
+        done
+    fi
+fi
+
+echo
+echo "${GREEN}${BOLD}✓ Setup complete.${RESET} ${DIM}(re-run this script anytime to pull updates)${RESET}"
+echo
+echo "${YELLOW}${BOLD}Optional next steps:${RESET}"
+echo "  ${CYAN}bash ~/.claude/integration-install.sh${RESET}  ${DIM}— wire the shell integration into your rc file${RESET}"
+echo "  ${CYAN}claude \"which CLI tools in ~/.claude/CLAUDE.md am I missing?\"${RESET}  ${DIM}— inventory preferred CLI tools${RESET}"
+if ! command -v codex >/dev/null 2>&1; then
+    echo "  ${CYAN}npm install -g @openai/codex${RESET}  ${DIM}— optional co-op: enables /codex:rescue, /codex:review, and the stop-time review gate${RESET}"
+elif ! codex login status >/dev/null 2>&1; then
+    echo "  ${CYAN}codex login${RESET}  ${DIM}— optional co-op: codex CLI is installed but not authed${RESET}"
+fi

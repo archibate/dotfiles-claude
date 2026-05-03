@@ -47,7 +47,7 @@ Conventions:
 
 - `emit_pre_tool_deny "reason"` — emits the PreToolUse deny JSON.
 - `emit_pre_tool_deny_bypassable MARKER "reason"` — same, but appends the canonical bypass footer (`If legitimate or false-positive, prepend \`# MARKER\` to the Bash command.`). Use this in every Bash-command `no-*` hook so wording stays consistent. Skip for non-Bash hooks like `no-schedule-skill.sh` / `no-schedule-wakeup-deadzone.sh` — their bypass markers live in tool-specific JSON fields, not in a Bash command, so the canned footer would mis-direct the agent.
-- `emit_pre_tool_warn "hint"` — emits the PreToolUse allow JSON with `additionalContext`. Use for non-blocking advisories where a hard-deny would be too noisy. (No callers in tree right now; reserved.)
+- `emit_pre_tool_warn "hint"` — emits PreToolUse JSON with `additionalContext` and no `permissionDecision`. Use for non-blocking advisories where a hard-deny would be too noisy.
 - `emit_post_tool_context "ctx"` — emits PostToolUse additionalContext JSON.
 
 ### `lib/check-python-unbuffered.sh`

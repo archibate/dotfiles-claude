@@ -4,8 +4,10 @@
 
 # Scrub env that some hooks consult, so tests reproduce the hook behavior a
 # fresh user environment would see (Claude's runtime env can set
-# PYTHONUNBUFFERED, masking deny tests).
+# PYTHONUNBUFFERED, masking deny tests; CC_PROJECT marks cc-connect sessions
+# that tldr-summary opts out of).
 unset PYTHONUNBUFFERED
+unset CC_PROJECT
 
 fail=0
 
@@ -697,6 +699,290 @@ echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("DISK")' >
   || { echo "FAIL: inject-system-load re-trip after cooldown: $out"; fail=1; }
 
 rm -f "$sysl_cache"
+
+echo ""
+echo "=== Skill-recall hint hooks ==="
+
+# hint-skill-frontend-design: nudge agent to load the frontend-design skill
+# before writing an HTML file. Once-per-session cache (signature: session_id).
+hsfd_sid="hsfd-$$"
+hsfd_cache="/tmp/claude-skill-hint-frontend-design/$hsfd_sid"
+rm -f "$hsfd_cache"
+
+# 1. .html first fire → emit hint
+out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid" '{session_id:$s,tool_input:{file_path:"/tmp/x.html",content:"<html/>"}}')" \
+       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
+echo "$out" | jq -e '(.hookSpecificOutput.permissionDecision | not) and (.hookSpecificOutput.additionalContext | contains("frontend-design"))' > "$test_out" \
+  && echo "OK:   hint-skill-frontend-design fires on first .html write" \
+  || { echo "FAIL: hint-skill-frontend-design first .html: $out"; fail=1; }
+
+# 2. .html second fire same session → cache hit, silent
+out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid" '{session_id:$s,tool_input:{file_path:"/tmp/y.html",content:"<html/>"}}')" \
+       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-frontend-design silent on repeat in same session" \
+  || { echo "FAIL: hint-skill-frontend-design should be silent on repeat: $out"; fail=1; }
+
+# 3. Non-html extension → silent
+out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid" '{session_id:$s,tool_input:{file_path:"/tmp/x.py",content:"x=1"}}')" \
+       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-frontend-design silent on .py write" \
+  || { echo "FAIL: hint-skill-frontend-design wrong-extension: $out"; fail=1; }
+
+# 4. Different session → hint emitted again (cache is per-session)
+hsfd_sid2="hsfd2-$$"
+hsfd_cache2="/tmp/claude-skill-hint-frontend-design/$hsfd_sid2"
+rm -f "$hsfd_cache2"
+out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid2" '{session_id:$s,tool_input:{file_path:"/tmp/z.html",content:"<html/>"}}')" \
+       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("frontend-design")' > "$test_out" \
+  && echo "OK:   hint-skill-frontend-design re-fires for new session_id" \
+  || { echo "FAIL: hint-skill-frontend-design new session: $out"; fail=1; }
+
+# 5. .htm extension also covered
+hsfd_sid3="hsfd3-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid3" '{session_id:$s,tool_input:{file_path:"/tmp/legacy.htm",content:"<html/>"}}')" \
+       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("frontend-design")' > "$test_out" \
+  && echo "OK:   hint-skill-frontend-design fires on .htm too" \
+  || { echo "FAIL: hint-skill-frontend-design .htm: $out"; fail=1; }
+
+rm -f "$hsfd_cache" "$hsfd_cache2" "/tmp/claude-skill-hint-frontend-design/$hsfd_sid3"
+
+# hint-skill-just-cli: nudge before `just <recipe>` Bash calls or
+# Write/Edit on a justfile. Once-per-session cache shared across all routes.
+hsj_sid="hsj-$$"
+hsj_cache="/tmp/claude-skill-hint-just-cli/$hsj_sid"
+rm -f "$hsj_cache"
+
+# 1. Bash route: bare `just build` → emit hint
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid" '{session_id:$s,tool_input:{command:"just build"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("just-cli")' > "$test_out" \
+  && echo "OK:   hint-skill-just-cli fires on Bash 'just build'" \
+  || { echo "FAIL: hint-skill-just-cli bash route: $out"; fail=1; }
+
+# 2. Cache hit on second call → silent
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid" '{session_id:$s,tool_input:{command:"just deploy"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-just-cli silent on second bash call (cache hit)" \
+  || { echo "FAIL: hint-skill-just-cli should be silent on repeat: $out"; fail=1; }
+
+# 3. Substring 'justice' must NOT trigger
+rm -f "$hsj_cache"
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid" '{session_id:$s,tool_input:{command:"cd /tmp/justice"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-just-cli silent on 'cd /tmp/justice' (substring guard)" \
+  || { echo "FAIL: hint-skill-just-cli substring guard: $out"; fail=1; }
+
+# 4. 'echo just kidding' — no separator before just → silent
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid" '{session_id:$s,tool_input:{command:"echo just kidding"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-just-cli silent on prose mention of 'just'" \
+  || { echo "FAIL: hint-skill-just-cli prose mention: $out"; fail=1; }
+
+# 5a. sudo wrapper (anchor lib coverage): `sudo just deploy` → fires
+hsj_sid_sudo="hsj-sudo-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid_sudo" '{session_id:$s,tool_input:{command:"sudo just deploy"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("just-cli")' > "$test_out" \
+  && echo "OK:   hint-skill-just-cli fires through sudo wrapper" \
+  || { echo "FAIL: hint-skill-just-cli sudo wrapper: $out"; fail=1; }
+
+# 5b. bash -c wrapper (anchor lib coverage): `bash -c "just build"` → fires
+hsj_sid_bashc="hsj-bashc-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid_bashc" '{session_id:$s,tool_input:{command:"bash -c \"just build\""}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("just-cli")' > "$test_out" \
+  && echo "OK:   hint-skill-just-cli fires through bash -c wrapper" \
+  || { echo "FAIL: hint-skill-just-cli bash -c wrapper: $out"; fail=1; }
+
+# 5c. FP guard: `grep just /etc/passwd` mentions just but not at command
+# position — the trailing /etc/passwd is an argument, not a separator.
+hsj_sid_fp="hsj-fp-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid_fp" '{session_id:$s,tool_input:{command:"grep just /etc/passwd"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-just-cli silent on grep argument 'just'" \
+  || { echo "FAIL: hint-skill-just-cli grep arg FP: $out"; fail=1; }
+
+# 6. File route: Write justfile → fires
+hsj_sid_file="hsj-file-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid_file" '{session_id:$s,tool_input:{file_path:"/proj/justfile"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("just-cli")' > "$test_out" \
+  && echo "OK:   hint-skill-just-cli fires on Write justfile" \
+  || { echo "FAIL: hint-skill-just-cli file route: $out"; fail=1; }
+
+# 7. Capitalized Justfile → still fires (case-insensitive basename)
+hsj_sid_cap="hsj-cap-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid_cap" '{session_id:$s,tool_input:{file_path:"/proj/Justfile"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("just-cli")' > "$test_out" \
+  && echo "OK:   hint-skill-just-cli fires on Justfile (case-insensitive)" \
+  || { echo "FAIL: hint-skill-just-cli case-insensitive: $out"; fail=1; }
+
+# 8. Unrelated file → silent
+hsj_sid_other="hsj-other-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid_other" '{session_id:$s,tool_input:{file_path:"/proj/README.md"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-just-cli silent on unrelated file" \
+  || { echo "FAIL: hint-skill-just-cli unrelated file: $out"; fail=1; }
+
+# 9. Cross-route dedupe: bash trip → file trip in same session → only first fires
+hsj_sid_x="hsj-x-$$"
+hsj_cache_x="/tmp/claude-skill-hint-just-cli/$hsj_sid_x"
+rm -f "$hsj_cache_x"
+printf '%s' "$(jq -nc --arg s "$hsj_sid_x" '{session_id:$s,tool_input:{command:"just test"}}')" \
+  | bash ~/.claude/hooks/hint-skill-just-cli.sh > "$test_out"
+out=$(printf '%s' "$(jq -nc --arg s "$hsj_sid_x" '{session_id:$s,tool_input:{file_path:"/proj/justfile"}}')" \
+       | bash ~/.claude/hooks/hint-skill-just-cli.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-just-cli silent across routes after first fire" \
+  || { echo "FAIL: hint-skill-just-cli cross-route dedupe: $out"; fail=1; }
+
+rm -f "$hsj_cache" "/tmp/claude-skill-hint-just-cli/$hsj_sid_file" \
+      "/tmp/claude-skill-hint-just-cli/$hsj_sid_cap" \
+      "/tmp/claude-skill-hint-just-cli/$hsj_sid_other" \
+      "/tmp/claude-skill-hint-just-cli/$hsj_sid_sudo" \
+      "/tmp/claude-skill-hint-just-cli/$hsj_sid_bashc" \
+      "/tmp/claude-skill-hint-just-cli/$hsj_sid_fp" \
+      "$hsj_cache_x"
+
+# hint-agent-claude-code-guide: nudge the agent to consult the
+# claude-code-guide subagent before editing files under any `.claude/`
+# directory. Once-per-session cache (signature: session_id).
+hccg_sid="hccg-$$"
+hccg_cache="/tmp/claude-hint-agent-claude-code-guide/$hccg_sid"
+rm -f "$hccg_cache"
+
+# 1. Absolute path under ~/.claude/ → emit hint
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid" '{session_id:$s,tool_input:{file_path:"/home/bate/.claude/settings.json"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+echo "$out" | jq -e '(.hookSpecificOutput.permissionDecision | not) and (.hookSpecificOutput.additionalContext | contains("claude-code-guide"))' > "$test_out" \
+  && echo "OK:   hint-agent-claude-code-guide fires on first ~/.claude/ edit" \
+  || { echo "FAIL: hint-agent-claude-code-guide first edit: $out"; fail=1; }
+
+# 2. Same session, different .claude/ file → cache hit, silent
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid" '{session_id:$s,tool_input:{file_path:"/home/bate/.claude/hooks/foo.sh"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-agent-claude-code-guide silent on repeat in same session" \
+  || { echo "FAIL: hint-agent-claude-code-guide should be silent on repeat: $out"; fail=1; }
+
+# 3. Project-local <repo>/.claude/... in a new session → fires
+hccg_sid2="hccg2-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid2" '{session_id:$s,tool_input:{file_path:"/some/repo/.claude/agents/foo.md"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("claude-code-guide")' > "$test_out" \
+  && echo "OK:   hint-agent-claude-code-guide fires on project-local .claude/ path" \
+  || { echo "FAIL: hint-agent-claude-code-guide project-local: $out"; fail=1; }
+
+# 4. Relative leading-segment .claude/... → fires
+hccg_sid3="hccg3-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid3" '{session_id:$s,tool_input:{file_path:".claude/skills/x.md"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("claude-code-guide")' > "$test_out" \
+  && echo "OK:   hint-agent-claude-code-guide fires on relative .claude/ path" \
+  || { echo "FAIL: hint-agent-claude-code-guide relative path: $out"; fail=1; }
+
+# 5. Unrelated path → silent
+hccg_sid4="hccg4-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid4" '{session_id:$s,tool_input:{file_path:"/tmp/foo.py"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-agent-claude-code-guide silent on unrelated path" \
+  || { echo "FAIL: hint-agent-claude-code-guide unrelated: $out"; fail=1; }
+
+# 6. FP guard: .claudeignore must NOT trigger (no `/` after `.claude`)
+hccg_sid5="hccg5-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid5" '{session_id:$s,tool_input:{file_path:"/home/bate/.claudeignore"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-agent-claude-code-guide silent on .claudeignore (FP guard)" \
+  || { echo "FAIL: hint-agent-claude-code-guide .claudeignore FP: $out"; fail=1; }
+
+# 7. FP guard: foo.claude/bar.txt must NOT trigger (no `/` before `.claude`)
+hccg_sid6="hccg6-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid6" '{session_id:$s,tool_input:{file_path:"/home/bate/foo.claude/bar.txt"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-agent-claude-code-guide silent on foo.claude/ (FP guard)" \
+  || { echo "FAIL: hint-agent-claude-code-guide foo.claude FP: $out"; fail=1; }
+
+rm -f "$hccg_cache" \
+      "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid2" \
+      "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid3"
+
+echo ""
+echo "=== Stop hooks ==="
+
+# tldr-summary: emit a block decision when the latest assistant text exceeds
+# TLDR_MIN_LINES (default 10). Skip on stop_hook_active (anti-loop), already-
+# present 📌 marker (anti-loop fallback, format defined in the /tldr skill),
+# and empty/short responses.
+
+tldr_long=$(for i in $(seq 1 15); do echo "line $i"; done)
+tldr_short=$(for i in $(seq 1 5); do echo "line $i"; done)
+
+# 1. Long via last_assistant_message → emits block + reason pointing to /tldr skill
+out=$(printf '%s' "$(jq -nc --arg t "$tldr_long" '{last_assistant_message:$t,stop_hook_active:false}')" | bash ~/.claude/hooks/tldr-summary.sh)
+echo "$out" | jq -e '.decision == "block" and (.reason | contains("/tldr"))' > "$test_out" \
+  && echo "OK:   tldr-summary emits block on long response (last_assistant_message path)" \
+  || { echo "FAIL: tldr-summary should block on long response: $out"; fail=1; }
+
+# 2. Short via last_assistant_message → silent
+out=$(printf '%s' "$(jq -nc --arg t "$tldr_short" '{last_assistant_message:$t,stop_hook_active:false}')" | bash ~/.claude/hooks/tldr-summary.sh)
+[ -z "$out" ] \
+  && echo "OK:   tldr-summary silent on short response" \
+  || { echo "FAIL: tldr-summary should be silent on short: $out"; fail=1; }
+
+# 3. stop_hook_active=true → silent even when long (anti-loop primary guard)
+out=$(printf '%s' "$(jq -nc --arg t "$tldr_long" '{last_assistant_message:$t,stop_hook_active:true}')" | bash ~/.claude/hooks/tldr-summary.sh)
+[ -z "$out" ] \
+  && echo "OK:   tldr-summary silent when stop_hook_active=true" \
+  || { echo "FAIL: tldr-summary should be silent on stop_hook_active: $out"; fail=1; }
+
+# 4. Long but already contains the /tldr skill's 📌 marker → silent
+#    (anti-loop fallback guard, mirrors the format defined in the skill)
+tldr_with_marker="$tldr_long
+📌 already done"
+out=$(printf '%s' "$(jq -nc --arg t "$tldr_with_marker" '{last_assistant_message:$t,stop_hook_active:false}')" | bash ~/.claude/hooks/tldr-summary.sh)
+[ -z "$out" ] \
+  && echo "OK:   tldr-summary silent when 📌 marker already present" \
+  || { echo "FAIL: tldr-summary should skip if already summarized: $out"; fail=1; }
+
+# 5. Missing last_assistant_message → silent (degraded payload)
+out=$(printf '%s' '{"stop_hook_active":false}' | bash ~/.claude/hooks/tldr-summary.sh)
+[ -z "$out" ] \
+  && echo "OK:   tldr-summary silent on empty payload" \
+  || { echo "FAIL: tldr-summary should be silent on empty payload: $out"; fail=1; }
+
+# 6. Custom TLDR_MIN_LINES — env override is respected
+out=$(TLDR_MIN_LINES=3 printf '%s' "$(jq -nc --arg t "$tldr_short" '{last_assistant_message:$t,stop_hook_active:false}')" | TLDR_MIN_LINES=3 bash ~/.claude/hooks/tldr-summary.sh)
+echo "$out" | jq -e '.decision == "block"' > "$test_out" \
+  && echo "OK:   tldr-summary honors TLDR_MIN_LINES override" \
+  || { echo "FAIL: tldr-summary should respect TLDR_MIN_LINES=3: $out"; fail=1; }
+
+# 7. Reason stays compact — the format/rules live in the /tldr skill, so the
+#    Stop-hook reason should be short (token economy: full prompt no longer
+#    re-emitted on every fire).
+out=$(printf '%s' "$(jq -nc --arg t "$tldr_long" '{last_assistant_message:$t,stop_hook_active:false}')" | bash ~/.claude/hooks/tldr-summary.sh)
+reason_len=$(echo "$out" | jq -r '.reason | length')
+[ "$reason_len" -lt 200 ] \
+  && echo "OK:   tldr-summary reason stays compact (${reason_len} chars, prompt offloaded to skill)" \
+  || { echo "FAIL: tldr-summary reason should be <200 chars after skill refactor: ${reason_len}"; fail=1; }
+
+# 8. cc-connect opt-out: CC_PROJECT set → silent even on a long response
+out=$(CC_PROJECT=demo printf '%s' "$(jq -nc --arg t "$tldr_long" '{last_assistant_message:$t,stop_hook_active:false}')" | CC_PROJECT=demo bash ~/.claude/hooks/tldr-summary.sh)
+[ -z "$out" ] \
+  && echo "OK:   tldr-summary silent when CC_PROJECT is set" \
+  || { echo "FAIL: tldr-summary should be silent for cc-connect sessions: $out"; fail=1; }
 
 rm -f "$test_out"
 

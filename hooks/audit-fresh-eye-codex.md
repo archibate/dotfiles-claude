@@ -56,7 +56,7 @@ For each file in the diff:
 - `DOC-contradiction` — new statements contradict unchanged surrounding text, established rules, or other structured sections of the same artifact (frontmatter vs. body, declared interface vs. prose, schema vs. description, sequence in one part vs. sequence in another)
 - `DOC-over-emphasis` — bold/emoji/ALL-CAPS density disproportionate to surrounding lines or to the content's load-bearingness
 - `DOC-tonal-drift` — new content rhetorical strength/length differs from siblings
-- `DOC-justifying-aside` — parenthetical defending an obvious claim
+- `DOC-justifying-aside` — parenthetical defending an obvious claim. Common signals: `(e.g. ...)` or `(i.e. ...)` immediately after a phrase whose meaning the reader already grasps from the preceding clause
 - `DOC-defensive-caveat` — warning about a failure mode the reader isn't hitting
 - `DOC-hallucinated-ref` — uncommon API/flag/symbol/command unverified against source
 - `DOC-stale-reference` — file path or quoted snippet no longer matches its target
@@ -75,6 +75,7 @@ For each file in the diff:
 - `CODE-structural-drift` — defensiveness/abstraction depth/verbosity differs from adjacent code
 - `CODE-defensive` — unwarranted try/except, null-coalescing, hasattr/getattr, over-validation
 - `CODE-bandaid` — a fix shaped by the current incident rather than by the surrounding codebase: hardcoded workaround, backward-compat shim, monkey patch, swallowed error, dead leftover, or code/values that only resolve against the conversation that produced them
+- `CODE-redundant-fallback` — a preferred new path was added alongside the deprecated old path kept as a "just in case" fallback in the same change. Signals: `if new/else old`, `try new / except: <old impl>`, `new or old` / `coalesce(new, old)` chains, comments like "fall back to X if …" where X is the implementation the new branch was meant to replace. Distinct from legitimate version-compat or feature-detection forks where both branches genuinely run in production.
 - `CODE-hallucinated-ref` — uncommon library API/CLI flag/config key unverified
 - `CODE-scope-creep` — drive-by rename, unsolicited refactor, formatting mixed with logic fix
 - `CODE-style-drift` — naming/indentation/import order/error handling/idiom inconsistent

@@ -44,15 +44,13 @@ emit_pre_tool_deny_bypassable() {
 If legitimate or false-positive, append \`# ${marker}\` to the Bash command."
 }
 
-# emit_pre_tool_warn "hint" — non-blocking advisory: lets the tool call proceed
-# (permissionDecision: allow) while injecting `hint` into Claude's context so
-# it can react if the call fails downstream. Use when the hook has useful but
-# not authoritative information about an impending tool call.
+# emit_pre_tool_warn "hint" — non-blocking advisory. It injects `hint` into
+# Claude's context without setting permissionDecision, so normal permission
+# handling still applies.
 emit_pre_tool_warn() {
     jq -n --arg ctx "$1" '{
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
-        permissionDecision: "allow",
         additionalContext: $ctx
       }
     }'

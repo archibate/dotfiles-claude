@@ -2,6 +2,24 @@
 # Peer state classification. Pane-visible state drives the top-level state;
 # transcript is consulted as an authority check and for modal subtype.
 
+# Capture the peer's pane with ANSI escapes preserved, then strip dim ghost
+# text (Claude Code renders the autocomplete suggestion with SGR 2/dim) and
+# remaining color codes. Without this step the suggestion bytes look like a
+# real user draft and trip the drafting gate. Echoes the cleaned tail.
+_capture_clean_tail() {
+  local target="$1" body
+  body=$(tm capture-pane -p -J -e -t "$target" 2>/dev/null) || return 1
+  body=$(tail -n 15 <<<"$body")
+  # Strip dim (SGR 2) segments — perl -0777 lets the regex span newlines so a
+  # ghost suggestion that wraps doesn't survive the pass.
+  body=$(printf '%s' "$body" | perl -0777 -pe 's/\e\[2m[^\e]*\e\[[0-9;]*m//g')
+  # Strip remaining SGR codes so box-rule detection sees plain `─` lines.
+  body=$(printf '%s' "$body" | perl -0777 -pe 's/\e\[[0-9;]*m//g')
+  # Claude Code pads the input line with NBSP (U+00A0); normalize to ASCII space.
+  body=$(sed $'s/\xc2\xa0/ /g' <<<"$body")
+  printf '%s' "$body"
+}
+
 # Returns one of: idle | busy | drafting | modal | other (on stdout).
 peer_state() {
   local target="$1"
@@ -12,17 +30,24 @@ peer_state() {
   esac
 
   local body
-  body=$(tm capture-pane -p -J -t "$target" 2>/dev/null) || { printf 'other\n'; return 0; }
-  body=$(tail -n 15 <<<"$body")
-  # Claude Code pads the input line with NBSP (U+00A0); normalize to ASCII space.
-  body=$(sed $'s/\xc2\xa0/ /g' <<<"$body")
+  body=$(_capture_clean_tail "$target") || { printf 'other\n'; return 0; }
 
   grep -qP '^─{10,}$' <<<"$body" || { printf 'other\n'; return 0; }
   grep -qP '^❯ '      <<<"$body" || { printf 'other\n'; return 0; }
 
+  # Box is bounded above by the top ─ rule and below by either a second ─
+  # rule (legacy UI) OR the status line carrying `[N%]` (current UI no longer
+  # draws a closing rule below the input). Without the status-line guard the
+  # awk falls through to EOF and slurps status + hint lines into the draft.
   local box draft menu_lines
-  box=$(awk '/^─{10,}$/ { if (inside) exit; inside=1; next } inside { print }' <<<"$body")
-  draft=$(tr -d '❯ \t\n' <<<"$box")
+  box=$(awk '
+    /^─{10,}$/                  { if (inside) exit; inside=1; next }
+    inside && /\[[0-9]+%\]/     { exit }
+    inside                      { print }
+  ' <<<"$body")
+  # Strip prompt glyph, whitespace, and ─ (current UI fills the empty input
+  # row with ─ as a field underline — visually a placeholder, not content).
+  draft=$(tr -d '❯─ \t\n' <<<"$box")
   if [[ -z "$draft" ]]; then
     printf 'idle\n'; return 0
   fi
@@ -83,15 +108,18 @@ check_transcript_end_turn() {
 # below it as if it were a draft.
 peer_box_state() {
   local target="$1" body box draft menu_lines
-  body=$(tm capture-pane -p -J -t "$target" 2>/dev/null) || { printf 'unknown\n'; return 0; }
-  body=$(tail -n 15 <<<"$body")
-  body=$(sed $'s/\xc2\xa0/ /g' <<<"$body")
+  body=$(_capture_clean_tail "$target") || { printf 'unknown\n'; return 0; }
 
   grep -qP '^─{10,}' <<<"$body" || { printf 'unknown\n'; return 0; }
   grep -qP '^❯ '     <<<"$body" || { printf 'unknown\n'; return 0; }
 
-  box=$(awk '/^─{10,}/ { if (inside) exit; inside=1; next } inside { print }' <<<"$body")
-  draft=$(tr -d '❯ \t\n' <<<"$box")
+  # Same status-line bound as peer_state — current UI omits the closing rule.
+  box=$(awk '
+    /^─{10,}/                   { if (inside) exit; inside=1; next }
+    inside && /\[[0-9]+%\]/     { exit }
+    inside                      { print }
+  ' <<<"$body")
+  draft=$(tr -d '❯─ \t\n' <<<"$box")
   if [[ -z "$draft" ]]; then printf 'empty\n'; return 0; fi
   menu_lines=$(grep -cE '^[[:space:]❯]*[0-9]+[.)]' <<<"$box" || true)
   if (( menu_lines >= 2 )); then printf 'modal\n'; else printf 'drafting\n'; fi

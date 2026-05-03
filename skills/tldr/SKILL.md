@@ -1,9 +1,9 @@
 ---
 name: tldr
-description: Append a one-line summary to a long prior response so the user can fast-read the verdict.
+description: Append a one-line summary to a long prior response so the user can fast-read the verdict. Use after outputing a final text response >=10 lines.
 ---
 
-Append exactly one line as a TLDR summary for the user to fast-read the verdict.
+After a final text response >=10 lines, append exactly one line as a TLDR summary for the user to fast-read the verdict.
 
 Format strictly:
   📌 <verdict in under 20 words>

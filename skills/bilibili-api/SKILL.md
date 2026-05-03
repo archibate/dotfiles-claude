@@ -72,6 +72,8 @@ credential = Credential(
 )
 ```
 
+**Local convention — check first:** This machine stores credentials at `~/.config/bilibili.env` (chmod 600).
+
 **Extract from browser:** Open bilibili.com > F12 DevTools > Application (Chrome) or Storage (Firefox) > Cookies > `.bilibili.com` > copy `SESSDATA`, `bili_jct`, `buvid3`.
 
 **Programmatic login:** Use `login_v2` module for QR code, password, or SMS login.

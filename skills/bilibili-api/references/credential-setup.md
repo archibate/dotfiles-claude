@@ -1,5 +1,32 @@
 # Credential Setup
 
+## Local convention (check first)
+
+Credentials live at **`~/.config/bilibili.env`** (chmod 600), `.env` format with keys `SESSDATA`, `BILI_JCT`, `BUVID3`, `BUVID4`, `DEDEUSERID`, `AC_TIME_VALUE`. Loader:
+
+```python
+from pathlib import Path
+from bilibili_api import Credential
+
+def load_cred() -> Credential:
+    vals = {}
+    for line in (Path.home() / ".config" / "bilibili.env").read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            k, _, v = line.partition("=")
+            vals[k.strip()] = v.strip()
+    return Credential(
+        sessdata=vals["SESSDATA"],
+        bili_jct=vals["BILI_JCT"],
+        buvid3=vals.get("BUVID3", ""),
+        buvid4=vals.get("BUVID4", ""),
+        dedeuserid=vals.get("DEDEUSERID", ""),
+        ac_time_value=vals.get("AC_TIME_VALUE", ""),
+    )
+```
+
+Fall back to browser extraction (below) only when this file is missing or stale; rewrite the file so future runs find it.
+
 ## Credential Class
 
 The `Credential` class stores authentication cookies required for Bilibili API access.
@@ -218,19 +245,23 @@ credential = Credential(
 )
 ```
 
-3. **Use `.env` files** (add to `.gitignore`):
+3. **Use `.env` files** (chmod 600, add to `.gitignore` if inside a repo). Keys match the [Local convention](#local-convention-check-first) above so the file is shareable across scripts:
 
-```python
-# .env
-BILI_SESSDATA=your_sessdata
+```ini
+# ~/.config/bilibili.env
+SESSDATA=your_sessdata
 BILI_JCT=your_bili_jct
-BILI_BUVID3=your_buvid3
+BUVID3=your_buvid3
+BUVID4=your_buvid4
+DEDEUSERID=your_uid
 ```
 
+Load with the standard pattern shown in the Local convention section, or with `python-dotenv` if you prefer:
+
 ```python
-# Load from .env
-from dotenv import load_dotenv
-load_dotenv()
+from pathlib import Path
+from dotenv import dotenv_values
+vals = dotenv_values(Path("~/.config/bilibili.env").expanduser())
 ```
 
 4. **Rotate credentials** periodically

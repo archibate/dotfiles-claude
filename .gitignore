@@ -56,9 +56,11 @@
 # archibate personal skills
 /skills/adb-wireless
 /skills/bilibili-mp3
+/skills/bilibili-cover
 /skills/sync-translation
 /skills/system-monitor
 
 __pycache__/
 RTK.md
 .codex
+.claude-usage-cache.json

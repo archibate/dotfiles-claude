@@ -11,6 +11,7 @@ source "$HERE/lib/safety.sh"
 # shellcheck source=../lib/write.sh
 source "$HERE/lib/write.sh"
 
+# BEGIN_DISPATCHER  -- build-portable.sh uses this marker; do not rename
 usage() {
   cat <<EOF
 Usage: claude-dm <verb> [args...]

@@ -163,6 +163,6 @@ Every write appends to `~/.claude/claude-dm.log` with timestamp, verb, target, a
 ## Limitations
 
 - 🔴 **TOCTOU** — peer may enter a modal between check and send; the safety gate is best-effort, not transactional.
-- 🔴 **Cross-machine** — not supported; tmux socket is local. Wrap with `ssh host tmux …` if you really need it.
+- 🔴 **Cross-machine** — not supported directly; tmux socket is local. To address peers on an SSH host or inside a Docker container, build the single-file bundle and run it on the remote: see `portable/README.md`.
 - 🟡 **UI drift** — safety checks encode the current Claude Code UI (`✳` glyph, `❯` prompt, `─` rules). Future UI changes may need the regexes updated in `lib/safety.sh`.
 - 🟡 **Injection signals as real user** — the peer sees the DM as though the human typed it. Identify yourself in prose messages (`"DM from <your-addr>: …"`) so the peer can reason about trust.

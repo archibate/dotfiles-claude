@@ -1,0 +1,666 @@
+#!/usr/bin/env bash
+# portable-claude-dm  build=1d95c1b  built=2026-05-05T00:17:57+08:00
+# bundled from lib/{common,read,safety,write}.sh + bin/claude-dm
+set -euo pipefail
+
+# ---- runtime dependency check ----
+# Covers commands invoked by lib/{common,read,safety,write}.sh and the dispatcher.
+for _c in tmux jq awk sed pgrep ps find tr wc head tail cat grep stat date sleep cp; do
+  command -v "$_c" >/dev/null 2>&1 || { echo "portable-claude-dm: missing dep: $_c" >&2; exit 127; }
+done
+unset _c
+
+# ==================== lib/common.sh ====================
+# shellcheck shell=bash
+# Shared helpers. Sourced by the dispatcher and all other lib files.
+
+: "${CLAUDE_DM_SOCKET:=/tmp/tmux-$(id -u)/default}"
+: "${CLAUDE_DM_LOG:=$HOME/.claude/claude-dm.log}"
+: "${CLAUDE_SESSIONS_DIR:=$HOME/.claude/sessions}"
+: "${CLAUDE_PROJECTS_DIR:=$HOME/.claude/projects}"
+
+SOCKET="$CLAUDE_DM_SOCKET"
+
+tm() { tmux -S "$SOCKET" "$@"; }
+
+die() { printf 'claude-dm: %s\n' "$*" >&2; exit 1; }
+warn() { printf 'claude-dm: %s\n' "$*" >&2; }
+
+audit() {
+  printf '%s\t%s\t%s\n' "$(date -Iseconds)" "$1" "$2" >> "$CLAUDE_DM_LOG"
+}
+
+# pane_pid -> claude pid. When tmux launches a shell, pane_pid is the shell
+# and claude is its child. When tmux launches claude directly (e.g. `new-session
+# '... claude'`), pane_pid itself is claude.
+pane_to_claude_pid() {
+  local pid="$1" comm
+  comm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')
+  if [[ "$comm" == "claude" ]]; then
+    printf '%s\n' "$pid"
+    return 0
+  fi
+  pgrep -P "$pid" -x claude 2>/dev/null | head -n 1
+}
+
+# target -> pane_pid (shell leader, not the claude process itself)
+target_pane_pid() {
+  tm display-message -p -t "$1" '#{pane_pid}' 2>/dev/null
+}
+
+# target -> claude pid (the process whose sessionId we care about)
+target_pid() {
+  local pp cp
+  pp=$(target_pane_pid "$1") || return 1
+  [[ -n "$pp" ]] || return 1
+  cp=$(pane_to_claude_pid "$pp")
+  [[ -n "$cp" ]] || return 1
+  printf '%s\n' "$cp"
+}
+
+# target -> current pane_title
+target_title() {
+  tm display-message -p -t "$1" '#{pane_title}' 2>/dev/null
+}
+
+# target -> pane_current_command
+target_cmd() {
+  tm display-message -p -t "$1" '#{pane_current_command}' 2>/dev/null
+}
+
+# pid -> sessionId (via ~/.claude/sessions/<pid>.json)
+pid_to_sid() {
+  local pid="$1" f="$CLAUDE_SESSIONS_DIR/$1.json"
+  [[ -f "$f" ]] || return 1
+  jq -r '.sessionId // empty' "$f"
+}
+
+# sessionId -> transcript jsonl path (first match)
+sid_to_transcript() {
+  local sid="$1"
+  local match
+  match=$(find "$CLAUDE_PROJECTS_DIR" -maxdepth 2 -name "$sid.jsonl" -print -quit 2>/dev/null)
+  [[ -n "$match" ]] || return 1
+  printf '%s\n' "$match"
+}
+
+# target -> transcript path
+target_transcript() {
+  local pid sid
+  pid=$(target_pid "$1") || return 1
+  [[ -n "$pid" ]] || return 1
+  sid=$(pid_to_sid "$pid") || return 1
+  sid_to_transcript "$sid"
+}
+
+# Resolve the current pane to a session:window.pane addr on its tmux socket.
+# Honours the actual socket from $TMUX (not CLAUDE_DM_SOCKET) since "self" must
+# target the real running pane. Mutates SOCKET so subsequent tm() calls follow.
+# Prints addr; returns nonzero with a warning if not running inside tmux.
+self_target() {
+  [[ -n "${TMUX:-}" ]]      || { warn "not running inside tmux"; return 1; }
+  [[ -n "${TMUX_PANE:-}" ]] || { warn "TMUX_PANE not set"; return 1; }
+  SOCKET="${TMUX%%,*}"
+  tmux -S "$SOCKET" display-message -p -t "$TMUX_PANE" \
+    '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null
+}
+
+# Walk PPID chain to find this session's claude pid.
+self_claude_pid() {
+  local pid="$PPID" comm
+  while [[ -n "$pid" && "$pid" -gt 1 ]]; do
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')
+    [[ "$comm" == "claude" ]] && { printf '%s\n' "$pid"; return 0; }
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+  done
+  return 1
+}
+
+# Stderr hint when self can't appear in the roster: (a) not in tmux (only
+# fires if $CLAUDECODE is set — silent for non-Claude callers), or (b) tmux
+# socket differs from $CLAUDE_DM_SOCKET. Stdout untouched.
+warn_self_unlisted() {
+  if [[ -z "${TMUX:-}" ]]; then
+    [[ -n "${CLAUDECODE:-}" ]] || return 0
+    local cpid sid
+    cpid=$(self_claude_pid || true)
+    sid=$(pid_to_sid "${cpid:-0}" 2>/dev/null || true)
+    warn "self not listed: not in tmux (pid=${cpid:-?} sid=${sid:-?}). Ask user to re-spawn yourself inside tmux to be addressable."
+    return 0
+  fi
+  local self_sock="${TMUX%%,*}" addr
+  [[ "$self_sock" == "$SOCKET" ]] && return 0
+  addr=$(tmux -S "$self_sock" display-message -p -t "${TMUX_PANE:-}" \
+    '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || true)
+  warn "self not listed: on socket $self_sock (as ${addr:-?}), listing $SOCKET. Try CLAUDE_DM_SOCKET=$self_sock."
+}
+
+# ==================== lib/read.sh ====================
+# shellcheck shell=bash
+# Read-only verbs: roster, peek, tail.
+
+# Emit TSV: addr, pid, state(idle|busy), sessionId, title
+# Self-row gets a trailing '*' on ADDR (display-only marker; strip before
+# passing to other verbs). Self is detected only when $CLAUDE_DM_SOCKET
+# matches the socket from $TMUX; cross-socket runs show no marker.
+dm_roster() {
+  local self_addr=""
+  if [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" && "${TMUX%%,*}" == "$SOCKET" ]]; then
+    self_addr=$(tm display-message -p -t "$TMUX_PANE" \
+      '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || true)
+  fi
+
+  tm list-panes -a \
+      -F '#{pane_pid}	#{session_name}:#{window_index}.#{pane_index}	#{pane_current_command}	#{pane_title}' \
+    | awk -F'\t' '$3=="claude"' \
+    | while IFS=$'\t' read -r pane_pid addr _cmd title; do
+        local state cpid sid marker=""
+        case "$title" in
+          '✳'*) state='idle'  ;;
+          *)    state='busy'  ;;
+        esac
+        cpid=$(pane_to_claude_pid "$pane_pid")
+        [[ -n "$cpid" ]] || continue
+        sid=$(pid_to_sid "$cpid" || true)
+        [[ -n "$self_addr" && "$addr" == "$self_addr" ]] && marker="*"
+        printf '%s%s\t%s\t%s\t%s\t%s\n' "$addr" "$marker" "$cpid" "$state" "$sid" "$title"
+      done
+}
+
+dm_peek() {
+  local target="$1" n="${2:-30}"
+  local tr
+  tr=$(target_transcript "$target") || die "no transcript for $target"
+  jq -r '
+    select(.type=="assistant")
+    | .message.content[]?
+    | select(.type=="text")
+    | .text
+  ' "$tr" | tail -n "$n"
+}
+
+dm_tail() {
+  local target="$1"
+  local tr
+  tr=$(target_transcript "$target") || die "no transcript for $target"
+  tail -n 0 -F "$tr" | jq -rc --unbuffered '
+    if .type=="assistant" then
+      (.message.content[]? | select(.type=="text") | "A> " + .text),
+      (.message.content[]? | select(.type=="tool_use") | "A> [tool] " + .name + " " + (.input|tostring|.[0:200]))
+    elif .type=="user" then
+      if (.message.content|type)=="string" then "U> " + .message.content
+      else (.message.content[]? | select(.type=="text") | "U> " + .text)
+      end
+    else empty
+    end
+  '
+}
+
+# ==================== lib/safety.sh ====================
+# shellcheck shell=bash
+# Peer state classification. Pane-visible state drives the top-level state;
+# transcript is consulted as an authority check and for modal subtype.
+
+# Capture the peer's pane with ANSI escapes preserved, then strip dim ghost
+# text (Claude Code renders the autocomplete suggestion with SGR 2/dim) and
+# remaining color codes. Without this step the suggestion bytes look like a
+# real user draft and trip the drafting gate. Echoes the cleaned tail.
+_capture_clean_tail() {
+  local target="$1" body
+  body=$(tm capture-pane -p -J -e -t "$target" 2>/dev/null) || return 1
+  body=$(tail -n 15 <<<"$body")
+  # Strip dim (SGR 2) segments — perl -0777 lets the regex span newlines so a
+  # ghost suggestion that wraps doesn't survive the pass.
+  body=$(printf '%s' "$body" | perl -0777 -pe 's/\e\[2m[^\e]*\e\[[0-9;]*m//g')
+  # Strip remaining SGR codes so box-rule detection sees plain `─` lines.
+  body=$(printf '%s' "$body" | perl -0777 -pe 's/\e\[[0-9;]*m//g')
+  # Claude Code pads the input line with NBSP (U+00A0); normalize to ASCII space.
+  body=$(sed $'s/\xc2\xa0/ /g' <<<"$body")
+  printf '%s' "$body"
+}
+
+# Returns one of: idle | busy | drafting | modal | other (on stdout).
+peer_state() {
+  local target="$1"
+  local title; title=$(target_title "$target")
+  case "$title" in
+    '✳'*) ;;
+    *)    printf 'busy\n'; return 0 ;;
+  esac
+
+  local body
+  body=$(_capture_clean_tail "$target") || { printf 'other\n'; return 0; }
+
+  grep -qP '^─{10,}$' <<<"$body" || { printf 'other\n'; return 0; }
+  grep -qP '^❯ '      <<<"$body" || { printf 'other\n'; return 0; }
+
+  # Box is bounded above by the top ─ rule and below by either a second ─
+  # rule (legacy UI) OR the status line carrying `[N%]` (current UI no longer
+  # draws a closing rule below the input). Without the status-line guard the
+  # awk falls through to EOF and slurps status + hint lines into the draft.
+  local box draft menu_lines
+  box=$(awk '
+    /^─{10,}$/                  { if (inside) exit; inside=1; next }
+    inside && /\[[0-9]+%\]/     { exit }
+    inside                      { print }
+  ' <<<"$body")
+  # Strip prompt glyph, whitespace, and ─ (current UI fills the empty input
+  # row with ─ as a field underline — visually a placeholder, not content).
+  draft=$(tr -d '❯─ \t\n' <<<"$box")
+  if [[ -z "$draft" ]]; then
+    printf 'idle\n'; return 0
+  fi
+
+  # Non-empty box: a menu (2+ numbered options) indicates a modal; otherwise a draft.
+  menu_lines=$(grep -cE '^[[:space:]❯]*[0-9]+[.)]' <<<"$box" || true)
+  if (( menu_lines >= 2 )); then
+    printf 'modal\n'
+  else
+    printf 'drafting\n'
+  fi
+}
+
+# When state is `modal`, return its subtype by looking at the peer's most recent
+# unmatched tool_use in the transcript: permission | question | other.
+modal_subtype() {
+  local target="$1" tr name
+  tr=$(target_transcript "$target") || { printf 'other\n'; return 0; }
+  name=$(tac "$tr" \
+    | jq -rc 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") | .name' \
+    | head -n 1)
+  case "$name" in
+    AskUserQuestion)              printf 'question\n'   ;;
+    Bash|Edit|Write|NotebookEdit) printf 'permission\n' ;;
+    '')                           printf 'other\n'      ;;
+    *)                            printf 'permission\n' ;;
+  esac
+}
+
+# Transcript sanity check: reject only if the most recent assistant turn has a
+# non-terminal stop_reason (e.g. tool_use pending result). Pane state is the
+# authoritative liveness signal; this catches the narrow mid-tool case where
+# the UI might briefly show idle while the transcript says a tool is in flight.
+# User-only tails (fresh / interrupted sessions) and no-transcript cases pass.
+check_transcript_end_turn() {
+  local tr
+  tr=$(target_transcript "$1") || return 0
+  local last_type last_stop
+  read -r last_type last_stop < <(tac "$tr" \
+    | jq -rc 'select(.type=="assistant" or .type=="user") | "\(.type) \(.message.stop_reason // "")"' \
+    | head -n 1) || true
+  if [[ "$last_type" == "assistant" && "$last_stop" != "end_turn" && -n "$last_stop" ]]; then
+    printf 'last assistant turn stop=%s\n' "$last_stop"
+    return 1
+  fi
+  return 0
+}
+
+# Classify the input box without checking pane title. For self-DM the title is
+# always busy (the agent is mid-turn), but the box still tells us whether the
+# user has queued a draft or a modal is open. Returns: empty | drafting | modal
+# | unknown.
+#
+# Differs from peer_state's box extraction: matches rules that *start* with
+# 10+ ─ chars rather than requiring the whole line, so that titled rules
+# (e.g. `──── working-dir ────`) count as box delimiters. Without this, the
+# top rule misses, awk only sees the bottom rule, and slurps the status line
+# below it as if it were a draft.
+peer_box_state() {
+  local target="$1" body box draft menu_lines
+  body=$(_capture_clean_tail "$target") || { printf 'unknown\n'; return 0; }
+
+  grep -qP '^─{10,}' <<<"$body" || { printf 'unknown\n'; return 0; }
+  grep -qP '^❯ '     <<<"$body" || { printf 'unknown\n'; return 0; }
+
+  # Same status-line bound as peer_state — current UI omits the closing rule.
+  box=$(awk '
+    /^─{10,}/                   { if (inside) exit; inside=1; next }
+    inside && /\[[0-9]+%\]/     { exit }
+    inside                      { print }
+  ' <<<"$body")
+  draft=$(tr -d '❯─ \t\n' <<<"$box")
+  if [[ -z "$draft" ]]; then printf 'empty\n'; return 0; fi
+  menu_lines=$(grep -cE '^[[:space:]❯]*[0-9]+[.)]' <<<"$box" || true)
+  if (( menu_lines >= 2 )); then printf 'modal\n'; else printf 'drafting\n'; fi
+}
+
+# True iff state is idle AND transcript confirms end_turn. Prints reason on stderr.
+safe_to_dm() {
+  local target="$1" state reason
+  state=$(peer_state "$target")
+  if [[ "$state" != "idle" ]]; then
+    printf 'state=%s\n' "$state" >&2; return 1
+  fi
+  reason=$(check_transcript_end_turn "$target") || { printf 'transcript %s\n' "$reason" >&2; return 1; }
+}
+
+# ==================== lib/write.sh ====================
+# shellcheck shell=bash
+# Write verbs. All writes go through safe_to_dm unless --force is passed.
+
+# Send prose. Single-line uses send-keys -l; multi-line uses bracketed paste so
+# embedded newlines insert into the buffer rather than submit.
+dm_send() {
+  local target="$1" msg="$2" force="${3:-}"
+  if [[ "$force" != "--force" ]]; then
+    safe_to_dm "$target" || die "peer $target not in a safe state (use --force to override)"
+  fi
+  if [[ "$msg" == *$'\n'* ]]; then
+    printf '%s' "$msg" | tm load-buffer -
+    tm paste-buffer -t "$target" -p
+    # Claude Code needs a moment to finish consuming the bracketed-paste
+    # sequence before Enter; without the gap, Enter lands mid-paste and is
+    # treated as a newline in the buffer instead of submit.
+    sleep 0.2
+  else
+    tm send-keys -t "$target" -l -- "$msg"
+  fi
+  tm send-keys -t "$target" Enter
+  audit send "$target: $msg"
+}
+
+# Slash-command tiers. Red commands are irreversible for the peer and require --confirm.
+cmd_tier() {
+  case "$1" in
+    /clear|/exit|/resume|/reset) printf 'red\n'  ;;
+    /compact|/loop|/schedule)    printf 'yellow\n' ;;
+    *)                           printf 'green\n'  ;;
+  esac
+}
+
+# Send a slash command. --confirm unlocks red tier; --force skips safety gate.
+dm_cmd() {
+  local target="$1" cmd="$2"; shift 2
+  [[ "$cmd" == /* ]] || die "not a slash command: $cmd"
+
+  local force=0 confirm=0
+  for a in "$@"; do
+    case "$a" in
+      --force)   force=1 ;;
+      --confirm) confirm=1 ;;
+      *) die "unknown flag: $a" ;;
+    esac
+  done
+
+  local tier; tier=$(cmd_tier "${cmd%% *}")
+  if [[ "$tier" == "red" && "$confirm" -eq 0 ]]; then
+    die "refusing red-tier command $cmd without --confirm"
+  fi
+
+  if [[ "$force" -eq 0 ]]; then
+    safe_to_dm "$target" || die "peer $target not in a safe state (use --force)"
+  fi
+
+  tm send-keys -t "$target" -l -- "$cmd"
+  tm send-keys -t "$target" Enter
+  audit cmd "$target: $cmd (tier=$tier)"
+}
+
+# Emergency interrupt. Sends Escape: cancels peer's in-flight turn, dismisses
+# modals, clears autocomplete. Refuses on drafting (would wipe human's draft).
+dm_esc() {
+  local target="$1" force="${2:-}"
+  local state; state=$(peer_state "$target")
+  if [[ "$state" == "drafting" && "$force" != "--force" ]]; then
+    die "peer $target is drafting; --force to esc anyway (will clear human's draft)"
+  fi
+  tm send-keys -t "$target" Escape
+  audit esc "$target (state=$state)"
+}
+
+# Answer a modal (permission or AskUserQuestion) with a single keystroke.
+# Typical values: 1, 2, 3 (numbered shortcut); some modals also accept y/n/a.
+dm_answer() {
+  local target="$1" key="$2" force="${3:-}"
+  [[ -n "$key" ]] || die "answer key required (e.g. 1, 2, 3)"
+  if [[ "$force" != "--force" ]]; then
+    local state; state=$(peer_state "$target")
+    [[ "$state" == "modal" ]] || die "peer $target not in modal (state=$state); --force to override"
+  fi
+  tm send-keys -t "$target" -l -- "$key"
+  audit answer "$target: $key"
+}
+
+# Self-trigger an allowlisted user-only slash command on the current pane.
+# Forks a background daemon that waits for the agent's current turn to end,
+# then injects the slash command followed by a wake-up notification at
+# peer-idle (see the daemon block below for why deferring is required).
+# Allowlist: /compact, /context, /rename. Other commands either destroy the
+# session (/clear, /exit), or are already callable via the Skill tool (/loop,
+# /schedule, custom skills). Refuses if the input box already has a draft or
+# modal, or if the box state is unparseable.
+dm_self() {
+  local cmd="$1"
+  [[ "$cmd" == /* ]] || die "not a slash command: $cmd"
+  local base="${cmd%% *}"
+  case "$base" in
+    /compact|/context|/rename) ;;
+    *) die "self-DM allowlist is /compact, /context, /rename (got: $cmd)" ;;
+  esac
+
+  local target; target=$(self_target) || die "self_target failed (must run inside a tmux pane)"
+  [[ -n "$target" ]] || die "could not resolve current tmux pane"
+
+  local box; box=$(peer_box_state "$target")
+  case "$box" in
+    empty)    ;;
+    drafting) die "input box has unsubmitted text on $target; refusing to clobber draft" ;;
+    modal)    die "modal active in input box on $target; refusing to inject" ;;
+    unknown)  die "could not parse input box on $target; refusing self-DM" ;;
+  esac
+
+  # Background daemon: wait for the agent's current turn to end, then inject
+  # the slash command followed by a wake-up notification. Both keystrokes go
+  # in at peer-idle so /context runs cleanly and its output bundles into the
+  # notification user message — the agent receives one real user turn that
+  # contains the slash output AND the wake-up cue.
+  #
+  # Why background: the caller is the agent itself, mid-turn. send-keys at
+  # this moment lands in a live input box and gets submitted prematurely
+  # (slash output orphaned, notification arrives as an interrupt). Deferring
+  # to peer-idle makes the sequence behave as if the user had typed it after
+  # the turn ended.
+  (
+    # Wait for the agent's turn to fully end. Two idle signals, either suffices:
+    #   (a) peer_state == idle (title shows ✳)
+    #   (b) transcript file unmodified for ≥ QUIET_S seconds AND box empty
+    # (b) is necessary because some sessions have stop-hook feedback loops that
+    # keep the title busy for minutes — but the transcript stops growing once
+    # the loop terminates. 0.5s polling × 1200 = 10 min cap.
+    QUIET_S=3
+    tr=$(target_transcript "$target" 2>/dev/null || true)
+    polls=0
+    fired=0
+    while (( polls < 1200 )); do
+      if [[ "$(peer_state "$target")" == "idle" ]]; then fired=1; break; fi
+      if [[ -n "$tr" && -f "$tr" ]]; then
+        mtime=$(stat -c %Y "$tr" 2>/dev/null || echo 0)
+        now=$(date +%s)
+        if (( now - mtime >= QUIET_S )) && [[ "$(peer_box_state "$target")" == "empty" ]]; then
+          fired=1; break
+        fi
+      fi
+      sleep 0.5
+      polls=$((polls + 1))
+    done
+    if (( fired == 0 )); then
+      audit self "$target: $cmd (timeout waiting for idle, daemon gave up)"
+      exit 1
+    fi
+    # Re-check the box at idle; refuse if a draft or modal appeared while we
+    # were waiting (would clobber the user's input).
+    case "$(peer_box_state "$target")" in
+      empty) ;;
+      *) audit self "$target: $cmd (box not empty at idle, daemon gave up)"; exit 1 ;;
+    esac
+    tm send-keys -t "$target" -l -- "$cmd"
+    tm send-keys -t "$target" Enter
+    sleep 0.5
+    tm send-keys -t "$target" -l -- "<notification>claude-dm self $cmd dispatched; output above</notification>"
+    tm send-keys -t "$target" Enter
+    audit self "$target: $cmd (fired at idle, polls=$polls)"
+  ) &
+  disown
+  audit self "$target: $cmd (queued for post-turn wake-up)"
+}
+
+dm_ask() {
+  local target="$1" msg="$2" timeout="${3:-120}"
+  local tag tr start_lines=0 waited=0
+  tag="DONE-$(date +%s%N)"
+
+  # Fresh sessions have no transcript yet; start_lines stays 0 until send creates it.
+  if tr=$(target_transcript "$target" 2>/dev/null); then
+    start_lines=$(wc -l <"$tr")
+  fi
+
+  dm_send "$target" "$msg
+
+Please end your reply with the sentinel: $tag"
+
+  while (( waited < timeout )); do
+    if tr=$(target_transcript "$target" 2>/dev/null); then
+      local assistant_text
+      assistant_text=$(tail -n +"$((start_lines + 1))" "$tr" \
+        | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text')
+      if grep -qF "$tag" <<<"$assistant_text"; then
+        sed "/$tag/Q" <<<"$assistant_text"
+        return 0
+      fi
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  die "timeout waiting for reply sentinel $tag on $target"
+}
+
+# ==================== bin/claude-dm (dispatcher) ====================
+usage() {
+  cat <<EOF
+Usage: claude-dm <verb> [args...]
+
+Read-only:
+  list                         roster of claude panes on \$CLAUDE_DM_SOCKET
+  peek  <target> [lines]       last N text blocks from peer's transcript (default 30)
+  tail  <target>               follow peer's transcript live
+  status <target>              show pane title, state, transcript path
+
+Write:
+  send   <target> <msg> [--force]                 DM a prose message; gated by safe_to_dm
+  cmd    <target> /<slash>  [--force] [--confirm] slash command; --confirm needed for red tier
+  ask    <target> <msg> [timeout_s]               DM + block until peer reply (sentinel; default 120s)
+  esc    <target> [--force]                       send Escape (emergency interrupt / modal cancel)
+  answer <target> <key> [--force]                 reply to modal (1/2/3/y/n/a); requires state=modal
+  self   /<slash>                                 queue an allowlisted slash command on the current pane
+                                                  (allowlist: /compact, /context, /rename); refuses unless input box is empty
+
+Env:
+  CLAUDE_DM_SOCKET=$SOCKET
+EOF
+}
+
+cmd_list() {
+  printf 'ADDR\tPID\tSTATE\tSID\tTITLE\n'
+  dm_roster
+  warn_self_unlisted
+}
+
+cmd_peek() {
+  local target="${1:?target required: session:window.pane}"
+  dm_peek "$target" "${2:-30}"
+}
+
+cmd_tail() {
+  local target="${1:?target required}"
+  dm_tail "$target"
+}
+
+cmd_status() {
+  local target="${1:?target required}"
+  local pid title sid tr
+  pid=$(target_pid "$target") || die "no such pane: $target"
+  [[ -n "$pid" ]] || die "no such pane: $target"
+  title=$(target_title "$target")
+  sid=$(pid_to_sid "$pid" 2>/dev/null || true)
+  tr=$(target_transcript "$target" 2>/dev/null || true)
+
+  printf 'target      %s\n' "$target"
+  printf 'pid         %s\n' "$pid"
+  printf 'title       %s\n' "$title"
+  printf 'cmd         %s\n' "$(target_cmd "$target")"
+  printf 'sessionId   %s\n' "${sid:-<none>}"
+  printf 'transcript  %s\n' "${tr:-<none>}"
+
+  local state; state=$(peer_state "$target")
+  printf 'state       %s' "$state"
+  if [[ "$state" == "modal" ]]; then
+    printf ' (%s)' "$(modal_subtype "$target")"
+  fi
+  printf '\n'
+
+  local reason
+  if reason=$(safe_to_dm "$target" 2>&1); then
+    printf 'safe_to_dm  yes\n'
+  else
+    printf 'safe_to_dm  no (%s)\n' "$reason"
+  fi
+}
+
+cmd_send() {
+  local target="${1:?target required}"
+  local msg="${2:?message required}"
+  local force="${3:-}"
+  dm_send "$target" "$msg" "$force"
+}
+
+cmd_cmd() {
+  local target="${1:?target required}"
+  local slash="${2:?slash command required}"
+  shift 2
+  dm_cmd "$target" "$slash" "$@"
+}
+
+cmd_ask() {
+  local target="${1:?target required}"
+  local msg="${2:?message required}"
+  local timeout="${3:-120}"
+  dm_ask "$target" "$msg" "$timeout"
+}
+
+cmd_esc() {
+  local target="${1:?target required}"
+  local force="${2:-}"
+  dm_esc "$target" "$force"
+}
+
+cmd_answer() {
+  local target="${1:?target required}"
+  local key="${2:?answer key required}"
+  local force="${3:-}"
+  dm_answer "$target" "$key" "$force"
+}
+
+cmd_self() {
+  local slash="${1:?slash command required (e.g. /compact)}"
+  dm_self "$slash"
+}
+
+main() {
+  local verb="${1:-}"; shift || true
+  case "$verb" in
+    list)   cmd_list   "$@" ;;
+    peek)   cmd_peek   "$@" ;;
+    tail)   cmd_tail   "$@" ;;
+    status) cmd_status "$@" ;;
+    send)   cmd_send   "$@" ;;
+    cmd)    cmd_cmd    "$@" ;;
+    ask)    cmd_ask    "$@" ;;
+    esc)    cmd_esc    "$@" ;;
+    answer) cmd_answer "$@" ;;
+    self)   cmd_self   "$@" ;;
+    ''|-h|--help|help) usage ;;
+    *) usage >&2; die "unknown verb: $verb" ;;
+  esac
+}
+
+main "$@"

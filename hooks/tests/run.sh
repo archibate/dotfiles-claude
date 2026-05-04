@@ -400,19 +400,50 @@ assert_silent no-head-read '{"tool_input":{"command":"sudo head -n 80 /etc/shado
 # A stray sudo earlier in a chained command must NOT silence the head-read check
 assert_deny no-head-read '{"tool_input":{"command":"sudo apt update; head -n 80 /tmp/x"}}' "Read tool"
 
-# no-head-tail-pipe: trailing `| head` / `| tail` truncates internal output
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "truncate by line position"
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"cat /tmp/x | tail -n 5"}}' "truncate by line position"
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"git log | head -20"}}' "BYPASS_HEAD_TAIL_CHECK"
-assert_deny no-head-tail-pipe '{"tool_input":{"command":"ls | head"}}' "If legitimate or false-positive"
-assert_silent no-head-tail-pipe '{"tool_input":{"command":"ls"}}'
-# Bare `head -n N <file>` lacks a leading pipe — separate hook (no-head-read) handles it
-assert_silent no-head-tail-pipe '{"tool_input":{"command":"head -n 5 /tmp/x"}}'
-# Intermediate head — output still continues into another pipe stage, not truncating
-assert_silent no-head-tail-pipe '{"tool_input":{"command":"cmd | head | wc -l"}}'
-# `||` is logical-or, not a pipe
-assert_silent no-head-tail-pipe '{"tool_input":{"command":"cmd || head -n 5 file"}}'
-assert_silent no-head-tail-pipe '{"tool_input":{"command":"# BYPASS_HEAD_TAIL_CHECK\nls | head"}}'
+# no-head-tail-pipe: soft oneshot hint — trailing `| head` / `| tail`
+# truncates the internal pipeline output. First trigger per session emits
+# additionalContext; subsequent triggers in the same session are silent.
+nht_sid="nht-$$"
+nht_cache_dir=/tmp/claude-hint-no-head-tail-pipe
+nht_cache="$nht_cache_dir/$nht_sid"
+rm -f "$nht_cache"
+
+# 1. First fire on `ls | head` → hint emitted (no permissionDecision)
+out=$(printf '%s' "$(jq -nc --arg s "$nht_sid" '{session_id:$s,tool_input:{command:"ls | head"}}')" \
+       | bash ~/.claude/hooks/no-head-tail-pipe.sh)
+echo "$out" | jq -e '(.hookSpecificOutput.permissionDecision | not) and (.hookSpecificOutput.additionalContext | contains("truncates by line position"))' > "$test_out" \
+  && echo "OK:   no-head-tail-pipe emits hint on first trailing-head pipe" \
+  || { echo "FAIL: no-head-tail-pipe first fire: $out"; fail=1; }
+
+# 2. Second trigger same session → cache hit, silent
+out=$(printf '%s' "$(jq -nc --arg s "$nht_sid" '{session_id:$s,tool_input:{command:"cat /tmp/x | tail -n 5"}}')" \
+       | bash ~/.claude/hooks/no-head-tail-pipe.sh)
+[ -z "$out" ] \
+  && echo "OK:   no-head-tail-pipe silent on repeat in same session" \
+  || { echo "FAIL: no-head-tail-pipe should be silent on repeat: $out"; fail=1; }
+
+# 3. New session_id → re-fires (cache is per-session)
+nht_sid2="nht2-$$"
+nht_cache2="$nht_cache_dir/$nht_sid2"
+rm -f "$nht_cache2"
+out=$(printf '%s' "$(jq -nc --arg s "$nht_sid2" '{session_id:$s,tool_input:{command:"git log | head -20"}}')" \
+       | bash ~/.claude/hooks/no-head-tail-pipe.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("truncates by line position")' > "$test_out" \
+  && echo "OK:   no-head-tail-pipe re-fires on new session_id" \
+  || { echo "FAIL: no-head-tail-pipe new session: $out"; fail=1; }
+
+# 4. Non-trigger commands — silent regardless of cache state. Use a unique
+# session id so a stray future-trigger bug would still surface.
+nht_sid_safe="nht-safe-$$"
+for safe_cmd in "ls" "head -n 5 /tmp/x" "cmd | head | wc -l" "cmd || head -n 5 file"; do
+  out=$(printf '%s' "$(jq -nc --arg s "$nht_sid_safe" --arg c "$safe_cmd" '{session_id:$s,tool_input:{command:$c}}')" \
+         | bash ~/.claude/hooks/no-head-tail-pipe.sh)
+  [ -z "$out" ] \
+    && echo "OK:   no-head-tail-pipe silent on '$safe_cmd'" \
+    || { echo "FAIL: no-head-tail-pipe should be silent on '$safe_cmd': $out"; fail=1; }
+done
+
+rm -f "$nht_cache" "$nht_cache2"
 assert_deny no-sed-print "$(jq -n --arg c "echo x | sed -n '12,13p' /tmp/x" '{tool_input:{command:$c}}')" "sed -n"
 assert_deny no-cat-write "$(jq -n --arg c "echo go | cat << EOF ${REDIR} /tmp/x
 hi

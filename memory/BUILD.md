@@ -98,15 +98,16 @@ TASK: Incremental update of my long-term memory pipeline at ~/.claude/memory/.
 
 Audit ~/.claude/memory/promoted.md and prune entries matching any of:
   1. Completed historical events (e.g. a rename that has already happened, a one-time setup step).
-  2. Version-pinned facts that will rot (specific Claude Code version numbers, specific model+hardware benchmark numbers).
-  3. Legacy protocol/auth details for a path the same file already declares superseded by a current path.
-  4. Vague meta-advice with no concrete future trigger.
+  2. Legacy protocol/auth details for a path the same file already declares superseded by a current path.
+  3. Vague meta-advice with no concrete future trigger.
+  4. Version-pinned facts that will rot.
+  5. Empirical results or numbers.
 
 For each entry pruned:
   - If a durable kernel survives (methodology, conclusion, sweet-spot rule), keep that kernel and drop the specifics.
   - Otherwise delete the bullet entirely.
 
-Write the originals (verbatim) into ~/.claude/memory/cleaned.md, grouped under their original section headers, each entry followed by a one-line deletion reason in parentheses. Header: "# Cleaned from promoted.md" + today's date. Then head to BUILD INDEX.
+Write the originals (verbatim) into ~/.claude/memory/cleaned.md, grouped under their original section headers, each entry followed by a one-line deletion reason in parentheses. Then head to BUILD INDEX.
 
 ## BUILD INDEX
 

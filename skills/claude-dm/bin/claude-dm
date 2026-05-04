@@ -38,6 +38,7 @@ EOF
 cmd_list() {
   printf 'ADDR\tPID\tSTATE\tSID\tTITLE\n'
   dm_roster
+  warn_self_unlisted
 }
 
 cmd_peek() {

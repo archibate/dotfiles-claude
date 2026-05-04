@@ -91,3 +91,33 @@ self_target() {
   tmux -S "$SOCKET" display-message -p -t "$TMUX_PANE" \
     '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null
 }
+
+# Walk PPID chain to find this session's claude pid.
+self_claude_pid() {
+  local pid="$PPID" comm
+  while [[ -n "$pid" && "$pid" -gt 1 ]]; do
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')
+    [[ "$comm" == "claude" ]] && { printf '%s\n' "$pid"; return 0; }
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+  done
+  return 1
+}
+
+# Stderr hint when self can't appear in the roster: (a) not in tmux (only
+# fires if $CLAUDECODE is set — silent for non-Claude callers), or (b) tmux
+# socket differs from $CLAUDE_DM_SOCKET. Stdout untouched.
+warn_self_unlisted() {
+  if [[ -z "${TMUX:-}" ]]; then
+    [[ -n "${CLAUDECODE:-}" ]] || return 0
+    local cpid sid
+    cpid=$(self_claude_pid || true)
+    sid=$(pid_to_sid "${cpid:-0}" 2>/dev/null || true)
+    warn "self not listed: not in tmux (pid=${cpid:-?} sid=${sid:-?}). Ask user to re-spawn yourself inside tmux to be addressable."
+    return 0
+  fi
+  local self_sock="${TMUX%%,*}" addr
+  [[ "$self_sock" == "$SOCKET" ]] && return 0
+  addr=$(tmux -S "$self_sock" display-message -p -t "${TMUX_PANE:-}" \
+    '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || true)
+  warn "self not listed: on socket $self_sock (as ${addr:-?}), listing $SOCKET. Try CLAUDE_DM_SOCKET=$self_sock."
+}

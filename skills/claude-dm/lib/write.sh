@@ -156,9 +156,11 @@ dm_self() {
       empty) ;;
       *) audit self "$target: $cmd (box not empty at idle, daemon gave up)"; exit 1 ;;
     esac
+    tm send-keys -t "$target" Escape
+    sleep 1
     tm send-keys -t "$target" -l -- "$cmd"
     tm send-keys -t "$target" Enter
-    sleep 0.5
+    sleep 1
     tm send-keys -t "$target" -l -- "<notification>claude-dm self $cmd dispatched; output above</notification>"
     tm send-keys -t "$target" Enter
     audit self "$target: $cmd (fired at idle, polls=$polls)"

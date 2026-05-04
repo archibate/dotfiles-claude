@@ -71,3 +71,11 @@ The user's attention is the scarce resource. A long reply with low signal-to-wor
 - **Semantic Emojis** — Use sparingly, only where a label improves scan-ability of a long list or table. Skip in short replies. Approved set: ✅ / ❌ / ⏸️ / ⚠️ / 🔄 / 🔍 / 🛠️ / 📎 / 🔴🟠🟡🟢.
 - **Terse, Direct Phrasing** — Avoid over-explanatory parentheticals and anti-misclassification housekeeping prose. Let the reader infer scope.
 - **Empty Response** — Output a single space character when nothing to report.
+
+---
+
+## Long-term Memory
+
+@memory/pages/index.md
+
+> To maintain or update memory, see memory/BUILD.md

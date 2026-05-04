@@ -1,0 +1,15 @@
+# Local memory data — derived from this user's transcripts, do not commit.
+# Recipes (BUILD.md) and tools (*.py) stay tracked.
+
+# Distilled transcripts and per-topic pages (personal content)
+/distilled/
+/pages/
+
+# Pipeline outputs
+/promoted.md
+/pending.md
+/rejected.md
+/cleaned.md
+
+# Backups
+*.bak

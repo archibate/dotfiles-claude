@@ -5,7 +5,8 @@ description: >
   Use when coordinating multiple simultaneous Claude sessions — e.g.
   "dm another claude", "list claude sessions", "stop another claude",
   "peek peer claude", "peek other sessions", "monitor peer claude",
-  "orchestrate claude sessions", "sync with peer", "spawn claude in tmux".
+  "orchestrate claude sessions", "sync with peer", "spawn claude in tmux",
+  "monitor remote claude".
 ---
 
 # claude-dm

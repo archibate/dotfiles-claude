@@ -2,6 +2,7 @@
   "env": {
     "IS_DEMO": "1",
     "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
+    "CLAUDE_CODE_FORK_SUBAGENT": "1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "1",
     "CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL": "1",
@@ -24,6 +25,16 @@
   },
   "enableAllProjectMcpServers": true,
   "skillListingBudgetFraction": 0.05,
+  "skillOverrides": {
+    "cache-hygiene": "name-only",
+    "init": "user-invocable-only",
+    "security-review": "user-invocable-only",
+    "fewer-permission-prompts": "user-invocable-only",
+    "claude-api": "user-invocable-only",
+    "simplify": "user-invocable-only",
+    "keybindings-help": "user-invocable-only",
+    "schedule": "user-invocable-only"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -192,16 +203,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/audit-edits.py hook",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/no-schedule-skill.sh",
             "timeout": 5
           }
         ]

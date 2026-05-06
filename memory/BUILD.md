@@ -10,7 +10,7 @@ Pipeline (parallelize via subagents where volume warrants):
 
 1. DISTILL → ~/.claude/memory/distilled/<slug>.md per project (one .md per cwd). Read each session's JSONL, order events by timestamp, keep only user (string content) and assistant (text blocks) where isSidechain=false. Drop <system-reminder>, <command-*>, <task-notification>, "Cache keep-alive..." ticks, "<<autonomous-loop...>>" sentinels.
 
-2. EXTRACT per .md → bullet nuggets. Each: STANDING-RULE claim + line citation + tag in {ai-default-conflict, repeated-correction, costly-correction, trial-and-error} → ~/.claude/memory/distilled/extracted/<num>-<slug>.md
+2. EXTRACT per .md → bullet nuggets. Each: STANDING-RULE claim + line citation + tag in {ai-default-conflict, repeated-correction, costly-correction, trial-and-error, system-mutations, env-facts} → ~/.claude/memory/distilled/extracted/<num>-<slug>.md
 
 3. CLUSTER across projects → one merged file. H2 themes (8–14); merge near-duplicates; carry `(×N sources)` cross-project recurrence count → ~/.claude/memory/distilled/extracted/_merged.md
 
@@ -18,7 +18,7 @@ Pipeline (parallelize via subagents where volume warrants):
 
 5. PROMOTE → ~/.claude/memory/promote.py merges `_triaged.md` into promoted/pending/rejected.md. For a fresh INIT (no carryover desired), `rm` the three destination files first. promoted.md: pure claim text under themed H2; pending keeps `[?]` markers; rejected keeps citations and metadata.
 
-KEEP: AI-default conflicts, costly corrections, repeated corrections, hard env facts (paths under ~, tool versions, API endpoints, hardware, identity), cross-project recurrence ≥2.
+KEEP: AI-default conflicts, costly corrections, repeated corrections, hard env facts (working projects, tool versions, services, API endpoints, crontab, hardware, identity), system mutations, cross-project recurrence ≥2.
 
 DROP: in-flight project state, AI defaults, narrow trial-and-error empirical findings, project-internal mechanics, claims too narrow to justify always-loaded cost.
 

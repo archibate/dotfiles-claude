@@ -4,10 +4,8 @@
 
 # Scrub env that some hooks consult, so tests reproduce the hook behavior a
 # fresh user environment would see (Claude's runtime env can set
-# PYTHONUNBUFFERED, masking deny tests; CC_PROJECT marks cc-connect sessions
-# that tldr-summary opts out of).
+# PYTHONUNBUFFERED, masking deny tests).
 unset PYTHONUNBUFFERED
-unset CC_PROJECT
 
 fail=0
 
@@ -843,75 +841,20 @@ out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid6" '{session_id:$s,tool_input:{fil
   && echo "OK:   hint-agent-claude-code-guide silent on foo.claude/ (FP guard)" \
   || { echo "FAIL: hint-agent-claude-code-guide foo.claude FP: $out"; fail=1; }
 
+# 8. CLAUDE.md is prose guidance, not Claude Code schema → silent
+hccg_sid7="hccg7-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid7" '{session_id:$s,tool_input:{file_path:"/home/bate/.claude/CLAUDE.md"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-agent-claude-code-guide silent on CLAUDE.md" \
+  || { echo "FAIL: hint-agent-claude-code-guide CLAUDE.md FP: $out"; fail=1; }
+
 rm -f "$hccg_cache" \
       "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid2" \
-      "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid3"
+      "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid3" \
+      "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid7"
 
 echo ""
-echo "=== Stop hooks ==="
-
-# tldr-summary: emit a block decision when the latest assistant text exceeds
-# TLDR_MIN_LINES (default 10). Skip on stop_hook_active (anti-loop), already-
-# present 📌 marker (anti-loop fallback, format defined in the /tldr skill),
-# and empty/short responses.
-
-tldr_long=$(for i in $(seq 1 15); do echo "line $i"; done)
-tldr_short=$(for i in $(seq 1 5); do echo "line $i"; done)
-
-# 1. Long via last_assistant_message → emits block + reason pointing to /tldr skill
-out=$(printf '%s' "$(jq -nc --arg t "$tldr_long" '{last_assistant_message:$t,stop_hook_active:false}')" | bash ~/.claude/hooks/tldr-summary.sh)
-echo "$out" | jq -e '.decision == "block" and (.reason | contains("/tldr"))' > "$test_out" \
-  && echo "OK:   tldr-summary emits block on long response (last_assistant_message path)" \
-  || { echo "FAIL: tldr-summary should block on long response: $out"; fail=1; }
-
-# 2. Short via last_assistant_message → silent
-out=$(printf '%s' "$(jq -nc --arg t "$tldr_short" '{last_assistant_message:$t,stop_hook_active:false}')" | bash ~/.claude/hooks/tldr-summary.sh)
-[ -z "$out" ] \
-  && echo "OK:   tldr-summary silent on short response" \
-  || { echo "FAIL: tldr-summary should be silent on short: $out"; fail=1; }
-
-# 3. stop_hook_active=true → silent even when long (anti-loop primary guard)
-out=$(printf '%s' "$(jq -nc --arg t "$tldr_long" '{last_assistant_message:$t,stop_hook_active:true}')" | bash ~/.claude/hooks/tldr-summary.sh)
-[ -z "$out" ] \
-  && echo "OK:   tldr-summary silent when stop_hook_active=true" \
-  || { echo "FAIL: tldr-summary should be silent on stop_hook_active: $out"; fail=1; }
-
-# 4. Long but already contains the /tldr skill's 📌 marker → silent
-#    (anti-loop fallback guard, mirrors the format defined in the skill)
-tldr_with_marker="$tldr_long
-📌 already done"
-out=$(printf '%s' "$(jq -nc --arg t "$tldr_with_marker" '{last_assistant_message:$t,stop_hook_active:false}')" | bash ~/.claude/hooks/tldr-summary.sh)
-[ -z "$out" ] \
-  && echo "OK:   tldr-summary silent when 📌 marker already present" \
-  || { echo "FAIL: tldr-summary should skip if already summarized: $out"; fail=1; }
-
-# 5. Missing last_assistant_message → silent (degraded payload)
-out=$(printf '%s' '{"stop_hook_active":false}' | bash ~/.claude/hooks/tldr-summary.sh)
-[ -z "$out" ] \
-  && echo "OK:   tldr-summary silent on empty payload" \
-  || { echo "FAIL: tldr-summary should be silent on empty payload: $out"; fail=1; }
-
-# 6. Custom TLDR_MIN_LINES — env override is respected
-out=$(TLDR_MIN_LINES=3 printf '%s' "$(jq -nc --arg t "$tldr_short" '{last_assistant_message:$t,stop_hook_active:false}')" | TLDR_MIN_LINES=3 bash ~/.claude/hooks/tldr-summary.sh)
-echo "$out" | jq -e '.decision == "block"' > "$test_out" \
-  && echo "OK:   tldr-summary honors TLDR_MIN_LINES override" \
-  || { echo "FAIL: tldr-summary should respect TLDR_MIN_LINES=3: $out"; fail=1; }
-
-# 7. Reason stays compact — the format/rules live in the /tldr skill, so the
-#    Stop-hook reason should be short (token economy: full prompt no longer
-#    re-emitted on every fire).
-out=$(printf '%s' "$(jq -nc --arg t "$tldr_long" '{last_assistant_message:$t,stop_hook_active:false}')" | bash ~/.claude/hooks/tldr-summary.sh)
-reason_len=$(echo "$out" | jq -r '.reason | length')
-[ "$reason_len" -lt 200 ] \
-  && echo "OK:   tldr-summary reason stays compact (${reason_len} chars, prompt offloaded to skill)" \
-  || { echo "FAIL: tldr-summary reason should be <200 chars after skill refactor: ${reason_len}"; fail=1; }
-
-# 8. cc-connect opt-out: CC_PROJECT set → silent even on a long response
-out=$(CC_PROJECT=demo printf '%s' "$(jq -nc --arg t "$tldr_long" '{last_assistant_message:$t,stop_hook_active:false}')" | CC_PROJECT=demo bash ~/.claude/hooks/tldr-summary.sh)
-[ -z "$out" ] \
-  && echo "OK:   tldr-summary silent when CC_PROJECT is set" \
-  || { echo "FAIL: tldr-summary should be silent for cc-connect sessions: $out"; fail=1; }
-
 rm -f "$test_out"
 
 echo ""

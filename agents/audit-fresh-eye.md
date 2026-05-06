@@ -87,6 +87,7 @@ For each file in the diff:
 - `DOC-contradiction` — new statements contradict unchanged surrounding text, established rules, or other structured sections of the same artifact (frontmatter vs. body, declared interface vs. prose, schema vs. description, sequence in one part vs. sequence in another)
 - `DOC-over-emphasis` — bold/emoji/ALL-CAPS density disproportionate to surrounding lines or to the content's load-bearingness
 - `DOC-tonal-drift` — new content rhetorical strength/length differs from siblings
+- `DOC-list-parity` — new entry added to a peer enumeration (comma-list, bullet-list, tag set) carries qualifier/parenthetical/rationale absent from existing peers; flag when new-entry word count > 2× median of unchanged peers in the same list
 - `DOC-justifying-aside` — parenthetical defending an obvious claim. Common signals: `(e.g. ...)` or `(i.e. ...)` immediately after a phrase whose meaning the reader already grasps from the preceding clause
 - `DOC-defensive-caveat` — warning about a failure mode the reader isn't hitting
 - `DOC-hallucinated-ref` — uncommon API/flag/symbol/command unverified against source

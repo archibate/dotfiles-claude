@@ -2,16 +2,24 @@
 # Peer state classification. Pane-visible state drives the top-level state;
 # transcript is consulted as an authority check and for modal subtype.
 
-# Capture the peer's pane with ANSI escapes preserved, then strip dim ghost
-# text (Claude Code renders the autocomplete suggestion with SGR 2/dim) and
-# remaining color codes. Without this step the suggestion bytes look like a
-# real user draft and trip the drafting gate. Echoes the cleaned tail.
+# Capture the peer's pane with ANSI escapes preserved, then strip ghost
+# placeholder text (Claude Code renders the autocomplete suggestion with the
+# first letter in reverse video and the rest dim) and remaining color codes.
+# Without this step the suggestion bytes look like a real user draft and trip
+# the drafting gate. Echoes the cleaned tail.
 _capture_clean_tail() {
   local target="$1" body
   body=$(tm capture-pane -p -J -e -t "$target" 2>/dev/null) || return 1
   body=$(tail -n 15 <<<"$body")
-  # Strip dim (SGR 2) segments — perl -0777 lets the regex span newlines so a
-  # ghost suggestion that wraps doesn't survive the pass.
+  # Strip reverse-video-bounded placeholder (\e[7m … \e[0m). The current UI
+  # renders the first character of the suggestion in reverse video and the
+  # rest in reset+dim (\e[0;2m), closed by a single \e[0m that tmux often
+  # emits at the start of the next captured row. -0777 /s lets the non-greedy
+  # match span the row boundary; capture the trailing newline (if consumed)
+  # and reinsert it so the prompt row stays separate from the bottom rule.
+  body=$(printf '%s' "$body" | perl -0777 -pe 's/\e\[7m.*?(\n?)\e\[0m/$1/gs')
+  # Strip remaining bare dim segments (\e[2m … \e[Nm) for legacy / fallback
+  # placeholder shapes that don't include a reverse-video leader.
   body=$(printf '%s' "$body" | perl -0777 -pe 's/\e\[2m[^\e]*\e\[[0-9;]*m//g')
   # Strip remaining SGR codes so box-rule detection sees plain `─` lines.
   body=$(printf '%s' "$body" | perl -0777 -pe 's/\e\[[0-9;]*m//g')

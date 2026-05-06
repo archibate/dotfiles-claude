@@ -40,13 +40,13 @@ Conventions:
 - For Bash-command hooks, use `emit_pre_tool_deny_bypassable <MARKER> "<reason>"` (in `lib/emit.sh`). It appends the canonical bypass footer:
   ``If legitimate or false-positive, prepend `# BYPASS_X` to the Bash command.``
   The two-branch wording ("legitimate or false-positive") is deliberate: the agent must know that bypass also covers regex misfires (e.g. the trigger token sitting inside a quoted string), not only "I really intend to run this." Without that, the agent gaslights itself into "I don't have a legitimate reason" on a genuine FP and gets stuck.
-- For non-Bash hooks (e.g. `no-schedule-skill.sh`, `no-schedule-wakeup-deadzone.sh` — markers belong in `Skill` args / `ScheduleWakeup.reason`, not a Bash command), inline a location-specific bypass instruction in `emit_pre_tool_deny` directly. Don't call `emit_pre_tool_deny_bypassable` — its footer references "the Bash command", which would be wrong for those tools.
+- For non-Bash hooks (e.g. `no-schedule-wakeup-deadzone.sh` — markers belong in tool-specific JSON fields like `ScheduleWakeup.reason`, not a Bash command), inline a location-specific bypass instruction in `emit_pre_tool_deny` directly. Don't call `emit_pre_tool_deny_bypassable` — its footer references "the Bash command", which would be wrong for those tools.
 - The helper matches the marker anywhere in `$command` (literal `tool_input.command`, not the script body the command happens to run). `grep -qF` is deliberately lenient so a marker on any line of a multi-line command works.
 
 ### `lib/emit.sh`
 
 - `emit_pre_tool_deny "reason"` — emits the PreToolUse deny JSON.
-- `emit_pre_tool_deny_bypassable MARKER "reason"` — same, but appends the canonical bypass footer (`If legitimate or false-positive, prepend \`# MARKER\` to the Bash command.`). Use this in every Bash-command `no-*` hook so wording stays consistent. Skip for non-Bash hooks like `no-schedule-skill.sh` / `no-schedule-wakeup-deadzone.sh` — their bypass markers live in tool-specific JSON fields, not in a Bash command, so the canned footer would mis-direct the agent.
+- `emit_pre_tool_deny_bypassable MARKER "reason"` — same, but appends the canonical bypass footer (`If legitimate or false-positive, prepend \`# MARKER\` to the Bash command.`). Use this in every Bash-command `no-*` hook so wording stays consistent. Skip for non-Bash hooks like `no-schedule-wakeup-deadzone.sh` — their bypass markers live in tool-specific JSON fields, not in a Bash command, so the canned footer would mis-direct the agent.
 - `emit_pre_tool_warn "hint"` — emits PreToolUse JSON with `additionalContext` and no `permissionDecision`. Use for non-blocking advisories where a hard-deny would be too noisy.
 - `emit_post_tool_context "ctx"` — emits PostToolUse additionalContext JSON.
 

@@ -13,20 +13,7 @@ Preferred over defaults:
 - `uv run` not `python3`
 - `pnpm` not `npm`
 
-Specialized tools available:
-
-- `ast-grep` (`sg`) — structural code search
-- `duckdb` — analytical SQL on files
-- `mlr` (miller) — CSV/JSON record processing
-- `jc` — CLI output to JSON
-- `gron` — flatten JSON for grep
-- `pueue` — background task queue
-- `gh` — GitHub CLI
-- `pdftotext` — PDF text extraction
-- `sqlite3` — SQLite CLI
-- `hyperfine` — command benchmarking
-- `rsync` — file sync/transfer
-- `gitleaks` — secret scanning
+Specialized tools (`ast-grep`, `duckdb`, `mlr`, `jc`, `gron`, `pueue`, `gh`, `pdftotext`, `sqlite3`, `hyperfine`, `rsync`, `gitleaks`) are available — probe with `which` when a task suggests one.
 
 ---
 
@@ -86,10 +73,8 @@ Bare ordinals are fine as in-place list markers but BAD when used as referents i
 
 - "Options: 1. Pushdown SQL ... 2. Filter in Python ..." — list markers, fine
 - "You accepted pushdown SQL" not "You accepted option 1"
-- "ready to build the wheel?" not "ready to phase 3?"
 - "Database migration complete, next step is data integrity check, go?" not "T2 complete, next step is T3"
 - "polars approach not working, revert back to pandas?" not "v3 not working, revert back to v2?"
-- "please answer the question about Monday deploy" not "now please answer Q1"
 - "Monday deploy task running" not "Task #2551 running"
 - "Recommendation: reduce concentration lambda" not "Recommendation: reduce cl"
 
@@ -122,7 +107,7 @@ NEVER pause mid-execution for hedge or trivial decisions; only the allow-list ab
 
 ## Degree of Automation (DoA)
 
-Three autonomy levels gate proactivity. Start with **low**. Announce transitions one-line at the boundary (`plan accepted → DoA medium`, `AFK ack → DoA high, /loop 5m armed`).
+Three autonomy levels gate proactivity. Start with **low**. Announce transitions one-line at the boundary (`plan accepted → DoA medium`, `AFK ack → DoA high, /loop 30m armed`).
 
 - **low** — initial. Co-author plan with the user. No file modification or system-state mutation. Temp-dir analytical one-shots OK. Read-only investigation OK. Investigations <5m run silently; >5m surface ETA first.
 - **medium** — entered when user accepts a plan. Execute to completion without per-step asks. Trivial in-flight issues: fix yourself. Irreversible action outside the agreed plan: walk around or wait.
@@ -134,6 +119,7 @@ DoA high discipline:
 - Never rest by choice before goal completion. Waiting background tasks (long build, scheduled data ETA) via `ScheduleWakeup` is fine.
 - Push side-tasks where only the outcome matters into fork subagents to preserve overnight context budget.
 - Monitor system health while running heavy jobs (memory, disk, GPU).
+- Babysit background tasks: short task first, decision-blocking key tasks first.
 - Direct low→high jump requires explicit plan acknowlegement.
 - Commit liberally to checkpoint progress; create branches and worktrees for parallel exploration; spawn peer Claude sessions via /claude-dm to coordinate subtasks toward the agreed goal. Avoid irreversible destructive git ops (amend commit, hard reset, force push, branch delete).
 - Before irreversible actions: try safe alternatives, postpone final landing decisions to morning for human ack.

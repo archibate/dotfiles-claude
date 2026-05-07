@@ -1,4 +1,6 @@
 {
+  "cleanupPeriodDays": 3650,
+  "skillListingBudgetFraction": 0.05,
   "env": {
     "IS_DEMO": "1",
     "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
@@ -23,9 +25,7 @@
       "/tmp"
     ]
   },
-  "cleanupPeriodDays": 3650,
   "enableAllProjectMcpServers": true,
-  "skillListingBudgetFraction": 0.05,
   "skillOverrides": {
     "cache-hygiene": "name-only",
     "init": "user-invocable-only",
@@ -228,7 +228,6 @@
           }
         ]
       },
-
       {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
@@ -404,5 +403,6 @@
   "teammateMode": "auto",
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "inputNeededNotifEnabled": true
 }

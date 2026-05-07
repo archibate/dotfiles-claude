@@ -1,6 +1,6 @@
 ---
 name: chrome-cdp
-description: Inspect and interact with a page open in the user's local Chrome session with shared cookies and login states. Use for headful browser automation. Requires explicit user approval.
+description: Connect to user's local Chrome session via Chrome DevTools Protocol. Inspect and interact with web pages shared with user cookies and login states. Use for headful browser automation. Request explicit user approval before use.
 ---
 
 # Chrome CDP
@@ -82,4 +82,4 @@ CSS px = screenshot image px / DPR
 
 - Prefer `snap --compact` over `html` for page structure.
 - Use `type` (not eval) to enter text in cross-origin iframes — `click`/`clickxy` to focus first, then `type`.
-- Chrome shows an "Allow debugging" modal once per tab on first access. A background daemon keeps the session alive so subsequent commands need no further approval. Daemons auto-exit after 20 minutes of inactivity.
+- Chrome shows an "Allow debugging" modal **once per hub lifetime** (not per command, not per tab). A single background hub holds one WebSocket to Chrome; every command — `list`, `open`, and per-tab ops — routes through it. The hub auto-exits after 8 hours of inactivity or when Chrome disconnects. `stop <target>` detaches one tab's session; `stop` with no args ends the hub.

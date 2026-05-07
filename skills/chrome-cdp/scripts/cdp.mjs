@@ -3,9 +3,11 @@
 // Uses raw CDP over WebSocket, no Puppeteer dependency.
 // Requires Node 22+ (built-in WebSocket).
 //
-// Per-tab persistent daemon: page commands go through a daemon that holds
-// the CDP session open. Chrome's "Allow debugging" modal fires once per
-// daemon (= once per tab). Daemons auto-exit after 20min idle.
+// Single hub daemon: every command (list/open/stop and per-tab ops) routes
+// through one persistent process that holds a single browser-level WebSocket
+// to Chrome. Chrome's "Allow debugging" modal therefore fires once per hub
+// lifetime, not once per tab or once per command. The hub auto-exits after
+// 8h idle.
 
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
@@ -15,7 +17,7 @@ import net from 'net';
 
 const TIMEOUT = 15000;
 const NAVIGATION_TIMEOUT = 30000;
-const IDLE_TIMEOUT = 20 * 60 * 1000;
+const IDLE_TIMEOUT = 8 * 60 * 60 * 1000;
 const DAEMON_CONNECT_RETRIES = 20;
 const DAEMON_CONNECT_DELAY = 300;
 const MIN_TARGET_PREFIX_LEN = 8;
@@ -28,12 +30,9 @@ const RUNTIME_DIR = IS_WINDOWS
     : resolve(homedir(), '.cache', 'cdp');
 try { mkdirSync(RUNTIME_DIR, { recursive: true, mode: 0o700 }); } catch {}
 const PAGES_CACHE = resolve(RUNTIME_DIR, 'pages.json');
-
-function sockPath(targetId) {
-  return IS_WINDOWS
-    ? `\\\\.\\pipe\\cdp-${targetId}`
-    : resolve(RUNTIME_DIR, `cdp-${targetId}.sock`);
-}
+const HUB_SOCK = IS_WINDOWS
+  ? `\\\\.\\pipe\\cdp-hub`
+  : resolve(RUNTIME_DIR, `cdp-hub.sock`);
 
 function getWsUrl() {
   const home = homedir();
@@ -480,87 +479,105 @@ async function evalRawStr(cdp, sid, method, paramsJson) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-tab daemon
+// Hub daemon — one WS to Chrome, lazy per-target attach
 // ---------------------------------------------------------------------------
 
-async function runDaemon(targetId) {
-  const sp = sockPath(targetId);
-
+async function runHub() {
   const cdp = new CDP();
   try {
     await cdp.connect(getWsUrl());
   } catch (e) {
-    process.stderr.write(`Daemon: cannot connect to Chrome: ${e.message}\n`);
+    process.stderr.write(`Hub: cannot connect to Chrome: ${e.message}\n`);
     process.exit(1);
   }
 
-  let sessionId;
-  try {
-    const res = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
-    sessionId = res.sessionId;
-  } catch (e) {
-    process.stderr.write(`Daemon: attach failed: ${e.message}\n`);
-    cdp.close();
-    process.exit(1);
-  }
+  // targetId → sessionId, populated lazily on first use of each tab.
+  const sessions = new Map();
 
-  // Shutdown helpers
   let alive = true;
   function shutdown() {
     if (!alive) return;
     alive = false;
     server.close();
-    if (!IS_WINDOWS) try { unlinkSync(sp); } catch {}
+    if (!IS_WINDOWS) try { unlinkSync(HUB_SOCK); } catch {}
     cdp.close();
     process.exit(0);
   }
 
-  // Exit if target goes away or Chrome disconnects
+  // Evict per-tab session entries on tab close / external detach. Hub stays alive.
   cdp.onEvent('Target.targetDestroyed', (params) => {
-    if (params.targetId === targetId) shutdown();
+    sessions.delete(params.targetId);
   });
   cdp.onEvent('Target.detachedFromTarget', (params) => {
-    if (params.sessionId === sessionId) shutdown();
+    for (const [tid, sid] of sessions) {
+      if (sid === params.sessionId) { sessions.delete(tid); break; }
+    }
   });
   cdp.onClose(() => shutdown());
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
-  // Idle timer
   let idleTimer = setTimeout(shutdown, IDLE_TIMEOUT);
   function resetIdle() {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(shutdown, IDLE_TIMEOUT);
   }
 
-  // Handle a command
-  async function handleCommand({ cmd, args }) {
+  async function getSession(targetId) {
+    const cached = sessions.get(targetId);
+    if (cached) return cached;
+    const res = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
+    sessions.set(targetId, res.sessionId);
+    return res.sessionId;
+  }
+
+  async function handleCommand({ cmd, targetId, args = [] }) {
     resetIdle();
     try {
+      // Hub-level commands — no per-tab session needed.
+      if (cmd === 'shutdown') return { ok: true, result: '', stopAfter: true };
+      if (cmd === 'stop') {
+        if (!targetId) return { ok: true, result: '', stopAfter: true };
+        const sid = sessions.get(targetId);
+        if (sid) {
+          try { await cdp.send('Target.detachFromTarget', { sessionId: sid }); } catch {}
+          sessions.delete(targetId);
+        }
+        return { ok: true, result: '' };
+      }
+      if (cmd === 'list' || cmd === 'list_raw') {
+        const pages = await getPages(cdp);
+        return {
+          ok: true,
+          result: cmd === 'list_raw' ? JSON.stringify(pages) : formatPageList(pages),
+        };
+      }
+      if (cmd === 'open') {
+        const url = args[0] || 'about:blank';
+        const { targetId: newId } = await cdp.send('Target.createTarget', { url });
+        const pages = await getPages(cdp);
+        if (!pages.some(p => p.targetId === newId)) {
+          pages.push({ targetId: newId, title: url, url });
+        }
+        return { ok: true, result: JSON.stringify({ targetId: newId, pages }) };
+      }
+
+      // Per-tab commands — lazy attach.
+      if (!targetId) return { ok: false, error: `Command "${cmd}" requires targetId` };
+      const sid = await getSession(targetId);
       let result;
       switch (cmd) {
-        case 'list': {
-          const pages = await getPages(cdp);
-          result = formatPageList(pages);
-          break;
-        }
-        case 'list_raw': {
-          const pages = await getPages(cdp);
-          result = JSON.stringify(pages);
-          break;
-        }
-        case 'snap': case 'snapshot': result = await snapshotStr(cdp, sessionId, true); break;
-        case 'eval': result = await evalStr(cdp, sessionId, args[0]); break;
-        case 'shot': case 'screenshot': result = await shotStr(cdp, sessionId, args[0], targetId); break;
-        case 'html': result = await htmlStr(cdp, sessionId, args[0]); break;
-        case 'nav': case 'navigate': result = await navStr(cdp, sessionId, args[0]); break;
-        case 'net': case 'network': result = await netStr(cdp, sessionId); break;
-        case 'click': result = await clickStr(cdp, sessionId, args[0]); break;
-        case 'clickxy': result = await clickXyStr(cdp, sessionId, args[0], args[1]); break;
-        case 'type': result = await typeStr(cdp, sessionId, args[0]); break;
-        case 'loadall': result = await loadAllStr(cdp, sessionId, args[0], args[1] ? parseInt(args[1]) : 1500); break;
-        case 'evalraw': result = await evalRawStr(cdp, sessionId, args[0], args[1]); break;
-        case 'stop': return { ok: true, result: '', stopAfter: true };
+        case 'snap': case 'snapshot': result = await snapshotStr(cdp, sid, true); break;
+        case 'eval': result = await evalStr(cdp, sid, args[0]); break;
+        case 'shot': case 'screenshot': result = await shotStr(cdp, sid, args[0], targetId); break;
+        case 'html': result = await htmlStr(cdp, sid, args[0]); break;
+        case 'nav': case 'navigate': result = await navStr(cdp, sid, args[0]); break;
+        case 'net': case 'network': result = await netStr(cdp, sid); break;
+        case 'click': result = await clickStr(cdp, sid, args[0]); break;
+        case 'clickxy': result = await clickXyStr(cdp, sid, args[0], args[1]); break;
+        case 'type': result = await typeStr(cdp, sid, args[0]); break;
+        case 'loadall': result = await loadAllStr(cdp, sid, args[0], args[1] ? parseInt(args[1]) : 1500); break;
+        case 'evalraw': result = await evalRawStr(cdp, sid, args[0], args[1]); break;
         default: return { ok: false, error: `Unknown command: ${cmd}` };
       }
       return { ok: true, result: result ?? '' };
@@ -571,15 +588,15 @@ async function runDaemon(targetId) {
 
   // Unix socket server — NDJSON protocol
   // Wire format: each message is one JSON object followed by \n (newline-delimited JSON).
-  // Request:  { "id": <number>, "cmd": "<command>", "args": ["arg1", "arg2", ...] }
-  // Response: { "id": <number>, "ok": <boolean>, "result": "<string>" }
-  //           or { "id": <number>, "ok": false, "error": "<message>" }
+  // Request:  { "id": <n>, "cmd": "<command>", "targetId": "<id>"?, "args": [...] }
+  // Response: { "id": <n>, "ok": true,  "result": "<string>" }
+  //        or { "id": <n>, "ok": false, "error": "<message>" }
   const server = net.createServer((conn) => {
     let buf = '';
     conn.on('data', (chunk) => {
       buf += chunk.toString();
       const lines = buf.split('\n');
-      buf = lines.pop(); // keep incomplete last line
+      buf = lines.pop();
       for (const line of lines) {
         if (!line.trim()) continue;
         let req;
@@ -599,16 +616,16 @@ async function runDaemon(targetId) {
   });
 
   server.on('error', (e) => {
-    process.stderr.write(`Daemon server listen failed: ${e.message}\n`);
+    process.stderr.write(`Hub server listen failed: ${e.message}\n`);
     process.exit(1);
   });
 
-  if (!IS_WINDOWS) try { unlinkSync(sp); } catch {}
-  server.listen(sp);
+  if (!IS_WINDOWS) try { unlinkSync(HUB_SOCK); } catch {}
+  server.listen(HUB_SOCK);
 }
 
 // ---------------------------------------------------------------------------
-// CLI ↔ daemon communication
+// CLI ↔ hub communication
 // ---------------------------------------------------------------------------
 
 function connectToSocket(sp) {
@@ -619,16 +636,15 @@ function connectToSocket(sp) {
   });
 }
 
-async function getOrStartTabDaemon(targetId) {
-  const sp = sockPath(targetId);
-  // Try existing daemon
-  try { return await connectToSocket(sp); } catch {}
+async function getOrStartHub() {
+  // Try existing hub
+  try { return await connectToSocket(HUB_SOCK); } catch {}
 
   // Clean stale socket
-  if (!IS_WINDOWS) try { unlinkSync(sp); } catch {}
+  if (!IS_WINDOWS) try { unlinkSync(HUB_SOCK); } catch {}
 
-  // Spawn daemon
-  const child = spawn(process.execPath, [process.argv[1], '_daemon', targetId], {
+  // Spawn hub
+  const child = spawn(process.execPath, [process.argv[1], '_hub'], {
     detached: true,
     stdio: 'ignore',
   });
@@ -637,9 +653,9 @@ async function getOrStartTabDaemon(targetId) {
   // Wait for socket (includes time for user to click Allow)
   for (let i = 0; i < DAEMON_CONNECT_RETRIES; i++) {
     await sleep(DAEMON_CONNECT_DELAY);
-    try { return await connectToSocket(sp); } catch {}
+    try { return await connectToSocket(HUB_SOCK); } catch {}
   }
-  throw new Error('Daemon failed to start — did you click Allow in Chrome?');
+  throw new Error('Hub failed to start — did you click Allow in Chrome?');
 }
 
 function sendCommand(conn, req) {
@@ -695,25 +711,25 @@ function sendCommand(conn, req) {
 }
 
 // ---------------------------------------------------------------------------
-// Stop daemons
+// Stop — hub shutdown or per-tab session detach
 // ---------------------------------------------------------------------------
 
 async function stopDaemons(targetPrefix) {
-  if (!existsSync(PAGES_CACHE)) return;
-  const pages = JSON.parse(readFileSync(PAGES_CACHE, 'utf8'));
-  const targets = targetPrefix
-    ? [resolvePrefix(targetPrefix, pages.map(p => p.targetId), 'target')]
-    : pages.map(p => p.targetId);
+  let conn;
+  try { conn = await connectToSocket(HUB_SOCK); } catch { return; }
 
-  for (const targetId of targets) {
-    const sp = sockPath(targetId);
-    try {
-      const conn = await connectToSocket(sp);
-      await sendCommand(conn, { cmd: 'stop' });
-    } catch {
-      if (!IS_WINDOWS) try { unlinkSync(sp); } catch {}
-    }
+  if (!targetPrefix) {
+    await sendCommand(conn, { cmd: 'shutdown' });
+    return;
   }
+
+  if (!existsSync(PAGES_CACHE)) {
+    conn.end();
+    return;
+  }
+  const pages = JSON.parse(readFileSync(PAGES_CACHE, 'utf8'));
+  const targetId = resolvePrefix(targetPrefix, pages.map(p => p.targetId), 'target');
+  await sendCommand(conn, { cmd: 'stop', targetId });
 }
 
 // ---------------------------------------------------------------------------
@@ -740,8 +756,8 @@ Usage: cdp <command> [args]
   evalraw <target> <method> [json]  Send a raw CDP command; returns JSON result
                                     e.g. evalraw <t> "DOM.getDocument" '{}'
   open  [url]                       Open a new tab (default: about:blank)
-                                    Note: each new tab triggers a fresh "Allow debugging?" prompt
-  stop  [target]                    Stop daemon(s)
+  stop  [target]                    No args: shut down the hub.
+                                    With <target>: detach that one session; hub stays alive.
 
 <target> is a unique targetId prefix from "cdp list". If a prefix is ambiguous,
 use more characters.
@@ -763,15 +779,19 @@ EVAL SAFETY NOTE
   "Ignore" buttons on a feed — indices shift). Prefer stable selectors or
   collect all data in a single eval.
 
-DAEMON IPC (for advanced use / scripting)
-  Each tab runs a persistent daemon at Unix socket in the runtime dir (see below).
+HUB IPC (for advanced use / scripting)
+  A single hub daemon holds one WebSocket to Chrome; all CLI invocations route
+  through its Unix socket (cdp-hub.sock in the runtime dir). One "Allow
+  debugging" prompt per hub lifetime, not per command.
   Protocol: newline-delimited JSON (one JSON object per line, UTF-8).
-    Request:  {"id":<number>, "cmd":"<command>", "args":["arg1","arg2",...]}
-    Response: {"id":<number>, "ok":true,  "result":"<string>"}
-           or {"id":<number>, "ok":false, "error":"<message>"}
-  Commands mirror the CLI: snap, eval, shot, html, nav, net, click, clickxy,
-  type, loadall, evalraw, stop. Use evalraw to send arbitrary CDP methods.
-  The socket disappears after 20 min of inactivity or when the tab closes.
+    Request:  {"id":<n>, "cmd":"<command>", "targetId":"<id>"?, "args":[...]}
+    Response: {"id":<n>, "ok":true,  "result":"<string>"}
+           or {"id":<n>, "ok":false, "error":"<message>"}
+  Hub-level commands (no targetId): list, list_raw, open, stop, shutdown.
+  Per-tab commands (require targetId): snap, eval, shot, html, nav, net,
+  click, clickxy, type, loadall, evalraw. Use evalraw for arbitrary CDP.
+  Hub exits after 8h idle or when Chrome disconnects. \`stop <target>\`
+  detaches one tab session; \`stop\` (no args) ends the hub.
 `;
 
 const NEEDS_TARGET = new Set([
@@ -782,39 +802,32 @@ const NEEDS_TARGET = new Set([
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
 
-  // Daemon mode (internal)
-  if (cmd === '_daemon') { await runDaemon(args[0]); return; }
+  // Hub mode (internal)
+  if (cmd === '_hub') { await runHub(); return; }
 
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
     console.log(USAGE); process.exit(0);
   }
 
   if (cmd === 'list' || cmd === 'ls') {
-    const cdp = new CDP();
-    await cdp.connect(getWsUrl());
-    const pages = await getPages(cdp);
-    cdp.close();
+    const conn = await getOrStartHub();
+    const response = await sendCommand(conn, { cmd: 'list_raw' });
+    if (!response.ok) { console.error('Error:', response.error); process.exit(1); }
+    const pages = JSON.parse(response.result);
     writeFileSync(PAGES_CACHE, JSON.stringify(pages), { mode: 0o600 });
     console.log(formatPageList(pages));
-    setTimeout(() => process.exit(0), 100);
     return;
   }
 
   // Open new tab
   if (cmd === 'open') {
     const url = args[0] || 'about:blank';
-    const cdp = new CDP();
-    await cdp.connect(getWsUrl());
-    const { targetId } = await cdp.send('Target.createTarget', { url });
-    // Refresh cache; new tab may not appear in getTargets immediately, so add it manually
-    const pages = await getPages(cdp);
-    if (!pages.some(p => p.targetId === targetId)) {
-      pages.push({ targetId, title: url, url });
-    }
-    cdp.close();
-    writeFileSync(PAGES_CACHE, JSON.stringify(pages), { mode: 0o600 });
-    console.log(`Opened new tab: ${targetId.slice(0, 8)}  ${url}`);
-    console.log('Note: this tab will need "Allow debugging?" approval on first access.');
+    const conn = await getOrStartHub();
+    const response = await sendCommand(conn, { cmd: 'open', args: [url] });
+    if (!response.ok) { console.error('Error:', response.error); process.exit(1); }
+    const data = JSON.parse(response.result);
+    writeFileSync(PAGES_CACHE, JSON.stringify(data.pages), { mode: 0o600 });
+    console.log(`Opened new tab: ${data.targetId.slice(0, 8)}  ${url}`);
     return;
   }
 
@@ -845,7 +858,7 @@ async function main() {
   const pages = JSON.parse(readFileSync(PAGES_CACHE, 'utf8'));
   const targetId = resolvePrefix(targetPrefix, pages.map(p => p.targetId), 'target', 'Run "cdp list".');
 
-  const conn = await getOrStartTabDaemon(targetId);
+  const conn = await getOrStartHub();
 
   const cmdArgs = args.slice(1);
 
@@ -869,7 +882,7 @@ async function main() {
     process.exit(1);
   }
 
-  const response = await sendCommand(conn, { cmd, args: cmdArgs });
+  const response = await sendCommand(conn, { cmd, targetId, args: cmdArgs });
 
   if (response.ok) {
     if (response.result) console.log(response.result);

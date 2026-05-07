@@ -14,7 +14,7 @@ Mine my Claude Code transcripts at ~/.claude/projects/**/*.jsonl into a curated 
 
 Pipeline (parallelize via subagents where volume warrants):
 
-1. DISTILL → ~/.claude/memory/distilled/<slug>.md per project (one .md per cwd). Read each session's JSONL, order events by timestamp, keep only user (string content) and assistant (text blocks) where isSidechain=false. Drop <system-reminder>, <command-*>, <task-notification>, "Cache keep-alive..." ticks, "<<autonomous-loop...>>" sentinels.
+1. DISTILL → ~/.claude/memory/distilled/<slug>.md per project (one .md per cwd). Read each session's JSONL, order events by timestamp, keep only user (string content) and assistant (text blocks) where isSidechain=false. Drop <system-reminder>, <command-*>, <task-notification>, "Cache keep-alive..." ticks, "<<autonomous-loop...>>" sentinels, user messages starting with "Stop hook feedback:", and assistant text starting with "API Error".
 
 2. EXTRACT per .md → bullet nuggets. Each: STANDING-RULE claim + line citation + tag in {user-convention, user-correction, costly-error, trial-and-error, friction-point, user-anger, repeating-workflow, env-facts, remember} → ~/.claude/memory/distilled/extracted/<num>-<slug>.md
 

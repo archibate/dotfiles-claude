@@ -41,4 +41,4 @@ mkdir -p "$CACHE_DIR"
 [ -f "$CACHE" ] && exit 0
 touch "$CACHE"
 
-emit_pre_tool_warn 'About to edit a Claude config file under `.claude/` (settings.json, hook, agent, skill, slash-command, plugin, etc.). Before committing to a change, spawn the `claude-code-guide` subagent via the Agent tool to fetch the current official Claude Code / Agent SDK / API docs for whatever schema or feature you are touching — formats and field names may have shifted since training. Skip only if the edit is a pure rename, typo fix, or value tweak that does not depend on schema.'
+emit_pre_tool_warn 'About to edit a Claude config file under `.claude/` (settings.json, settings.local.json, agent, hook, or skill). Before committing to a change, spawn the `claude-code-guide` subagent via the Agent tool to fetch the current official Claude Code / Agent SDK / API docs for whatever schema or feature you are touching — formats and field names may have shifted since training. Skip only if the edit is a pure rename, typo fix, or value tweak that does not depend on schema.'

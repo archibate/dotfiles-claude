@@ -22,6 +22,8 @@ SYSTEM_REMINDER_RE = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 COMMAND_TAG_RE = re.compile(r"<(command-name|command-message|command-args|local-command-stdout|local-command-caveat|task-notification)>.*?</\1>", re.S)
 CACHE_TICK_RE = re.compile(r"^Cache keep-alive\. Idle tick \d+/\d+\.\s*$")
 AUTONOMOUS_RE = re.compile(r"<<autonomous-loop(?:-dynamic)?>>")
+STOP_HOOK_PREFIX = "Stop hook feedback:"
+API_ERROR_PREFIX = "API Error"
 
 
 def clean_user_text(s: str) -> str:
@@ -31,21 +33,27 @@ def clean_user_text(s: str) -> str:
     s = s.strip()
     if CACHE_TICK_RE.match(s):
         return ""
+    if s.startswith(STOP_HOOK_PREFIX):
+        return ""
     return s
 
 
 def extract_assistant_text(content) -> str:
     if isinstance(content, str):
-        return content.strip()
-    if not isinstance(content, list):
+        text = content.strip()
+    elif isinstance(content, list):
+        parts = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        text = "\n".join(p for p in parts if p).strip()
+    else:
         return ""
-    parts = []
-    for block in content:
-        if not isinstance(block, dict):
-            continue
-        if block.get("type") == "text":
-            parts.append(block.get("text", ""))
-    return "\n".join(p for p in parts if p).strip()
+    if text.startswith(API_ERROR_PREFIX):
+        return ""
+    return text
 
 
 def _ts_to_seconds(ts: str) -> str:

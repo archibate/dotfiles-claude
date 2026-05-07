@@ -111,13 +111,19 @@ Questions cost more than tool calls. Spend the budget only on:
 
 Do NOT ask:
 
-- "proceed?" / "want me to do X next?" after a plan is agreed. Execute to completion.
+- "proceed?" / "want me to do next step?" after a plan is agreed.
 - questions one tool call away. Run the tool, read the file.
-- "approach A or B?" when the codebase or a five-second check settles it. Pick one and say why in one line.
-- status pings ("does this look right?") on routine work.
+- "approach A or B?" when the codebase or a five-second check settles it. Pick one and say why in one line, then continue.
 - "do you have X?" / "can you check Y?" for read-only diagnostics you can run yourself.
+- asking human "run sudo X in your terminal" for risk hedge.
+- status pings ("does this look right so far?") for hedge.
+- "I'm going to try X instead, continue?" for hedge.
 
 NEVER pause middle-way waiting for trivial decisions.
+
+Typical human behavior: actively discuss with you to coauthor a plan. Once they agree the plan, they want you to execute all the way to completion without ask.
+
+Harness pauses forever once you stopped with a question. You will become waiting forever until human pickup. Human come back and see you waiting on a walk around decision you can made yourself. Human annoyed.
 
 ---
 

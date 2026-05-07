@@ -813,8 +813,11 @@ rm -f "$hsfd_cache" "$hsfd_cache2" "/tmp/claude-skill-hint-frontend-design/$hsfd
 
 
 # hint-agent-claude-code-guide: nudge the agent to consult the
-# claude-code-guide subagent before editing files under any `.claude/`
-# directory. Once-per-session cache (signature: session_id).
+# claude-code-guide subagent before editing settings.json /
+# settings.local.json or files under the agents/, hooks/, skills/
+# subtrees of any `.claude/` directory. Other `.claude/` paths
+# (CLAUDE.md, memory/, plugins/, ...) are silent.
+# Once-per-session cache (signature: session_id).
 hccg_sid="hccg-$$"
 hccg_cache="/tmp/claude-hint-agent-claude-code-guide/$hccg_sid"
 rm -f "$hccg_cache"
@@ -881,10 +884,35 @@ out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid7" '{session_id:$s,tool_input:{fil
   && echo "OK:   hint-agent-claude-code-guide silent on CLAUDE.md" \
   || { echo "FAIL: hint-agent-claude-code-guide CLAUDE.md FP: $out"; fail=1; }
 
+# 9. settings.local.json is in the allow-list → fires
+hccg_sid8="hccg8-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid8" '{session_id:$s,tool_input:{file_path:"/home/bate/.claude/settings.local.json"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("claude-code-guide")' > "$test_out" \
+  && echo "OK:   hint-agent-claude-code-guide fires on settings.local.json" \
+  || { echo "FAIL: hint-agent-claude-code-guide settings.local.json: $out"; fail=1; }
+
+# 10. .claude/plugins/* is outside the allow-list (settings/agents/hooks/skills) → silent
+hccg_sid9="hccg9-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid9" '{session_id:$s,tool_input:{file_path:"/home/bate/.claude/plugins/foo.json"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-agent-claude-code-guide silent on .claude/plugins/" \
+  || { echo "FAIL: hint-agent-claude-code-guide plugins FP: $out"; fail=1; }
+
+# 11. .claude/memory/*.md is outside the allow-list → silent
+hccg_sid10="hccg10-$$"
+out=$(printf '%s' "$(jq -nc --arg s "$hccg_sid10" '{session_id:$s,tool_input:{file_path:"/home/bate/.claude/memory/BUILD.md"}}')" \
+       | bash ~/.claude/hooks/hint-agent-claude-code-guide.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-agent-claude-code-guide silent on .claude/memory/" \
+  || { echo "FAIL: hint-agent-claude-code-guide memory FP: $out"; fail=1; }
+
 rm -f "$hccg_cache" \
       "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid2" \
       "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid3" \
-      "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid7"
+      "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid7" \
+      "/tmp/claude-hint-agent-claude-code-guide/$hccg_sid8"
 
 echo ""
 rm -f "$test_out"

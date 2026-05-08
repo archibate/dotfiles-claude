@@ -6,7 +6,9 @@
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-5.3-codex",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.4",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.5"
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.5",
+    "ANTHROPIC_DEFAULT_MODEL": "gpt-5.4",
+    "CLAUDE_CODE_EFFORT_LEVEL": "xhigh"
   },
   "skipAutoPermissionPrompt": false,
   "voiceEnabled": false,

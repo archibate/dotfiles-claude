@@ -341,6 +341,16 @@
             "asyncRewake": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/marker-discipline.py",
+            "timeout": 15,
+            "asyncRewake": true
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

@@ -172,7 +172,52 @@ def run():
     return 0
 
 
+def statusline_segment(session_id):
+    """Return a one-line statusline segment for the session's current drift ratio.
+
+    Empty string when not enough turns. Color-codes by threshold and prefixes
+    with ⚠ when the hook is currently in 'warned' state.
+    """
+    if not session_id:
+        return ""
+    transcript_path = find_transcript(session_id)
+    if not transcript_path or not os.path.exists(transcript_path):
+        return ""
+    turns = compute_per_turn(transcript_path)
+    if len(turns) < MIN_TURNS:
+        return ""
+    ratios = windowed_b(turns)
+    most_recent = ratios[-1]
+
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    RED = "\033[31m"
+    RESET = "\033[0m"
+
+    if most_recent < P75:
+        color = GREEN
+    elif most_recent < P90:
+        color = YELLOW
+    else:
+        color = RED
+
+    state = load_state(session_id)
+    warned = state.get("warned")
+    if warned:
+        color = RED
+
+    label = "⚠⏚" if warned else "⏚"
+    return f"  {color}[{label}:{most_recent:.0f}]{RESET}"
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "statusline":
+        sid = sys.argv[2] if len(sys.argv) > 2 else ""
+        try:
+            sys.stdout.write(statusline_segment(sid))
+        except Exception:
+            pass
+        sys.exit(0)
     try:
         sys.exit(run())
     except Exception:

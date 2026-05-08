@@ -6,7 +6,8 @@
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3.6-35b-a3b-aggressive",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3.6-35b-a3b-aggressive",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3.6-35b-a3b-aggressive"
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3.6-35b-a3b-aggressive",
+    "ANTHROPIC_DEFAULT_MODEL": "qwen3.6-35b-a3b-aggressive"
   },
   "skipAutoPermissionPrompt": false,
   "voiceEnabled": false,

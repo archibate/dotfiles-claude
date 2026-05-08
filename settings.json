@@ -331,6 +331,16 @@
             "asyncRewake": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/drift-detect.py",
+            "timeout": 30,
+            "asyncRewake": true
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

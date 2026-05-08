@@ -49,11 +49,11 @@ For reference, my personal configs that pair well with this setup:
 
 ## Defaults you should know
 
-**`permissions.defaultMode: "default"`** — tool calls use standard Claude Code permission prompts by default.
+**`permissions.defaultMode: "bypassPermissions"`** — tool calls run without standard Claude Code permission prompts by default.
 
-The safety layer also includes `hooks/no-*.sh` — mkfs / partition edits, writes to `/dev`, `/etc`, `/proc`, `/sys`, `/boot`, secure-delete, power-state, recursive chmod/chown, firewall flush, force-push, `git --amend`, `crontab -r`, `killall`, etc. These hooks are guardrails for accidental irreversible mistakes.
+The safety layer lives in `hooks/no-*.sh` — mkfs / partition edits, writes to `/dev`, `/etc`, `/proc`, `/sys`, `/boot`, secure-delete, power-state, recursive chmod/chown, firewall flush, force-push, `git --amend`, `crontab -r`, `killall`, etc. These hooks are guardrails for accidental irreversible mistakes.
 
-To run without prompts: set `"defaultMode": "bypassPermissions"` in `settings.json` and use the `--allow-dangerously-skip-permissions` wrapper flag intentionally.
+To restore standard prompts: set `"defaultMode": "default"` in `settings.json` and remove the `--allow-dangerously-skip-permissions` wrapper flag.
 
 ## Audit Hook
 

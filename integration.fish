@@ -2,7 +2,7 @@ function claude
     set -lx SHELL (command -v bash)
     set -lx PYTHONUNBUFFERED 1
     set -lx AGENT_BROWSER_SESSION (basename $PWD)-(command -sq openssl; and openssl rand -hex 8; or random)
-    command claude --thinking-display summarized $argv
+    command claude --thinking-display summarized --allow-dangerously-skip-permissions $argv
 end
 
 function claude-simple

@@ -20,7 +20,7 @@
     "AUDIT_CLAUDE_EFFORT": "high"
   },
   "permissions": {
-    "defaultMode": "default",
+    "defaultMode": "bypassPermissions",
     "additionalDirectories": [
       "/tmp"
     ]

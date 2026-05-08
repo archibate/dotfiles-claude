@@ -2,7 +2,7 @@
 # Custom Claude Code statusLine renderer.
 #
 # Reads stdin JSON (session_id, cwd, model.id, context_window, workspace),
-# renders a single line with model + ctx% + cwd + git + audit + drift segments
+# renders a single line with model + ctx% + cwd + git + audit + idle + drift segments
 # scoped to the current session.
 #
 # Audit segment priority:
@@ -30,8 +30,15 @@ YELLOW=$'\033[33m'
 BLUE=$'\033[34m'
 MAGENTA=$'\033[35m'
 CYAN=$'\033[36m'
+GRAY=$'\033[90m'
 BOLD=$'\033[1m'
 RESET=$'\033[0m'
+
+file_mtime_epoch() {
+  stat -c '%Y' "$1" 2>/dev/null ||
+    stat -f '%m' "$1" 2>/dev/null ||
+    true
+}
 
 # --- model_short -------------------------------------------------------------
 # claude-opus-4-7[1m] -> opus-4.7-1m  ;  display_name passes through.
@@ -94,6 +101,31 @@ if [[ -n "$session_id" ]]; then
   audit_segment=$(~/.claude/hooks/audit-edits.py statusline "$session_id" 2>/dev/null || true)
 fi
 
+# --- idle segment -------------------------------------------------------------
+# Time since last transcript activity. Hidden <2min, blue 2–5min, gray ≥5min (cache TTL).
+idle_segment=""
+if [[ -n "$session_id" ]]; then
+  shopt -s nullglob
+  transcripts=("$HOME"/.claude/projects/*/"${session_id}".jsonl)
+  shopt -u nullglob
+  transcript="${transcripts[0]:-}"
+  if [[ -f "$transcript" ]]; then
+    last_epoch=$(file_mtime_epoch "$transcript")
+    if [[ -n "$last_epoch" ]]; then
+      now_epoch=$(date +%s)
+      elapsed=$(( now_epoch - last_epoch ))
+      h=$((elapsed / 3600)); m=$(((elapsed % 3600) / 60)); s=$((elapsed % 60))
+      if   (( h > 0 ));         then fmt="${h}h ${m}m ${s}s"
+      elif (( elapsed >= 60 )); then fmt="${m}m ${s}s"
+      else                           fmt="${s}s"
+      fi
+      if   (( elapsed >= 300 )); then color=$GRAY; idle_segment="  ${color}[${fmt}]${RESET}"
+      elif (( elapsed >= 120 )); then color=$BLUE; idle_segment="  ${color}[${fmt}]${RESET}"
+      fi
+    fi
+  fi
+fi
+
 # --- drift segment -----------------------------------------------------------
 # Windowed B-ratio (tokens per grounding event). Empty until 5+ turns.
 drift_segment=""
@@ -104,4 +136,4 @@ fi
 # --- compose -----------------------------------------------------------------
 left="${model_segment}${ctx_segment}"
 [[ -n "$left" && -n "$cwd_segment" ]] && left+="  "
-printf '%s%s%s%s%s\n' "$left" "$cwd_segment" "$git_segment" "$audit_segment" "$drift_segment"
+printf '%s%s%s%s%s%s\n' "$left" "$cwd_segment" "$git_segment" "$audit_segment" "$idle_segment" "$drift_segment"

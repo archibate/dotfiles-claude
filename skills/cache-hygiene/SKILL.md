@@ -3,7 +3,8 @@ name: cache-hygiene
 description: >
   Prompt cache cost optimization. Generates periodic conversation turns to keep the
   5-minute prompt cache warm during idle gaps. TRIGGER immediately after any Bash or
-  Agent call with `run_in_background=true`, or when the user says "cache keep-alive".
+  Agent call with `run_in_background=true` on the official Anthropic runtime, or
+  when the user says "cache keep-alive".
 allowed-tools:
   - ScheduleWakeup
 compatibility: Claude Code
@@ -15,7 +16,8 @@ Prompt cache cost optimization protocol. The prompt cache has a 5-minute TTL. A 
 
 ## When to Use
 
-- **Auto-triggered** (via hook): after launching a background task (Bash or Agent).
+- **Auto-triggered** (via hook): after launching a background task (Bash or Agent)
+  on the official Anthropic runtime.
 - **Manual** (user types `/cache-hygiene`): user signals they will be away. Start the keep-alive loop after ending the current response.
 
 ## Keep-Alive Protocol

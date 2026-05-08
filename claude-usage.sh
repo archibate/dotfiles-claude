@@ -43,7 +43,7 @@ def cache_path() -> Path:
 
 
 def using_custom_endpoint() -> bool:
-    base = os.environ.get("ANTHROPIC_BASE_URL") or os.environ.get("ANTHROPIC_API_BASE_URL")
+    base = os.environ.get("ANTHROPIC_BASE_URL")
     if not base:
         return False
     try:

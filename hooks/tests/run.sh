@@ -6,6 +6,9 @@
 # fresh user environment would see (Claude's runtime env can set
 # PYTHONUNBUFFERED, masking deny tests).
 unset PYTHONUNBUFFERED
+unset ANTHROPIC_BASE_URL
+unset ANTHROPIC_DEFAULT_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL
+unset ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL
 
 fail=0
 
@@ -47,6 +50,32 @@ assert_context() {
     fail=1
   else
     echo "OK:   $name context ($pattern)"
+  fi
+}
+
+assert_silent_env() {
+  local name="$1" input="$2" env_name="$3" env_value="$4"
+  local out
+  out=$(printf '%s' "$input" | env "$env_name=$env_value" bash ~/.claude/hooks/$name.sh 2>&1)
+  if [ -n "$out" ]; then
+    echo "FAIL: $name should be silent with $env_name=$env_value"
+    echo "  got: $out"
+    fail=1
+  else
+    echo "OK:   $name silent ($env_name=$env_value)"
+  fi
+}
+
+assert_context_env() {
+  local name="$1" input="$2" pattern="$3" env_name="$4" env_value="$5"
+  local out
+  out=$(printf '%s' "$input" | env "$env_name=$env_value" bash ~/.claude/hooks/$name.sh 2>&1)
+  if ! echo "$out" | jq -e ".hookSpecificOutput.additionalContext | contains(\"$pattern\")" > "$test_out"; then
+    echo "FAIL: $name should emit additionalContext containing '$pattern' with $env_name=$env_value"
+    echo "  got: $out"
+    fail=1
+  else
+    echo "OK:   $name context ($pattern, $env_name=$env_value)"
   fi
 }
 
@@ -542,6 +571,8 @@ assert_silent no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":600,"re
 assert_silent no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":"abc","reason":"x"}}'
 # String-encoded number still evaluates numerically
 assert_deny no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":"600","reason":"x"}}' "dead zone"
+# Third-party provider runtime: prompt-cache dead-zone policy is silent.
+assert_silent_env no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":600,"reason":"x"}}' ANTHROPIC_BASE_URL "https://api.deepseek.com/anthropic"
 
 echo ""
 echo "=== PreToolUse defaulting hooks ==="
@@ -626,9 +657,13 @@ assert_silent verify-explore-results '{"tool_input":{"subagent_type":"Plan"}}'
 echo ""
 echo "=== PostToolUse: hooks using emit helper ==="
 
-# cache-keepalive-hint: fires on backgrounded Bash and Agent; silent on foreground
+# cache-keepalive-hint: fires on official-Anthropic backgrounded Bash and Agent;
+# silent on foreground and third-party provider runtimes.
 assert_context cache-keepalive-hint '{"tool_name":"Bash","tool_input":{"run_in_background":true,"command":"sleep 60"}}' "Background Bash"
 assert_context cache-keepalive-hint '{"tool_name":"Agent","tool_input":{"run_in_background":true}}' "Background agent"
+assert_context_env cache-keepalive-hint '{"tool_name":"Bash","tool_input":{"run_in_background":true,"command":"sleep 60"}}' "Background Bash" ANTHROPIC_BASE_URL "https://api.anthropic.com"
+assert_silent_env cache-keepalive-hint '{"tool_name":"Bash","tool_input":{"run_in_background":true,"command":"sleep 60"}}' ANTHROPIC_BASE_URL "https://api.deepseek.com/anthropic"
+assert_silent_env cache-keepalive-hint '{"tool_name":"Agent","tool_input":{"run_in_background":true}}' ANTHROPIC_DEFAULT_MODEL "gpt-5.4"
 assert_silent cache-keepalive-hint '{"tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{}}'
 
 # prefer-uv-run: fires on bare python3; silent when uv run is already used

@@ -153,6 +153,10 @@ Common pitfalls:
 - Do NOT miss the backticks around markers: `[opinion]` not [opinion].
 - Append the markers AFTER claims, not before.
 
+<example>
+Markers go AFTER each claim `[verified: CLAUDE.md L110]`, with backticks `[verified: CLAUDE.md L109]`. Untagged adjective judgments like "cleaner" or "more stable" read as rationale but are unverified opinions `[verified: CLAUDE.md L103]` — tag them `[opinion]` or replace with a `[verified: <source>]` citation `[opinion]`.
+</example>
+
 ---
 
 ## Naming Rule

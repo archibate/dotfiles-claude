@@ -2,7 +2,7 @@
 # Custom Claude Code statusLine renderer.
 #
 # Reads stdin JSON (session_id, cwd, model.id, context_window, workspace),
-# renders a single line with model + ctx% + cwd + git + an audit segment
+# renders a single line with model + ctx% + cwd + git + audit + drift segments
 # scoped to the current session.
 #
 # Audit segment priority:
@@ -94,7 +94,14 @@ if [[ -n "$session_id" ]]; then
   audit_segment=$(~/.claude/hooks/audit-edits.py statusline "$session_id" 2>/dev/null || true)
 fi
 
+# --- drift segment -----------------------------------------------------------
+# Windowed B-ratio (tokens per grounding event). Empty until 5+ turns.
+drift_segment=""
+if [[ -n "$session_id" ]]; then
+  drift_segment=$(~/.claude/hooks/drift-detect.py statusline "$session_id" 2>/dev/null || true)
+fi
+
 # --- compose -----------------------------------------------------------------
 left="${model_segment}${ctx_segment}"
 [[ -n "$left" && -n "$cwd_segment" ]] && left+="  "
-printf '%s%s%s%s\n' "$left" "$cwd_segment" "$git_segment" "$audit_segment"
+printf '%s%s%s%s%s\n' "$left" "$cwd_segment" "$git_segment" "$audit_segment" "$drift_segment"

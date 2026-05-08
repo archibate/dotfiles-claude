@@ -6,7 +6,7 @@ Preferred over defaults:
 
 - `rg` not `grep`
 - `fd` not `find`
-- `exa` not `ls`
+- `eza` not `ls`
 - `sd` not `sed`
 - `just` not `make`
 - `uv` not `pip`

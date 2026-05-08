@@ -9,8 +9,7 @@ the current session transcript. Fires asyncRewake exit 2 with a system-reminder
 when 3+ consecutive turns have windowed B above the p90 threshold AND the hook
 is not currently in 'warned' state. Resets when windowed B drops below p75.
 
-Threshold values (290 = p90, 150 = p75) come from calibration over 14 historical
-sessions; treat as starting hypothesis pending observation.
+Threshold values (143 = p90, 73 = p75) calibrated over 547 historical sessions.
 
 Numerator: assistant text + Bash command + Write content + Edit new_string (tokens).
 Denominator: count of user-tagged transcript entries since previous assistant entry.
@@ -22,8 +21,8 @@ import os
 import sys
 from pathlib import Path
 
-P90 = 290
-P75 = 150
+P90 = 143
+P75 = 73
 SUSTAINED = 3
 WINDOW = 5
 MIN_TURNS = 5

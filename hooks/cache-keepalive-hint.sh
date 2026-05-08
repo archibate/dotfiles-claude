@@ -1,7 +1,9 @@
 #!/usr/bin/bash
 # PostToolUse hook: prompt cache keep-alive hint on every background launch.
 # Bash → use Monitor (~270s timeout); Agent → load /cache-hygiene.
-# Fires on every background task (explicit run_in_background or auto-backgrounded).
+# Fires on official Anthropic background tasks (explicit run_in_background or
+# auto-backgrounded). Third-party providers may not share Anthropic prompt-cache
+# economics, so stay silent there.
 set -euo pipefail
 
 input=$(cat)
@@ -11,6 +13,11 @@ run_in_bg=$(echo "$input" | jq -r '.tool_input.run_in_background // false')
 bg_id=$(echo "$input" | jq -r '.tool_response.backgroundTaskId // empty')
 
 if [ "$run_in_bg" != "true" ] && [ -z "$bg_id" ]; then
+    exit 0
+fi
+
+source "$(dirname "$0")/lib/provider.sh"
+if ! is_official_anthropic_runtime; then
     exit 0
 fi
 

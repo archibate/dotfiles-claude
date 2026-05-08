@@ -893,7 +893,10 @@ def cmd_statusline(session_id: str, color: bool = True) -> int:
             except OSError:
                 pass
             continue
-        sys.stdout.write(f"  {CYAN}auditing… {elapsed}s{RESET}")
+        h, rem = divmod(elapsed, 3600)
+        m, s = divmod(rem, 60)
+        dur = f"{h}h {m}m {s}s" if h else f"{m}m {s}s" if m else f"{s}s"
+        sys.stdout.write(f"  {CYAN}auditing… {dur}{RESET}")
         return 0
 
     # 2. Result marker

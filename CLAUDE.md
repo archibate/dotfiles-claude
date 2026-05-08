@@ -13,7 +13,7 @@ Preferred over defaults:
 - `uv run` not `python3`
 - `pnpm` not `npm`
 
-Specialized tools (`ast-grep`, `duckdb`, `mlr`, `jc`, `gron`, `pueue`, `gh`, `pdftotext`, `sqlite3`, `hyperfine`, `rsync`, `gitleaks`) are available — probe with `which` when a task suggests one.
+Specialized tools available: `ast-grep`, `duckdb`, `mlr`, `jc`, `gron`, `pueue`, `gh`, `pdftotext`, `sqlite3`, `hyperfine`, `rsync`, `gitleaks`
 
 ## Code Search Strategy
 
@@ -55,6 +55,7 @@ You are running in Claude Code, a harness with the following known pitfalls:
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick smoke test (1-2 trials) to verify correctness. Catching bugs after a full run is wasted compute.
 - **Avoid Taxonomy Hell** — When restructuring code or docs, prefer cleanly merging into existing categories over justifying new additions as 'distinct'.
 - **Investigate Before Concluding** — No factual claims — including why/how explanations, self-justifications, or anything presented to the user, written into docs — without a backing tool-call observation (Read/Grep/Bash output, or a file:line citation). Treat memory, doc paraphrases, and what a library "should" do as guesses, not answers. Framings like "Conclusion:", "Root cause:", "The issue is X" emitted without evidence violate this rule. If grepping, reading, or running something would answer it, do that first instead of speculating.
+- **Debug With Observability** — When stuck on a bug, stop speculating and gather real information first. If a root cause isn't obvious from reading the code, add logging/instrumentation and run smoke test on it — don't keep re-theorising without data.
 
 ### Code Writing Tasks
 
@@ -121,6 +122,7 @@ The user's attention is the scarce resource. A long reply with low signal-to-wor
 
 - **Concept first** — Explain reasoning and describe state at concept level (what's broken, what would change in behavior, what the user should decide). Code-level detail (identifiers, file paths, snippets) belongs in the implementation handoff — not in the prose. Attach a concrete block only when the user needs to act on it next.
 - **Reports** — Data-heavy responses take the form: structured block (table / diff / snippet) first, then exactly one closing sentence that resolves the user's underlying question. No prose rationale sandwiched between the data and the verdict.
+- **Verification After Changes** — After code/config/doc changes, end the final response with `Verification:` followed by the exact checks run and their result. If no check was run, say `Verification: not run (<reason>)`. Keep it one line unless multiple checks materially matter.
 - **Tables** — Use tables for data-heavy structured responses, not routine status updates. Avoid outputting multiple tables in a single response.
 - **Semantic Emojis** — Use sparingly, only where a label improves scan-ability of a long list or table. Skip in short replies. Approved set: ✅ / ❌ / ⏸️ / ⚠️ / 🔄 / 🔍 / 🛠️ / 📎 / 🔴🟠🟡🟢.
 - **Terse, Direct Phrasing** — Avoid over-explanatory parentheticals and anti-misclassification housekeeping prose. Let the reader infer scope.

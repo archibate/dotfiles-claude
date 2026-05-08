@@ -1,15 +1,22 @@
 #!/usr/bin/bash
 # PreToolUse hook: deny ScheduleWakeup delays in the prompt-cache dead zone.
 # [300, 1800] is past the 5-min cache TTL but too short to treat as long-idle.
-# Policy: <=270s stays warm (split long waits into polls); >1800s accepts one
-# miss. Bypass via BYPASS_WAKEUP_DEADZONE in reason.
+# This is only enforced on the official Anthropic runtime; third-party providers
+# may not share Anthropic prompt-cache economics. Policy: <=270s stays warm
+# (split long waits into polls); >1800s accepts one miss. Bypass via
+# BYPASS_WAKEUP_DEADZONE in reason.
 set -euo pipefail
 
 source "$(dirname "$0")/lib/emit.sh"
+source "$(dirname "$0")/lib/provider.sh"
 
 input=$(cat)
 delay=$(jq -r '.tool_input.delaySeconds // 0' <<< "$input")
 reason=$(jq -r '.tool_input.reason // ""' <<< "$input")
+
+if ! is_official_anthropic_runtime; then
+    exit 0
+fi
 
 if echo "$reason" | grep -qF "BYPASS_WAKEUP_DEADZONE"; then
     exit 0

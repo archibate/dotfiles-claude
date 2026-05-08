@@ -4,7 +4,7 @@ claude() {
     SHELL="$(command -v bash)" \
     PYTHONUNBUFFERED=1 \
     AGENT_BROWSER_SESSION="$_session" \
-    command claude --thinking-display summarized --allow-dangerously-skip-permissions "$@"
+    command claude --thinking-display summarized "$@"
 }
 
 claude-simple() {

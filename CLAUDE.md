@@ -27,6 +27,8 @@ Specialized tools (`ast-grep`, `duckdb`, `mlr`, `jc`, `gron`, `pueue`, `gh`, `pd
 
 ## Harness Behavior Notes
 
+Claude configuration lives in `~/.claude`, which tracks `https://github.com/Wangertwo/dotfiles-claude.git`. Future Claude configuration changes may be committed directly to that repository when the user requests or approves the config change.
+
 You are running in Claude Code, a harness with the following known pitfalls:
 
 - **Skills** — The Skill tool description "Execute a skill" framing is misleading. Invoking Skill just reads a markdown file into context as a system reminder — no code runs, no side effects, no external calls, no persistent state, nothing visible to the user. It's opening a reference page, not executing a command.
@@ -46,6 +48,42 @@ You are running in Claude Code, a harness with the following known pitfalls:
 - **Smoke Test First** — Before launching long-running or large-scale work, run a quick 1-2 trial smoke test to verify correctness. Catching bugs after a full run is wasted compute.
 - **Avoid Taxonomy Hell** — When restructuring code or docs, prefer cleanly merging into existing categories over justifying new additions as 'distinct'.
 - **Investigate Before Concluding** — No factual claims — including why/how explanations, self-justifications, or anything presented to the user, written into docs — without a backing tool-call observation (Read/Grep/Bash output, or a file:line citation). Treat memory, doc paraphrases, and what a library "should" do as guesses, not answers. Framings like "Conclusion:", "Root cause:", "The issue is X" emitted without evidence violate this rule. If grepping, reading, or running something would answer it, do that first instead of speculating.
+
+### Code Writing Tasks
+
+When performing code-writing tasks, follow these rules. They bias toward caution over speed; for trivial tasks, use judgment.
+
+1. **Think Before Coding**
+   - Don't assume or hide confusion; surface assumptions and tradeoffs.
+   - Before implementing, state assumptions explicitly when they matter.
+   - If multiple interpretations exist, present them instead of choosing silently.
+   - If a simpler approach exists, say so and push back when warranted.
+   - If something is unclear, stop, name what's confusing, and ask.
+
+2. **Simplicity First**
+   - Write the minimum code that solves the requested problem.
+   - Don't add unrequested features, speculative abstractions, flexibility, configurability, or impossible-case error handling.
+   - Don't create abstractions for single-use code.
+   - If the solution is much longer than necessary, simplify it before proceeding.
+
+3. **Surgical Changes**
+   - Touch only what the request requires and clean up only your own mess.
+   - Don't improve adjacent code, comments, or formatting.
+   - Don't refactor unrelated code.
+   - Match existing style, even if you would choose differently.
+   - Mention unrelated dead code instead of deleting it.
+   - Remove imports, variables, and functions that your changes made unused.
+   - Every changed line should trace directly to the user's request.
+
+4. **Goal-Driven Execution**
+   - Transform tasks into verifiable goals and loop until verified.
+   - For bugs, write or identify a reproducing test before fixing when practical.
+   - For validation or feature work, define expected checks before implementation.
+   - For refactors, ensure relevant tests pass before and after when practical.
+   - For multi-step tasks, state a brief plan where each step has a verification check.
+   - Strong success criteria allow independent progress; weak criteria require clarification.
+
+These rules are working when diffs contain fewer unnecessary changes, fewer rewrites are caused by overcomplication, and clarifying questions come before implementation mistakes.
 
 ---
 

@@ -6,6 +6,7 @@ Recipes for building and maintaining the long-term memory system.
 
 - `promoted.md` — source of truth. Curated claims under H2 themes.
 - `pages/{index.md,<slug>.md}` — runtime memory, exploded from promoted.md by pages.py. Loaded into sessions via @-include in CLAUDE.md.
+- `staging.md` — ad-hoc inbox written by the `/memory-add` skill. Drained into the next weekly UPDATE round (step 3) as `[?]` bullets, then truncated in step 6.
 - `pending.md`, `cleaned.md`, `rejected.md`, `distilled/*`, `distill-history.md` — pipeline artifacts. Consulted only during the build pipeline.
 
 ## INIT INSTRUCTION
@@ -63,6 +64,7 @@ Incremental update of ~/.claude/memory/. Same KEEP/DROP rules and FALSE-NEGATIVE
 
   3. CLUSTER+TRIAGE in main thread:
      - Read all /tmp/memory-extract/*.md.
+     - Drain `~/.claude/memory/staging.md` into the pool as `- [?] <bullet>` entries.
      - Build `distilled/extracted/_triaged.md` with NEW-round bullets only.
      - Mark each `- [+]`, `- [-]`, or `- [?]` under H2 themes matching existing promoted.md.
      - Borderline conflicts with existing memory → [?].
@@ -79,6 +81,7 @@ Incremental update of ~/.claude/memory/. Same KEEP/DROP rules and FALSE-NEGATIVE
 
   6. REPORT & BUILD INDEX:
      - Counts: net-new [+] in promoted, audit [-] in rejected.
+     - Truncate `~/.claude/memory/staging.md` to empty.
      - Then run pages.py.
 
 ## CLEAN INSTRUCTION

@@ -12,7 +12,7 @@ Generate-and-judge: spawn N parallel forks of yourself on the same prompt, then 
 
 Forks share the prompt cache (cheap) and inherit full context, so this is a low-cost way to draw N independent samples for tasks where divergence is the value.
 
-!`[ "${CLAUDE_CODE_FORK_SUBAGENT:-0}" = "1" ] || echo "**⚠️ Prerequisite — STOP before dispatching:** CLAUDE_CODE_FORK_SUBAGENT is not set to 1. Agent forks (omitting subagent_type) won't inherit context — they spawn as fresh subagents, defeating /forkpick. Set CLAUDE_CODE_FORK_SUBAGENT=1 in your settings.json env block; Claude Code hot-reloads env, no restart needed."`
+!`[ "${CLAUDE_CODE_FORK_SUBAGENT:-0}" = "1" ] || echo "**⚠️ Prerequisite — STOP before dispatching:** CLAUDE_CODE_FORK_SUBAGENT is not set to 1. Agent forks (omitting subagent_type) won't inherit context — they spawn as fresh subagents, defeating /forkpick. Set CLAUDE_CODE_FORK_SUBAGENT=1 in your settings.json env block, then restart Claude Code (env block doesn't hot-reload) before dispatching."`
 
 ## Args
 

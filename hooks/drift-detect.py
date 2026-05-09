@@ -28,6 +28,7 @@ WINDOW = 5
 MIN_TURNS = 5
 STATE_DIR_TMPL = "/tmp/.claude-hooks-{session_id}"
 STATE_FILE = "drift-state.json"
+STATUSLINE_CACHE_FILE = "drift-statusline.cache"
 
 
 def load_state(session_id):
@@ -171,20 +172,19 @@ def run():
     return 0
 
 
-def statusline_segment(session_id):
-    """Return a one-line statusline segment for the session's current drift ratio.
+def _stat_key(path):
+    try:
+        st = os.stat(path)
+        return f"{st.st_mtime_ns}:{st.st_size}"
+    except OSError:
+        return "missing"
 
-    Empty string when not enough turns. Color-codes by threshold and prefixes
-    with ⚠ when the hook is currently in 'warned' state.
-    """
-    if not session_id:
-        return ""
-    transcript_path = find_transcript(session_id)
-    if not transcript_path or not os.path.exists(transcript_path):
-        return ""
+
+def _compute_segment(transcript_path, session_id):
     turns = compute_per_turn(transcript_path)
     if len(turns) < MIN_TURNS:
         return ""
+
     ratios = windowed_b(turns)
     most_recent = ratios[-1]
 
@@ -202,11 +202,52 @@ def statusline_segment(session_id):
 
     state = load_state(session_id)
     warned = state.get("warned")
-    if warned:
-        color = RED
 
     label = "⚠⏚" if warned else "⏚"
     return f"  {color}[{label}:{most_recent:.0f}]{RESET}"
+
+
+def statusline_segment(session_id):
+    """Return a one-line statusline segment for the session's current drift ratio.
+
+    Empty string when not enough turns. Color-codes by threshold and prefixes
+    with ⚠ when the hook is currently in 'warned' state.
+
+    Cached by (transcript stat, state stat) — status line refreshes every 5s
+    but transcripts only grow at turn boundaries, so most ticks hit the cache.
+    Hit path ~12µs; direct compute ~263µs at 100KB, ~11ms at 3MB.
+    """
+    if not session_id:
+        return ""
+    transcript_path = find_transcript(session_id)
+    if not transcript_path or not os.path.exists(transcript_path):
+        return ""
+
+    state_dir = Path(STATE_DIR_TMPL.format(session_id=session_id))
+    state_path = state_dir / STATE_FILE
+    cache_path = state_dir / STATUSLINE_CACHE_FILE
+    cache_key = f"{_stat_key(transcript_path)}|{_stat_key(state_path)}"
+
+    try:
+        if cache_path.exists():
+            cached = cache_path.read_text()
+            sep = cached.find("\n")
+            if sep >= 0 and cached[:sep] == cache_key:
+                return cached[sep + 1 :]
+    except OSError:
+        pass
+
+    segment = _compute_segment(transcript_path, session_id)
+
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = cache_path.with_suffix(".tmp")
+        tmp_path.write_text(f"{cache_key}\n{segment}")
+        os.replace(tmp_path, cache_path)
+    except OSError:
+        pass
+
+    return segment
 
 
 if __name__ == "__main__":

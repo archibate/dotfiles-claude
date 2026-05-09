@@ -30,6 +30,13 @@ source "$(dirname "$0")/lib/anchors.sh"
 
 read_bash_command
 
+# Fast-path bailout: union of trigger tokens across all 11 specific checks
+# below. False positives just fall through to the precise checks; false
+# negatives would silently disarm the hook, so the union must be a superset.
+# Common case (no token present) saves ~24 grep spawns.
+FASTPATH='\b(mkfs|parted|fdisk|gdisk|sgdisk|cfdisk|wipefs|cryptsetup|shred|srm|wipe|shutdown|reboot|poweroff|halt|init|telinit|systemctl|chmod|chown|docker|iptables|ip6tables|nft|ufw|crontab|killall|kill|tee|cp|mv|install|dd)\b|/dev/|/etc/|/proc/|/sys/|/boot/|>'
+echo "$command" | grep -qP "$FASTPATH" || exit 0
+
 # Anchored to command position via lib/anchors.sh — covers direct invocation
 # (with optional sudo flags), `bash -c` / `eval` / `xargs` wrappers, and
 # `ssh [opts] host CMD`. Without anchoring, a literal mention of the tool name

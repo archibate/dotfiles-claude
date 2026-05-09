@@ -157,6 +157,8 @@ assert_deny no-dangerous-ops '{"tool_input":{"command":"mkfs.ext4 /dev/sdb1"}}' 
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo mkfs -t ext4 /dev/sdc"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"parted /dev/sda mklabel gpt"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sgdisk -Z /dev/sda"}}' "disk-format"
+# fastpath regression: tool-name-only invocations (no /dev/ path) must still deny
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sgdisk -Z disk.img"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"wipefs -a /dev/sdb"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo cryptsetup luksFormat /dev/sda1"}}' "luksFormat"
 # Anchor-lib upgrade: ssh / sudo-flag wrappers + FP fixes

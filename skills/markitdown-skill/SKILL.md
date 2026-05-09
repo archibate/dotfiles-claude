@@ -1,6 +1,6 @@
 ---
 name: markitdown-skill
-description: Guide for using Microsoft MarkItDown - a Python utility for converting files to Markdown. Use when converting PDF, Word, PowerPoint, Excel, images, audio, HTML, CSV, JSON, XML, ZIP, YouTube URLs, EPubs, Jupyter notebooks, RSS feeds, or Wikipedia pages to Markdown format. Also use for document processing pipelines, LLM preprocessing, or text extraction tasks.
+description: Use MarkItDown to convert various files to Markdown. Use when converting PDF, Word, PowerPoint, Excel, images, audio, HTML, CSV, JSON, XML, ZIP, YouTube URLs, EPubs, Jupyter notebooks, RSS feeds, or Wikipedia pages to Markdown format. Also use for document processing pipelines, LLM preprocessing, or text extraction tasks.
 ---
 
 # MarkItDown Skill

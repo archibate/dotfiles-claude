@@ -26,6 +26,14 @@ The `pandas` pipeline is too slow for real-time `[verified: cProfile output: "60
 </good-example>
 
 <bad-example>
+The async-await rewrite scores highest `[opinion]`. Want me to apply the async-await rewrite, keep the callback chain, or merge the two?
+</bad-example>
+
+<good-example>
+**Recommendation:** apply the async-await rewrite — callback chain has no advantage now that the upstream API is promise-shaped `[opinion]`. Go?
+</good-example>
+
+<bad-example>
 | metric | reported  | after fix (projected) |
 |--------|-----------|-----------------------|
 | p99    | 240ms     | ~80ms                 |
@@ -40,7 +48,35 @@ The cache_keepalive change should close the connection-leak path and dramaticall
 | p99 | 240ms `[verified: load_test.json L8]` | ~80ms `[opinion]` |
 | errors | 1.4% `[verified: load_test.json L12]` | unchanged direction `[opinion]` |
 
-The `cache_keepalive` change might close the connection-leak path `[opinion]` — consider re-running the load test to confirm. Go?
+**Read**
+
+The `cache_keepalive` change might close the connection-leak path `[opinion]`.
+
+**Next**
+
+Re-run the load test to confirm the projected p99 drop `[opinion]`. Go?
+</good-example>
+
+<bad-example>
+| function | cumtime | calls |
+|---|---|---|
+| read_csv | 4.2s `[verified: cprofile.txt L1]` | 1 `[verified: cprofile.txt L1]` |
+| groupby | 2.1s `[verified: cprofile.txt L2]` | 12 `[verified: cprofile.txt L2]` |
+| to_parquet | 0.8s `[verified: cprofile.txt L3]` | 1 `[verified: cprofile.txt L3]` |
+
+`read_csv` dominates.
+</bad-example>
+
+<good-example>
+| function | cumtime | calls |
+|---|---|---|
+| read_csv | 4.2s | 1 |
+| groupby | 2.1s | 12 |
+| to_parquet | 0.8s | 1 |
+
+**What this means**
+
+Hot spots from the profile run `[verified: cprofile.txt L1-L3]`. `read_csv` dominates `[opinion]`.
 </good-example>
 
 <bad-example>
@@ -50,7 +86,14 @@ Root cause: API rate limit is being hit by concurrent workers from another job. 
 <good-example>
 Let me investigate why.
 <Bash>rg -n -m 50 'SOME_PATTERN' /path/to/job.log</Bash>
-Rate-limit errors point at concurrent workers `[verified: job log L235]`. Confirming yesterday's run also failed before re-triggering `[verified: job log L238]`.
+
+**Cause**
+
+Rate-limit errors point at concurrent workers `[verified: job log L235]`.
+
+**Next**
+
+Confirming yesterday's run also failed before re-triggering `[verified: job log L238]`.
 </good-example>
 
 <bad-example>
@@ -130,7 +173,7 @@ Set N_RETRY=5 in src/rate_limiter.py and ran pytest tests/test_rate_limiter.py �
 <good-example>
 Bumped retries from 3 to 5 `[verified: edited src/rate_limiter.py L32]`. test 8/8 pass `[verified: pytest output: "8 passed in 0.42s"]`. The parquet output lands in `/tmp/out` `[verified: ls /tmp/out: "results.parquet"]`.
 
-Verification: `pytest tests/test_rate_limiter.py` → 8/8 passing.
+**Verification:** `pytest tests/test_rate_limiter.py` → 8/8 passing.
 </good-example>
 
 <bad-example>
@@ -177,7 +220,7 @@ Bumped retry budget from 3 to 5.
 <Bash>uv run pytest tests/test_rate_limiter.py</Bash>
 Bumped retry budget from 3 to 5 `[verified: test_rate_limiter.py 8/8 passing]`.
 
-Verification: `uv run pytest tests/test_rate_limiter.py` → 8/8 passing.
+**Verification:** `uv run pytest tests/test_rate_limiter.py` → 8/8 passing.
 </good-example>
 
 <bad-example>
@@ -190,7 +233,7 @@ Added an install section.
 <Read>README.md</Read>
 Added an install section `[verified: README.md L12-L42]`.
 
-Verification: not run (markdown-only edit, no executable check applies).
+**Verification:** not run (markdown-only edit, no executable check applies).
 </good-example>
 
 
@@ -198,10 +241,42 @@ Verification: not run (markdown-only edit, no executable check applies).
 <Read>src/rate_limiter.py</Read>
 Current retry budget is 5.
 
-Verification: not run (read-only, no changes made).
+**Verification:** not run (read-only, no changes made).
 </bad-example>
 
 <bad-example>
 <Read>src/rate_limiter.py</Read>
 Current retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
 </bad-example>
+
+<good-example>
+<Read>src/rate_limiter.py</Read>
+Current retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
+
+**Sources:**
+- rate_limiter.py L12: N_RETRY = 5 — locatable
+</good-example>
+
+<bad-example>
+(assistant mistakenly emitted no Read call, skipped the Sources scan)
+Retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
+<User>You fabricated the `[verified: <source>]`?</User>
+I apologize for the hallucinated cite. Let me read the actual file now.
+<Read>src/rate_limiter.py</Read>
+Retry budget is actually 3 `[verified: src/rate_limiter.py L8: N_RETRY = 3]` — prior claim was wrong.
+</bad-example>
+
+<good-example>
+(assistant mistakenly emitted no Read call)
+Retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
+
+**Sources:**
+- rate_limiter.py L12: N_RETRY = 5 — hallucinated
+
+Sources scan caught the hallucination — re-running to verify before end-turn.
+<Bash>rg -n "N_RETRY" src/rate_limiter.py</Bash>
+Retry budget is actually 3 `[verified: src/rate_limiter.py L8: N_RETRY = 3]` — prior claim was wrong.
+
+**Sources:**
+- src/rate_limiter.py L8: N_RETRY = 3 — locatable
+</good-example>

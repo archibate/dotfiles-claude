@@ -370,9 +370,9 @@ async function navStr(cdp, sid, url) {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
-      throw new Error(`Only http/https URLs allowed, got: ${url}`);
+      throw new Error(`nav: only http/https allowed (got ${url}). Redirecting an existing tab to non-http URIs can hijack its origin (e.g. \`javascript:\` runs in the current page's context). For local files or other schemes, use \`cdp.mjs open <url>\` instead — it creates a fresh tab with no inherited context.`);
   } catch (e) {
-    if (e.message.startsWith('Only')) throw e;
+    if (e.message.startsWith('nav:')) throw e;
     throw new Error(`Invalid URL: ${url}`);
   }
   await cdp.send('Page.enable', {}, sid);

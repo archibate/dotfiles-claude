@@ -12,6 +12,8 @@ Generate-and-judge: spawn N parallel forks of yourself on the same prompt, then 
 
 Forks share the prompt cache (cheap) and inherit full context, so this is a low-cost way to draw N independent samples for tasks where divergence is the value.
 
+!`[ "${CLAUDE_CODE_FORK_SUBAGENT:-0}" = "1" ] || echo "**⚠️ Prerequisite — STOP before dispatching:** CLAUDE_CODE_FORK_SUBAGENT is not set to 1. Agent forks (omitting subagent_type) won't inherit context — they spawn as fresh subagents, defeating /forkpick. Set CLAUDE_CODE_FORK_SUBAGENT=1 in your settings.json env block; Claude Code hot-reloads env, no restart needed."`
+
 ## Args
 
 `/forkpick [N=3] [rubric:...] <question>`
@@ -33,6 +35,19 @@ Refuse with one line and stop if the question is:
 Refusal line: `forkpick is for divergent answers — one direct answer suffices here.`
 
 Fork only when there's a real best-of-N judgment call: design choices, prose drafting, code style, naming, tradeoff analysis, open-ended planning.
+
+## Mutable tasks (worktree isolation)
+
+If the request asks forks to edit files (create/fix/refactor/implement/edit/add), each fork must run in its own git worktree — otherwise concurrent `Edit`/`Write` calls clobber each other and reads see torn state.
+
+**Worktree base mode (live):** !`jq -r '"Mode: " + (.worktree.baseRef // "fresh (default)") + (if (.worktree.baseRef // "fresh") == "head" then " — Agent worktrees branch from local HEAD, so forks inherit unpushed commits on this branch (uncommitted/staged edits still invisible, commit first)." else " — worktrees branch from the local origin/<default> remote-tracking ref, which can be stale until you git fetch; forks see only commits already on that ref. Easiest fix: set worktree.baseRef to head in ~/.claude/settings.json so forks branch from your current HEAD." end)' ~/.claude/settings.json`
+
+- Pass `isolation: "worktree"` on every `Agent` call. Each fork gets its own path + branch (`cwd` inside the fork is the worktree path); the harness auto-cleans worktrees that produced no changes and returns `path` + `branch` for the rest. Auto-cleanup only applies to interactive runs — non-interactive (`claude -p ...`) leaves worktrees behind.
+- Tell each fork to leave the change committed on its branch and end with a one-paragraph summary — judging works off diffs, not chat.
+- Judge from the parent by comparing **diffs** (`git -C <path> diff <base>` or `git log <base>..<branch>`) plus the summary, not just reply text.
+- After picking the winner, cherry-pick or merge the winner's branch into the user's working tree as a separate step. Confirm before landing if DoA is low. Leave loser worktrees alone — they self-clean or stay for inspection.
+- Refuse fan-out when forks would race on shared external state (DB writes, network calls, deploys, package publishes) — worktrees isolate the filesystem only.
+- A fork **cannot spawn further forks**, so if your `/forkpick` invocation is itself running inside a fork (e.g. nested via another skill), the inner forks will fail — flag and stop instead of dispatching.
 
 ## Protocol
 
@@ -84,13 +99,23 @@ Do not paste full loser content unless the user asks.
 - Varying the prompt across forks. Use `/fresh-arch` for deliberate diversity.
 - Skipping the verdict — "all three were good" is not a pick.
 - Re-running `/forkpick` on its own output to "best-of-best". Diminishing returns past N=4.
+- Mutable forks without `isolation: "worktree"` — concurrent `Edit`/`Write` calls clobber.
+- Mutable forks for tasks that mutate shared external state (DB rows, network endpoints, deploys, package registries) — worktrees do not isolate those.
 
 ## Sketch
 
+Read-only (questions, design comparisons, prose):
 ```
 Agent({ name: "fork-1", description: "forkpick sample", prompt: "<question>" })
 Agent({ name: "fork-2", description: "forkpick sample", prompt: "<question>" })
 Agent({ name: "fork-3", description: "forkpick sample", prompt: "<question>" })
 ```
 
-All three in one message. Wait for notifications. Score. Pick.
+Mutable (file edits — add `isolation: "worktree"` to every fork):
+```
+Agent({ name: "fork-1", description: "forkpick sample", prompt: "<question>", isolation: "worktree" })
+Agent({ name: "fork-2", description: "forkpick sample", prompt: "<question>", isolation: "worktree" })
+Agent({ name: "fork-3", description: "forkpick sample", prompt: "<question>", isolation: "worktree" })
+```
+
+All N in one message. Wait for notifications. Score. Pick. For mutable forks, cherry-pick or merge the winner's branch as a separate landing step.

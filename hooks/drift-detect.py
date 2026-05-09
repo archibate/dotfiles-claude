@@ -9,11 +9,22 @@ the current session transcript. Fires asyncRewake exit 2 with a system-reminder
 when 3+ consecutive turns have windowed B above the p90 threshold AND the hook
 is not currently in 'warned' state. Resets when windowed B drops below p75.
 
-Threshold values (143 = p90, 73 = p75) calibrated over 547 historical sessions.
+Threshold values (393 = p90, 225 = p75) calibrated over 2275 historical sessions
+under the evaluable view (n=18751 windowed ratios from 319 sessions with ≥
+MIN_TURNS=5 *significant* turns at MIN_NUM=30) — i.e. the distribution of
+ratios the hook would actually evaluate against thresholds, not raw windowed
+output from short sessions that can never fire. Cross-verified at MIN_NUM=0:
+recovers p90=144 over 583 evaluable sessions, matching the prior (143, 73)
+calibration over 547 sessions. Prior calibration on raw turns no longer
+applies under filtering.
 
 Numerator: assistant text + Bash command + Write content + Edit new_string (tokens).
 Denominator: count of user-tagged transcript entries since previous assistant entry.
 Token approximation: chars / 4.
+
+Turns with numerator below MIN_NUM are filtered before windowing — small loop
+ticks (e.g. /cache-hygiene) would otherwise dilute a neighboring high-density
+turn out of the P90 band.
 """
 
 import json
@@ -21,11 +32,19 @@ import os
 import sys
 from pathlib import Path
 
-P90 = 143
-P75 = 73
+P90 = 393
+P75 = 225
 SUSTAINED = 3
 WINDOW = 5
 MIN_TURNS = 5
+# Filter floor: turns with numerator below this are excluded from the window so
+# that loop-tick noise can't dilute a neighboring high-density turn out of the
+# P90 band. Calibrated over 1402 sessions with /cache-hygiene + /loop markers:
+# loop-tick num distribution had p99=28, max=54 across 314 ticks; setting the
+# floor above p99 filters effectively all loop ticks while preserving
+# substantive turns (substantive p75=40, p90=164 across 40k turns).
+# NOTE: changing MIN_NUM invalidates P90/P75 above — recalibrate together.
+MIN_NUM = 30
 STATE_DIR_TMPL = "/tmp/.claude-hooks-{session_id}"
 STATE_FILE = "drift-state.json"
 STATUSLINE_CACHE_FILE = "drift-statusline.cache"
@@ -114,11 +133,12 @@ def compute_per_turn(transcript_path):
     return turns
 
 
-def windowed_b(turns, window=WINDOW):
+def windowed_b(turns, window=WINDOW, min_num=MIN_NUM):
+    sig = [(n, d) for (n, d) in turns if n >= min_num]
     ratios = []
-    for i in range(len(turns)):
+    for i in range(len(sig)):
         lo = max(0, i + 1 - window)
-        sub = turns[lo : i + 1]
+        sub = sig[lo : i + 1]
         n_sum = sum(t[0] for t in sub)
         d_sum = sum(t[1] for t in sub)
         ratios.append(n_sum / d_sum if d_sum else 0.0)
@@ -140,10 +160,10 @@ def run():
         return 0
 
     turns = compute_per_turn(transcript_path)
-    if len(turns) < MIN_TURNS:
+    ratios = windowed_b(turns)
+    if len(ratios) < MIN_TURNS:
         return 0
 
-    ratios = windowed_b(turns)
     last = ratios[-SUSTAINED:]
     sustained_above = all(r > P90 for r in last)
     most_recent = ratios[-1]
@@ -182,10 +202,10 @@ def _stat_key(path):
 
 def _compute_segment(transcript_path, session_id):
     turns = compute_per_turn(transcript_path)
-    if len(turns) < MIN_TURNS:
+    ratios = windowed_b(turns)
+    if len(ratios) < MIN_TURNS:
         return ""
 
-    ratios = windowed_b(turns)
     most_recent = ratios[-1]
 
     GREEN = "\033[32m"

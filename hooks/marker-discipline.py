@@ -33,7 +33,7 @@ Fenced code blocks are stripped before scanning so quoted snippets do not
 trigger. Inline-code spans are kept because the user's marker style sometimes
 wraps the marker in backticks.
 
-See CLAUDE.md -> Output Style -> Inline epistemic markers.
+See CLAUDE.md -> Output Style — Epistemic Markers.
 """
 
 import json
@@ -187,7 +187,7 @@ def run() -> int:
     lines.append(
         "Each verdict / recommendation / root-cause line needs an inline "
         "[opinion] or [verified: <source>] marker. "
-        "See CLAUDE.md -> Output Style -> Inline epistemic markers."
+        "See CLAUDE.md -> Output Style — Epistemic Markers."
     )
     sys.stderr.write("\n".join(lines) + "\n")
     return 2

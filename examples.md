@@ -20,7 +20,7 @@ Want me to:
 </bad-example>
 
 <good-example>
-The `pandas` pipeline is too slow for real-time `[verified: profiling output]`.
+The `pandas` pipeline is too slow for real-time `[verified: cProfile output: "60% in pd.read_csv"]`.
 
 **Recommendation:** try `polars` for acceleration `[opinion]`. Go?
 </good-example>
@@ -37,8 +37,8 @@ The cache_keepalive change should close the connection-leak path and dramaticall
 <good-example>
 | metric | reported | after fix (projected) |
 |---|---|---|
-| p99 | 240ms `[verified: load_test.json]` | ~80ms `[opinion]` |
-| errors | 1.4% `[verified: load_test.json]` | unchanged direction `[opinion]` |
+| p99 | 240ms `[verified: load_test.json L8]` | ~80ms `[opinion]` |
+| errors | 1.4% `[verified: load_test.json L12]` | unchanged direction `[opinion]` |
 
 The `cache_keepalive` change might close the connection-leak path `[opinion]` — consider re-running the load test to confirm. Go?
 </good-example>
@@ -58,7 +58,7 @@ T2 complete (the database migration). Next step is T3, which is the data integri
 </bad-example>
 
 <good-example>
-Database migration complete `[verified: alembic upgrade output]`. Next: data integrity check `[opinion]`. Go?
+Database migration complete `[verified: alembic output: "0042 -> 0043, OK"]`. Next: data integrity check `[opinion]`. Go?
 </good-example>
 
 <bad-example>
@@ -92,7 +92,7 @@ Recommend: A1 + B2 should work, but it depends on the workload. Go?
 </bad-example>
 
 <good-example>
-Profiling shows 60% in `CSV` parse, 30% in `groupby` `[verified: cProfile dump]`.
+Profiling shows 60% in `CSV` parse, 30% in `groupby` `[verified: cProfile dump: "tottime read_csv 4.2s, groupby 2.1s"]`.
 
 First question: storage format?
 1. Parquet - offers ... `[opinion]`
@@ -128,7 +128,7 @@ Set N_RETRY=5 in src/rate_limiter.py and ran pytest tests/test_rate_limiter.py �
 </bad-example>
 
 <good-example>
-Bumped retries from 3 to 5 `[verified: edited src/rate_limiter.py L32]`. test 8/8 pass `[verified: pytest tests/test_rate_limiter.py]`. The parquet output lands in `/tmp/out` `[verified: ls /tmp/out]`.
+Bumped retries from 3 to 5 `[verified: edited src/rate_limiter.py L32]`. test 8/8 pass `[verified: pytest output: "8 passed in 0.42s"]`. The parquet output lands in `/tmp/out` `[verified: ls /tmp/out: "results.parquet"]`.
 
 Verification: `pytest tests/test_rate_limiter.py` → 8/8 passing.
 </good-example>
@@ -141,7 +141,7 @@ Now inspecting the failure log.
 
 <good-example>
 <Bash>pueue kill 47</Bash>
-Pueue task 47 (regenerate stale features) killed `[verified: pueue output]` — inspecting the failure log.
+Pueue task 47 (regenerate stale features) killed `[verified: pueue output: "Killed task 47"]` — inspecting the failure log.
 <Read>~/.local/share/pueue/task_logs/47.log</Read>
 </good-example>
 
@@ -159,9 +159,9 @@ Acknowledged. Writing the production pipeline now.
 <Write>production_pipeline.py</Write>
 Let me run a smoke test on a 1-day slice: 5200 rows × 95 feature columns. First query the latest available date in your data source:
 <Bash>some-sql-tool --query "SELECT max(date) FROM some_table"</Bash>
-The latest available date is 2026-04-01 `[verified: some-sql-tool query output]`. Running smoke test on that day.
+The latest available date is 2026-04-01 `[verified: some-sql-tool output: "max(date) = 2026-04-01"]`. Running smoke test on that day.
 <Bash>uv run production_pipeline.py --date 2026-04-01</Bash>
-Smoke clean `[verified: smoke run succeed with no error]`.
+Smoke clean `[verified: production_pipeline.py --date 2026-04-01: exit 0, 5200 rows × 95 cols]`.
 
 Initial run will produce 95 feature columns `[verified: production_pipeline.py L42: FEATURE_COLUMNS]`. ETA ~30 min `[opinion]`. Running the full pipeline now to get production data. This can be computation-intensive, so I will load the `/preflight-check` skill for guidance before running directly.
 <Skill name="preflight-check" arg="uv run production_pipeline.py"></Skill>
@@ -198,7 +198,7 @@ Verification: not run (markdown-only edit, no executable check applies).
 <Read>src/rate_limiter.py</Read>
 Current retry budget is 5.
 
-Verification: not run (a simple question, I just read the file, no changes made).
+Verification: not run (read-only, no changes made).
 </bad-example>
 
 <bad-example>

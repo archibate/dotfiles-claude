@@ -574,6 +574,14 @@ assert_deny no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":"600","re
 # Third-party provider runtime: prompt-cache dead-zone policy is silent.
 assert_silent_env no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":600,"reason":"x"}}' ANTHROPIC_BASE_URL "https://api.deepseek.com/anthropic"
 
+# no-multi-question: enforce CLAUDE.md "Ask one question at a time" on AskUserQuestion.
+assert_silent no-multi-question '{"tool_input":{"questions":[{"question":"q1?","header":"h"}]}}'
+assert_deny no-multi-question '{"tool_input":{"questions":[{"question":"q1?","header":"h"},{"question":"q2?","header":"h"}]}}' "2 questions"
+assert_deny no-multi-question '{"tool_input":{"questions":[{"question":"q1?","header":"h"},{"question":"q2?","header":"h"},{"question":"q3?","header":"h"},{"question":"q4?","header":"h"}]}}' "4 questions"
+# Boundary: missing/empty questions array — schema would reject upstream, hook stays silent.
+assert_silent no-multi-question '{"tool_input":{}}'
+assert_silent no-multi-question '{"tool_input":{"questions":[]}}'
+
 echo ""
 echo "=== PreToolUse defaulting hooks ==="
 

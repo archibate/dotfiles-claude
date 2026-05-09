@@ -138,7 +138,8 @@ claude-dm answer HOME:6.1 3         # option 3 ("No")
 
 Self-trigger a user-only slash command on the current pane:
 ```bash
-claude-dm self /context             # see context-window usage on next turn
+claude-dm self /context             # context-window usage summary
+claude-dm self "/context all"       # same, but expands per-item
 claude-dm self /compact             # pre-emptive compaction before heavy work
 claude-dm self /rename              # auto-name session from conversation history
 claude-dm self "/rename my-session" # rename to a specific name

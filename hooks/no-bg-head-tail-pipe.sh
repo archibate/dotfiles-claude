@@ -10,11 +10,15 @@ source "$(dirname "$0")/lib/bypass.sh"
 source "$(dirname "$0")/lib/emit.sh"
 source "$(dirname "$0")/lib/read_input.sh"
 
-read_bash_command
-bypass_check BYPASS_BACKGROUND_HEAD_TAIL
-
+# Cheapest extraction first: most Bash calls are foreground, so we exit before
+# touching the .command field or bypass-marker grep on the common path.
+input=$(cat)
 run_in_bg=$(jq -r '.tool_input.run_in_background // false' <<< "$input")
 [ "$run_in_bg" = "true" ] || exit 0
+
+command=$(jq -r '.tool_input.command // ""' <<< "$input")
+[ -n "$command" ] || exit 0
+bypass_check BYPASS_BACKGROUND_HEAD_TAIL
 
 # Trailing `| head` / `| tail` (final pipeline stage).
 # `(^|[^|])\|` requires a single `|` (not `||`); `[^|]*$` anchors as the last stage.

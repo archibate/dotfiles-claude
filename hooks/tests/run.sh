@@ -157,6 +157,8 @@ assert_deny no-dangerous-ops '{"tool_input":{"command":"mkfs.ext4 /dev/sdb1"}}' 
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo mkfs -t ext4 /dev/sdc"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"parted /dev/sda mklabel gpt"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sgdisk -Z /dev/sda"}}' "disk-format"
+# fastpath regression: tool-name-only invocations (no /dev/ path) must still deny
+assert_deny no-dangerous-ops '{"tool_input":{"command":"sgdisk -Z disk.img"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"wipefs -a /dev/sdb"}}' "disk-format"
 assert_deny no-dangerous-ops '{"tool_input":{"command":"sudo cryptsetup luksFormat /dev/sda1"}}' "luksFormat"
 # Anchor-lib upgrade: ssh / sudo-flag wrappers + FP fixes
@@ -573,6 +575,14 @@ assert_silent no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":"abc","
 assert_deny no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":"600","reason":"x"}}' "dead zone"
 # Third-party provider runtime: prompt-cache dead-zone policy is silent.
 assert_silent_env no-schedule-wakeup-deadzone '{"tool_input":{"delaySeconds":600,"reason":"x"}}' ANTHROPIC_BASE_URL "https://api.deepseek.com/anthropic"
+
+# no-multi-question: enforce CLAUDE.md "Ask one question at a time" on AskUserQuestion.
+assert_silent no-multi-question '{"tool_input":{"questions":[{"question":"q1?","header":"h"}]}}'
+assert_deny no-multi-question '{"tool_input":{"questions":[{"question":"q1?","header":"h"},{"question":"q2?","header":"h"}]}}' "2 questions"
+assert_deny no-multi-question '{"tool_input":{"questions":[{"question":"q1?","header":"h"},{"question":"q2?","header":"h"},{"question":"q3?","header":"h"},{"question":"q4?","header":"h"}]}}' "4 questions"
+# Boundary: missing/empty questions array — schema would reject upstream, hook stays silent.
+assert_silent no-multi-question '{"tool_input":{}}'
+assert_silent no-multi-question '{"tool_input":{"questions":[]}}'
 
 echo ""
 echo "=== PreToolUse defaulting hooks ==="

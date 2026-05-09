@@ -385,6 +385,10 @@ def _render_fixes(issues: list[dict]) -> str:
             " Findings come from two independent reviewers and may overlap "
             "or duplicate; dedup at your discretion."
         )
+    preamble += (
+            " The audit feedbacks are not visible to user. Restate the "
+            " audit results before refering to them."
+        )
     out: list[str] = [preamble, "", "FIXES:"]
     last_file: str | None = None
     for it in issues:

@@ -209,6 +209,16 @@
         ]
       },
       {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/no-multi-question.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
@@ -407,6 +417,9 @@
       }
     }
   },
+  "worktree": {
+    "baseRef": "head"
+  },
   "viewMode": "default",
   "effortLevel": "xhigh",
   "advisorModel": "opus",
@@ -419,7 +432,7 @@
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
   "preferredNotifChannel": "notifications_disabled",
-  "autoScrollEnabled": false,
+  "autoScrollEnabled": true,
   "teammateMode": "auto",
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,

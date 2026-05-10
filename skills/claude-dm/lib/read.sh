@@ -59,3 +59,48 @@ dm_tail() {
     end
   '
 }
+
+# Block until peer reaches a terminal state, then emit one sentinel line.
+# DONE  — peer satisfies the same gate as safe_to_dm: pane title is ✳
+#         AND the transcript's last assistant turn is end_turn (no pending
+#         tool_use). Title-idle alone is not enough — UI can briefly show ✳
+#         while a tool result is still in flight.
+# MODAL — peer is waiting on a permission / question modal (needs intervention)
+# Polls peer_state every interval_s (default 30). If timeout_s > 0, gives up
+# after that many seconds with stderr message and exit 1. Re-checks target_pid
+# each iteration so a vanished pane breaks the loop instead of looping forever
+# (peer_state falls through to 'busy' when target_title returns empty).
+dm_wait() {
+  local target="$1" interval="${2:-30}" timeout="${3:-0}"
+  target_pid "$target" >/dev/null 2>&1 || die "no such pane: $target"
+
+  local elapsed=0 state nap
+  while true; do
+    target_pid "$target" >/dev/null 2>&1 || { warn "pane gone: $target"; return 1; }
+    state=$(peer_state "$target")
+    case "$state" in
+      idle)
+        # Pane title can read ✳ briefly while the transcript still has a
+        # non-end_turn assistant turn (tool result pending). Match safe_to_dm:
+        # require both signals before declaring DONE; otherwise keep polling.
+        if check_transcript_end_turn "$target" >/dev/null; then
+          printf 'DONE\n'; return 0
+        fi
+        ;;
+      modal) printf 'MODAL\n'; return 0 ;;
+    esac
+    if (( timeout > 0 && elapsed >= timeout )); then
+      warn "timeout after ${timeout}s (state=$state)"
+      return 1
+    fi
+    # Cap sleep to remaining budget so timeout fires within timeout_s even
+    # when caller passed interval > remaining.
+    if (( timeout > 0 && interval > timeout - elapsed )); then
+      nap=$(( timeout - elapsed ))
+    else
+      nap=$interval
+    fi
+    sleep "$nap"
+    elapsed=$(( elapsed + nap ))
+  done
+}

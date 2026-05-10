@@ -35,6 +35,7 @@ claude-dm list                                 # roster of claude panes
 claude-dm status <target>                      # state + safety gate result
 claude-dm peek   <target> [N]                  # last N text blocks of peer's transcript
 claude-dm tail   <target>                      # live-follow peer's JSONL
+claude-dm wait   <target> [int_s] [to_s]       # block until peer reaches idle/modal
 claude-dm send   <target> <msg>   [--force]
 claude-dm cmd    <target> /<slash> [--force] [--confirm]
 claude-dm ask    <target> <msg>   [timeout_s]
@@ -71,6 +72,7 @@ When state is `modal`, `status` also reports a subtype — `permission` (Bash/Ed
 | `esc`    | `busy`, `modal`, `idle`, `other` | `drafting` only (would wipe human's draft) | `--force` |
 | `answer` | `modal` only | everything else | `--force` |
 | `self`   | own pane, input box `empty` | input box `drafting` / `modal` / `unknown` | none (allowlist is hard) |
+| `wait`   | always (terminal: idle/modal) | — | — |
 | `peek` / `tail` / `list` / `status` | always | — | — |
 
 Why the draft protection: `send-keys` *appends* to the tty buffer. If a human has a half-typed draft, your message concatenates with theirs. Every write verb that goes through `safe_to_dm` catches this via the `drafting` state; `esc` applies the same rule explicitly.
@@ -120,6 +122,18 @@ Ask and wait for reply:
 ```bash
 claude-dm ask HOME:8.1 "What's the current test status?" 180
 ```
+
+Block until a peer finishes its current turn (e.g. after dispatching work via `send`/`cmd`). Pair with `Bash run_in_background` + `Monitor` so the orchestrator agent gets a notification on the sentinel line and decides next steps:
+```bash
+claude-dm send HOME:8.1 "Run the full test suite and summarise failures."
+claude-dm wait HOME:8.1                    # 30s polls, no timeout, blocks until DONE/MODAL
+claude-dm wait HOME:8.1 10 600             # 10s polls, give up after 10 min
+```
+Output is one of:
+- `DONE` — peer passes the same gate as `safe_to_dm`: pane title `✳` AND transcript's last assistant turn is `end_turn`. Title-idle alone is not enough; the loop keeps polling while a tool result is still pending so DONE never fires mid-turn. Safe to follow with `send` / `cmd`.
+- `MODAL` — peer hit a permission / AskUserQuestion modal (resolve with `status` + `answer` / `esc`)
+
+Exit 1 (no stdout sentinel) on timeout or if the peer pane vanishes.
 
 Interrupt a peer that's run too long, or cancel a stuck modal:
 ```bash

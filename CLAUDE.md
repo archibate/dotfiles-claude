@@ -15,6 +15,12 @@ Preferred over defaults:
 
 Specialized tools (`ast-grep`, `duckdb`, `mlr`, `jc`, `gron`, `pueue`, `gh`, `pdftotext`, `sqlite3`, `hyperfine`, `rsync`, `gitleaks`) are available — probe with `which` when a task suggests one.
 
+## Code Search Strategy
+
+- For C++, Python, JavaScript, TypeScript, TSX, and JSX code searches, prefer `sg` / ast-grep before text-only search when the query involves syntax, function calls, methods, imports/includes, decorators, definitions, class members, multi-line structures, or refactoring targets.
+- Use `rg` when `sg` is unavailable, `sg` fails for the language or pattern, the query is plain text, or the target is docs, configs, logs, comments, filenames, or non-code content.
+- If `sg` and `rg` results disagree before a code change, verify with `Read` or LSP rather than choosing from search output alone.
+
 ---
 
 ## Python Preferences

@@ -45,7 +45,6 @@ Step 2 — URLs matching a known domain:
 |---|---|
 | `github.com` / `gist.github.com` | File via `raw.githubusercontent.com`; issue/PR via `gh issue view` / `gh pr view`; search via anonymous `api.github.com/search/issues` — see `references/github.md` |
 | `x.com` / `twitter.com` / `t.co` | `curl -sL https://api.fxtwitter.com/<user>/status/<id> \| jq` |
-| `bilibili.com` | `/bilibili-api` skill — fetches video title, description, comments |
 | `youtube.com` / `youtu.be` | `yt-dlp --dump-json --skip-download` for title/description/metadata; `yt-dlp --write-auto-sub --sub-lang en --skip-download` for transcript |
 | `arxiv.org` / `ssrn.com` | `/jina-ai` skill |
 | `mp.weixin.qq.com` (微信公众号) | `/scrapling` skill — `scrapling extract get <url>` works without a browser |

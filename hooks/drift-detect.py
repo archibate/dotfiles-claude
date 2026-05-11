@@ -165,7 +165,7 @@ def run():
             f"You may be generating output (text, code, edits) without enough verification. "
             f"Refresh grounding (current docs, real-world usage, existing substrate, fresh "
             f"subagent audit) before continuing. "
-            f"See Self-critique Protocol → Inline epistemic markers.\n"
+            f"See Output Style: verified claims stay unmarked; opinions need [opinion].\n"
         )
         return 2
 

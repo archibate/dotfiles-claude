@@ -2,27 +2,38 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""Stop hook: flag opinion-style lines in the last assistant response that lack
-an inline [opinion] marker.
+"""Stop hook: flag verdict lines in the last assistant response that lack
+inline [opinion] / [verified: <source>] markers.
 
-Scans the final assistant text in the current session transcript for opinion
+Scans the final assistant text in the current session transcript for verdict
 triggers:
-- Line-anchored labels — Recommendation and TL;DR (each followed by `:`).
+- Line-anchored labels — Conclusion, Root cause, Recommendation, Verdict,
+  TL;DR, Fix, Solution, Answer (each followed by `:`).
+- Direct verdict to user question — line-start `Yes,` / `No,` /
+  `Yes —` / `No —` (em-dash or ASCII-hyphen with leading whitespace).
+- Synthesis / inferential — line-start `So`, `Therefore`, `Thus`, or
+  `This means` / `This implies`.
+- "The X is/was Y" predicates over issue / problem / bug / fix / root cause.
 - Predicate-position evaluative comparatives (e.g. `is cheaper`,
   `would be cleaner`, `seems faster`, `is more idiomatic`).
 - Bare certainty adverbs — `clearly`, `obviously`, `definitely`, `certainly`.
 
-For each hit, checks for `[opinion]` within a ±120-char character window
-(which may span the trigger's line and adjacent lines). If any opinion-style
-line has no marker in that window, emits an asyncRewake exit-2 reminder so the
-agent self-corrects on the next turn (the response already shipped; this is a
-non-blocking nudge, not a rewrite).
+For each hit, checks for `[opinion]` or `[verified` within a ±120-char
+character window (which may span the trigger's line and adjacent lines). If
+any verdict has no marker in that window, emits an asyncRewake exit-2
+reminder so the agent self-corrects on the next turn (the response already
+shipped; this is a non-blocking nudge, not a rewrite).
+
+Pattern set is calibrated against ~1758 historical session transcripts; the
+rejected high-volume / high-noise candidates were `don't/doesn't/isn't`
+(2720 hits, mostly descriptions), `actually/in fact` (discourse markers),
+and bare `should/must` (mixes prescription with description).
 
 Fenced code blocks are stripped before scanning so quoted snippets do not
 trigger. Inline-code spans are kept because the user's marker style sometimes
 wraps the marker in backticks.
 
-See CLAUDE.md -> Output Style.
+See CLAUDE.md -> Output Style -> Inline epistemic markers.
 """
 
 import json
@@ -41,10 +52,32 @@ _COMPARATIVES = (
     r"consistent|maintainable|readable|correct))"
 )
 
-OPINION_PATTERNS = [
-    # Line-anchored opinion labels.
+VERDICT_PATTERNS = [
+    # Line-anchored verdict labels.
     re.compile(
-        r"^\s*(?:Recommendation|TL;DR)\b\s*:",
+        r"^\s*(?:Conclusion|Root[- ]cause|Recommendation|Verdict|TL;DR|"
+        r"Fix|Solution|Answer)\b\s*:",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    # "The issue/problem/bug/fix/root cause is/was ..."
+    re.compile(
+        r"^\s*The\s+(?:issue|problem|bug|fix|root\s+cause)\s+(?:is|was)\b",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    # Direct verdict to user question — line-start "Yes," / "No," / "Yes —".
+    # Comma may attach directly; em-dash / ASCII-hyphen must have whitespace
+    # before it so "No-op" / "No-code" / "Yes-or-no" don't false-positive.
+    re.compile(
+        r"^\s*(?:Yes|No)(?:,|\s+[—\-])",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    # Line-start synthesis: "So,", "Therefore,", "Thus,", "This means/implies".
+    re.compile(
+        r"^\s*(?:So|Therefore|Thus)\b[\s,]",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        r"^\s*This\s+(?:means|implies)\b",
         re.IGNORECASE | re.MULTILINE,
     ),
     # Predicate-position evaluative comparative.
@@ -59,7 +92,7 @@ OPINION_PATTERNS = [
     ),
 ]
 
-MARKER_RE = re.compile(r"\[opinion\]", re.IGNORECASE)
+MARKER_RE = re.compile(r"\[(?:opinion\]|verified[: \]])", re.IGNORECASE)
 MARKER_WINDOW = 120
 FENCED_RE = re.compile(r"```.*?```", re.DOTALL)
 MAX_REPORTED = 5
@@ -101,11 +134,11 @@ def last_assistant_text(transcript_path: str) -> str:
     return last_text
 
 
-def find_unmarked_opinions(text: str) -> list[str]:
+def find_unmarked_verdicts(text: str) -> list[str]:
     scrubbed = FENCED_RE.sub(lambda m: " " * len(m.group(0)), text)
     hits: list[str] = []
     seen: set[str] = set()
-    for pat in OPINION_PATTERNS:
+    for pat in VERDICT_PATTERNS:
         for m in pat.finditer(scrubbed):
             lo = max(0, m.start() - MARKER_WINDOW)
             hi = min(len(scrubbed), m.end() + MARKER_WINDOW)
@@ -141,20 +174,20 @@ def run() -> int:
     if not text:
         return 0
 
-    hits = find_unmarked_opinions(text)
+    hits = find_unmarked_verdicts(text)
     if not hits:
         return 0
 
     plural = "s" if len(hits) > 1 else ""
-    lines = [f"Unmarked opinion line{plural} in last response:"]
+    lines = [f"Unmarked verdict line{plural} in last response:"]
     for snip in hits[:MAX_REPORTED]:
         lines.append(f"  - {snip}")
     if len(hits) > MAX_REPORTED:
         lines.append(f"  ... ({len(hits) - MAX_REPORTED} more)")
     lines.append(
-        "Opinion / recommendation / evaluative judgment lines need an inline "
-        "[opinion] marker. Verified claims are unmarked by default. "
-        "See CLAUDE.md -> Output Style."
+        "Each verdict / recommendation / root-cause line needs an inline "
+        "[opinion] or [verified: <source>] marker. "
+        "See CLAUDE.md -> Output Style -> Inline epistemic markers."
     )
     sys.stderr.write("\n".join(lines) + "\n")
     return 2

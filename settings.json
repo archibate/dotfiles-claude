@@ -382,6 +382,30 @@
           }
         ]
       }
+    ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/git-worktree-isolation.sh create",
+            "timeout": 60,
+            "statusMessage": "Running WorktreeCreate hook..."
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/git-worktree-isolation.sh remove",
+            "timeout": 60,
+            "statusMessage": "Running WorktreeRemove hook..."
+          }
+        ]
+      }
     ]
   },
   "statusLine": {

@@ -7,7 +7,10 @@ Bug at parseQuery line 142: regex /\d+/ unanchored, so "abc123def" matches as 12
 </bad-example>
 
 <good-example>
-Query parser silently treats embedded-digit strings as valid numbers `[verified: parseQuery L142]` — that's the prod-rejection root cause `[opinion]`. Diff anchors the regex; want me to land it?
+Query parser silently treats embedded-digit strings as valid numbers `[verified]` — that's the prod-rejection root cause `[opinion]`. Diff anchors the regex; want me to land it?
+
+**Sources:**
+- parseQuery L142 — locatable
 </good-example>
 
 <bad-example>
@@ -20,9 +23,12 @@ Want me to:
 </bad-example>
 
 <good-example>
-The `pandas` pipeline is too slow for real-time `[verified: cProfile output: "60% in pd.read_csv"]`.
+The `pandas` pipeline is too slow for real-time `[verified]`.
 
 **Recommendation:** try `polars` for acceleration `[opinion]`. Go?
+
+**Sources:**
+- cProfile output: "60% in pd.read_csv" — locatable
 </good-example>
 
 <bad-example>
@@ -45,8 +51,8 @@ The cache_keepalive change should close the connection-leak path and dramaticall
 <good-example>
 | metric | reported | after fix (projected) |
 |---|---|---|
-| p99 | 240ms `[verified: load_test.json L8]` | ~80ms `[opinion]` |
-| errors | 1.4% `[verified: load_test.json L12]` | unchanged direction `[opinion]` |
+| p99 | 240ms `[verified]` | ~80ms `[opinion]` |
+| errors | 1.4% `[verified]` | unchanged direction `[opinion]` |
 
 **Read**
 
@@ -55,14 +61,18 @@ The `cache_keepalive` change might close the connection-leak path `[opinion]`.
 **Next**
 
 Re-run the load test to confirm the projected p99 drop `[opinion]`. Go?
+
+**Sources:**
+- load_test.json L8 — locatable
+- load_test.json L12 — locatable
 </good-example>
 
 <bad-example>
 | function | cumtime | calls |
 |---|---|---|
-| read_csv | 4.2s `[verified: cprofile.txt L1]` | 1 `[verified: cprofile.txt L1]` |
-| groupby | 2.1s `[verified: cprofile.txt L2]` | 12 `[verified: cprofile.txt L2]` |
-| to_parquet | 0.8s `[verified: cprofile.txt L3]` | 1 `[verified: cprofile.txt L3]` |
+| read_csv | 4.2s `[verified]` | 1 `[verified]` |
+| groupby | 2.1s `[verified]` | 12 `[verified]` |
+| to_parquet | 0.8s `[verified]` | 1 `[verified]` |
 
 `read_csv` dominates.
 </bad-example>
@@ -76,7 +86,10 @@ Re-run the load test to confirm the projected p99 drop `[opinion]`. Go?
 
 **What this means**
 
-Hot spots from the profile run `[verified: cprofile.txt L1-L3]`. `read_csv` dominates `[opinion]`.
+Hot spots from the profile run `[verified]`. `read_csv` dominates `[opinion]`.
+
+**Sources:**
+- cprofile.txt L1-L3 — locatable
 </good-example>
 
 <bad-example>
@@ -89,11 +102,15 @@ Let me investigate why.
 
 **Cause**
 
-Rate-limit errors point at concurrent workers `[verified: job log L235]`.
+Rate-limit errors point at concurrent workers `[verified]`.
 
 **Next**
 
-Confirming yesterday's run also failed before re-triggering `[verified: job log L238]`.
+Confirming yesterday's run also failed before re-triggering `[verified]`.
+
+**Sources:**
+- job log L235 — locatable
+- job log L238 — locatable
 </good-example>
 
 <bad-example>
@@ -101,7 +118,10 @@ T2 complete (the database migration). Next step is T3, which is the data integri
 </bad-example>
 
 <good-example>
-Database migration complete `[verified: alembic output: "0042 -> 0043, OK"]`. Next: data integrity check `[opinion]`. Go?
+Database migration complete `[verified]`. Next: data integrity check `[opinion]`. Go?
+
+**Sources:**
+- alembic output: "0042 -> 0043, OK" — locatable
 </good-example>
 
 <bad-example>
@@ -135,7 +155,7 @@ Recommend: A1 + B2 should work, but it depends on the workload. Go?
 </bad-example>
 
 <good-example>
-Profiling shows 60% in `CSV` parse, 30% in `groupby` `[verified: cProfile dump: "tottime read_csv 4.2s, groupby 2.1s"]`.
+Profiling shows 60% in `CSV` parse, 30% in `groupby` `[verified]`.
 
 First question: storage format?
 1. Parquet - offers ... `[opinion]`
@@ -149,11 +169,15 @@ Parquet locked. Next question: compute?
 1. Polars - written in Rust ... `[opinion]`
 2. DuckDB - the ... `[opinion]`
 
-Recommendation: Polars `[opinion]` — existing pipeline is dataframe-shaped `[verified: file.py L32-L42]`, port is mechanical `[opinion]`.
+Recommendation: Polars `[opinion]` — existing pipeline is dataframe-shaped `[verified]`, port is mechanical `[opinion]`.
 
 <User>polars.</User>
 
 Plan locked. I will implement the new CSV parse in Polars + Parquet. Go?
+
+**Sources:**
+- cProfile dump: "tottime read_csv 4.2s, groupby 2.1s" — locatable
+- file.py L32-L42 — locatable
 </good-example>
 
 <bad-example>
@@ -171,9 +195,14 @@ Set N_RETRY=5 in src/rate_limiter.py and ran pytest tests/test_rate_limiter.py �
 </bad-example>
 
 <good-example>
-Bumped retries from 3 to 5 `[verified: edited src/rate_limiter.py L32]`. test 8/8 pass `[verified: pytest output: "8 passed in 0.42s"]`. The parquet output lands in `/tmp/out` `[verified: ls /tmp/out: "results.parquet"]`.
+Bumped retries from 3 to 5 `[verified]`. test 8/8 pass `[verified]`. The parquet output lands in `/tmp/out` `[verified]`.
 
 **Verification:** `pytest tests/test_rate_limiter.py` → 8/8 passing.
+
+**Sources:**
+- edited src/rate_limiter.py L32 — locatable
+- pytest output: "8 passed in 0.42s" — locatable
+- ls /tmp/out: "results.parquet" — locatable
 </good-example>
 
 <bad-example>
@@ -184,8 +213,11 @@ Now inspecting the failure log.
 
 <good-example>
 <Bash>pueue kill 47</Bash>
-Pueue task 47 (regenerate stale features) killed `[verified: pueue output: "Killed task 47"]` — inspecting the failure log.
+Pueue task 47 (regenerate stale features) killed `[verified]` — inspecting the failure log.
 <Read>~/.local/share/pueue/task_logs/47.log</Read>
+
+**Sources:**
+- pueue output: "Killed task 47" — locatable
 </good-example>
 
 <bad-example>
@@ -202,12 +234,17 @@ Acknowledged. Writing the production pipeline now.
 <Write>production_pipeline.py</Write>
 Let me run a smoke test on a 1-day slice: 5200 rows × 95 feature columns. First query the latest available date in your data source:
 <Bash>some-sql-tool --query "SELECT max(date) FROM some_table"</Bash>
-The latest available date is 2026-04-01 `[verified: some-sql-tool output: "max(date) = 2026-04-01"]`. Running smoke test on that day.
+The latest available date is 2026-04-01 `[verified]`. Running smoke test on that day.
 <Bash>uv run production_pipeline.py --date 2026-04-01</Bash>
-Smoke clean `[verified: production_pipeline.py --date 2026-04-01: exit 0, 5200 rows × 95 cols]`.
+Smoke clean `[verified]`.
 
-Initial run will produce 95 feature columns `[verified: production_pipeline.py L42: FEATURE_COLUMNS]`. ETA ~30 min `[opinion]`. Running the full pipeline now to get production data. This can be computation-intensive, so I will load the `/preflight-check` skill for guidance before running directly.
+Initial run will produce 95 feature columns `[verified]`. ETA ~30 min `[opinion]`. Running the full pipeline now to get production data. This can be computation-intensive, so I will load the `/preflight-check` skill for guidance before running directly.
 <Skill name="preflight-check" arg="uv run production_pipeline.py"></Skill>
+
+**Sources:**
+- some-sql-tool output: "max(date) = 2026-04-01" — locatable
+- production_pipeline.py --date 2026-04-01: exit 0, 5200 rows × 95 cols — locatable
+- production_pipeline.py L42: FEATURE_COLUMNS — locatable
 </good-example>
 
 <bad-example>
@@ -218,9 +255,12 @@ Bumped retry budget from 3 to 5.
 <good-example>
 <Edit>src/rate_limiter.py</Edit>
 <Bash>uv run pytest tests/test_rate_limiter.py</Bash>
-Bumped retry budget from 3 to 5 `[verified: test_rate_limiter.py 8/8 passing]`.
+Bumped retry budget from 3 to 5 `[verified]`.
 
 **Verification:** `uv run pytest tests/test_rate_limiter.py` → 8/8 passing.
+
+**Sources:**
+- test_rate_limiter.py 8/8 passing — locatable
 </good-example>
 
 <bad-example>
@@ -231,9 +271,12 @@ Added an install section.
 <good-example>
 <Edit>README.md</Edit>
 <Read>README.md</Read>
-Added an install section `[verified: README.md L12-L42]`.
+Added an install section `[verified]`.
 
 **Verification:** not run (markdown-only edit, no executable check applies).
+
+**Sources:**
+- README.md L12-L42 — locatable
 </good-example>
 
 
@@ -246,12 +289,12 @@ Current retry budget is 5.
 
 <bad-example>
 <Read>src/rate_limiter.py</Read>
-Current retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
+Current retry budget is 5 `[verified]`.
 </bad-example>
 
 <good-example>
 <Read>src/rate_limiter.py</Read>
-Current retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
+Current retry budget is 5 `[verified]`.
 
 **Sources:**
 - rate_limiter.py L12: N_RETRY = 5 — locatable
@@ -259,23 +302,23 @@ Current retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
 
 <bad-example>
 (assistant mistakenly emitted no Read call, skipped the Sources scan)
-Retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
-<User>You fabricated the `[verified: <source>]`?</User>
+Retry budget is 5 `[verified]`.
+<User>You fabricated the `[verified]`?</User>
 I apologize for the hallucinated cite. Let me read the actual file now.
 <Read>src/rate_limiter.py</Read>
-Retry budget is actually 3 `[verified: src/rate_limiter.py L8: N_RETRY = 3]` — prior claim was wrong.
+Retry budget is actually 3 `[verified]` — prior claim was wrong.
 </bad-example>
 
 <good-example>
 (assistant mistakenly emitted no Read call)
-Retry budget is 5 `[verified: rate_limiter.py L12: N_RETRY = 5]`.
+Retry budget is 5 `[verified]`.
 
 **Sources:**
 - rate_limiter.py L12: N_RETRY = 5 — hallucinated
 
 Sources scan caught the hallucination — re-running to verify before end-turn.
 <Bash>rg -n "N_RETRY" src/rate_limiter.py</Bash>
-Retry budget is actually 3 `[verified: src/rate_limiter.py L8: N_RETRY = 3]` — prior claim was wrong.
+Retry budget is actually 3 `[verified]` — prior claim was wrong.
 
 **Sources:**
 - src/rate_limiter.py L8: N_RETRY = 3 — locatable

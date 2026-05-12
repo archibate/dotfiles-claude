@@ -2,29 +2,28 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""Drift detection hook for Claude Code Stop event.
+"""Statusline component: 5-turn windowed tokens-per-grounding-event ratio.
 
-Computes a 5-turn windowed tokens-per-grounding-event ratio (metric B) over
-the current session transcript. Fires asyncRewake exit 2 with a system-reminder
-when 3+ consecutive turns have windowed B above the p90 threshold AND the hook
-is not currently in 'warned' state. Resets when windowed B drops below p75.
+Reads the current session transcript and emits a colored `[⏚:<ratio>]`
+segment for the statusline. Color-codes by P75 / P90 thresholds calibrated
+over 2275 historical sessions:
+  green   ratio < P75 (225)
+  yellow  P75 ≤ ratio < P90 (393)
+  red     ratio ≥ P90
 
-Threshold values (393 = p90, 225 = p75) calibrated over 2275 historical sessions
-under the evaluable view (n=18751 windowed ratios from 319 sessions with ≥
-MIN_TURNS=5 *significant* turns at MIN_NUM=30) — i.e. the distribution of
-ratios the hook would actually evaluate against thresholds, not raw windowed
-output from short sessions that can never fire. Cross-verified at MIN_NUM=0:
-recovers p90=144 over 583 evaluable sessions, matching the prior (143, 73)
-calibration over 547 sessions. Prior calibration on raw turns no longer
-applies under filtering.
+Numerator: assistant text + Bash command + Write content + Edit new_string
+(approx tokens, chars / 4).
+Denominator: count of user-tagged transcript entries since previous
+assistant entry.
 
-Numerator: assistant text + Bash command + Write content + Edit new_string (tokens).
-Denominator: count of user-tagged transcript entries since previous assistant entry.
-Token approximation: chars / 4.
+Turns with numerator below MIN_NUM=30 are filtered before windowing so
+small loop ticks can't dilute a neighboring high-density turn.
 
-Turns with numerator below MIN_NUM are filtered before windowing — small loop
-ticks (e.g. /cache-hygiene) would otherwise dilute a neighboring high-density
-turn out of the P90 band.
+Cached by (transcript stat) — statusline refreshes every 5s but transcripts
+only grow at turn boundaries, so most ticks hit the cache.
+Hit path ~12µs; direct compute ~263µs at 100KB, ~11ms at 3MB.
+
+Pure statusline — no stderr, no exit-2, no enforcement.
 """
 
 import json
@@ -34,37 +33,11 @@ from pathlib import Path
 
 P90 = 393
 P75 = 225
-SUSTAINED = 3
 WINDOW = 5
 MIN_TURNS = 5
-# Filter floor: turns with numerator below this are excluded from the window so
-# that loop-tick noise can't dilute a neighboring high-density turn out of the
-# P90 band. Calibrated over 1402 sessions with /cache-hygiene + /loop markers:
-# loop-tick num distribution had p99=28, max=54 across 314 ticks; setting the
-# floor above p99 filters effectively all loop ticks while preserving
-# substantive turns (substantive p75=40, p90=164 across 40k turns).
-# NOTE: changing MIN_NUM invalidates P90/P75 above — recalibrate together.
 MIN_NUM = 30
-STATE_DIR_TMPL = "/tmp/.claude-hooks-{session_id}"
-STATE_FILE = "drift-state.json"
+CACHE_DIR_TMPL = "/tmp/.claude-hooks-{session_id}"
 STATUSLINE_CACHE_FILE = "drift-statusline.cache"
-
-
-def load_state(session_id):
-    state_dir = Path(STATE_DIR_TMPL.format(session_id=session_id))
-    state_path = state_dir / STATE_FILE
-    if state_path.exists():
-        try:
-            return json.loads(state_path.read_text())
-        except Exception:
-            pass
-    return {"warned": False}
-
-
-def save_state(session_id, state):
-    state_dir = Path(STATE_DIR_TMPL.format(session_id=session_id))
-    state_dir.mkdir(parents=True, exist_ok=True)
-    (state_dir / STATE_FILE).write_text(json.dumps(state))
 
 
 def find_transcript(session_id):
@@ -145,53 +118,6 @@ def windowed_b(turns, window=WINDOW, min_num=MIN_NUM):
     return ratios
 
 
-def run():
-    try:
-        payload = json.load(sys.stdin)
-    except Exception:
-        return 0
-
-    session_id = payload.get("session_id", "")
-    if not session_id:
-        return 0
-
-    transcript_path = find_transcript(session_id)
-    if not transcript_path or not os.path.exists(transcript_path):
-        return 0
-
-    turns = compute_per_turn(transcript_path)
-    ratios = windowed_b(turns)
-    if len(ratios) < MIN_TURNS:
-        return 0
-
-    last = ratios[-SUSTAINED:]
-    sustained_above = all(r > P90 for r in last)
-    most_recent = ratios[-1]
-
-    state = load_state(session_id)
-
-    if state.get("warned"):
-        if most_recent < P75:
-            state["warned"] = False
-            save_state(session_id, state)
-        return 0
-
-    if sustained_above:
-        state["warned"] = True
-        save_state(session_id, state)
-        sys.stderr.write(
-            f"Drift signal: 5-turn windowed tokens-per-grounding-event sustained above "
-            f"p90 ({P90}) for {SUSTAINED}+ turns (current: {most_recent:.0f}). "
-            f"You may be generating output (text, code, edits) without enough verification. "
-            f"Refresh grounding (current docs, real-world tool call, existing substrate, fresh "
-            f"subagent audit) before continuing. "
-            f"See Self-critique Protocol and Output Style — Epistemic Markers.\n"
-        )
-        return 2
-
-    return 0
-
-
 def _stat_key(path):
     try:
         st = os.stat(path)
@@ -200,7 +126,7 @@ def _stat_key(path):
         return "missing"
 
 
-def _compute_segment(transcript_path, session_id):
+def _compute_segment(transcript_path):
     turns = compute_per_turn(transcript_path)
     ratios = windowed_b(turns)
     if len(ratios) < MIN_TURNS:
@@ -220,22 +146,13 @@ def _compute_segment(transcript_path, session_id):
     else:
         color = RED
 
-    state = load_state(session_id)
-    warned = state.get("warned")
-
-    label = "⚠⏚" if warned else "⏚"
-    return f"  {color}[{label}:{most_recent:.0f}]{RESET}"
+    return f"  {color}[⏚:{most_recent:.0f}]{RESET}"
 
 
 def statusline_segment(session_id):
     """Return a one-line statusline segment for the session's current drift ratio.
 
-    Empty string when not enough turns. Color-codes by threshold and prefixes
-    with ⚠ when the hook is currently in 'warned' state.
-
-    Cached by (transcript stat, state stat) — status line refreshes every 5s
-    but transcripts only grow at turn boundaries, so most ticks hit the cache.
-    Hit path ~12µs; direct compute ~263µs at 100KB, ~11ms at 3MB.
+    Empty string when not enough turns. Color-codes by threshold.
     """
     if not session_id:
         return ""
@@ -243,10 +160,9 @@ def statusline_segment(session_id):
     if not transcript_path or not os.path.exists(transcript_path):
         return ""
 
-    state_dir = Path(STATE_DIR_TMPL.format(session_id=session_id))
-    state_path = state_dir / STATE_FILE
-    cache_path = state_dir / STATUSLINE_CACHE_FILE
-    cache_key = f"{_stat_key(transcript_path)}|{_stat_key(state_path)}"
+    cache_dir = Path(CACHE_DIR_TMPL.format(session_id=session_id))
+    cache_path = cache_dir / STATUSLINE_CACHE_FILE
+    cache_key = _stat_key(transcript_path)
 
     try:
         if cache_path.exists():
@@ -257,10 +173,10 @@ def statusline_segment(session_id):
     except OSError:
         pass
 
-    segment = _compute_segment(transcript_path, session_id)
+    segment = _compute_segment(transcript_path)
 
     try:
-        state_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)
         tmp_path = cache_path.with_suffix(".tmp")
         tmp_path.write_text(f"{cache_key}\n{segment}")
         os.replace(tmp_path, cache_path)
@@ -271,14 +187,16 @@ def statusline_segment(session_id):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "statusline":
-        sid = sys.argv[2] if len(sys.argv) > 2 else ""
-        try:
-            sys.stdout.write(statusline_segment(sid))
-        except Exception:
-            pass
-        sys.exit(0)
+    # Usage: drift-detect.py statusline <session_id>
+    # The leading "statusline" arg is kept for backward compat with the
+    # existing statusline.sh invocation.
+    sid = ""
+    if len(sys.argv) > 2 and sys.argv[1] == "statusline":
+        sid = sys.argv[2]
+    elif len(sys.argv) > 1:
+        sid = sys.argv[1]
     try:
-        sys.exit(run())
+        sys.stdout.write(statusline_segment(sid))
     except Exception:
-        sys.exit(0)
+        pass
+    sys.exit(0)

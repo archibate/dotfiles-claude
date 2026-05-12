@@ -383,26 +383,6 @@
             "asyncRewake": true
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/drift-detect.py",
-            "timeout": 30,
-            "asyncRewake": true
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/marker-discipline.py",
-            "timeout": 15,
-            "asyncRewake": true
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [
@@ -439,6 +419,9 @@
       }
     ]
   },
+  "worktree": {
+    "baseRef": "head"
+  },
   "statusLine": {
     "type": "command",
     "command": "~/.claude/statusline.sh",
@@ -455,7 +438,8 @@
     "plugin-dev@claude-plugins-official": false,
     "code-review@claude-plugins-official": false,
     "typescript-lsp@claude-plugins-official": true,
-    "lua-lsp@claude-plugins-official": true
+    "lua-lsp@claude-plugins-official": true,
+    "caveman@caveman": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
@@ -469,10 +453,13 @@
         "source": "github",
         "repo": "openai/codex-plugin-cc"
       }
+    },
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "juliusbrussee/caveman"
+      }
     }
-  },
-  "worktree": {
-    "baseRef": "head"
   },
   "viewMode": "default",
   "effortLevel": "xhigh",
@@ -489,7 +476,7 @@
   "autoScrollEnabled": true,
   "teammateMode": "auto",
   "remoteControlAtStartup": true,
+  "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true,
-  "inputNeededNotifEnabled": true
+  "voiceEnabled": true
 }

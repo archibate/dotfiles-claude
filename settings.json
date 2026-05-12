@@ -19,7 +19,8 @@
     "AUDIT_CODEX_MODEL": "gpt-5.4",
     "AUDIT_CODEX_EFFORT": "medium",
     "AUDIT_CLAUDE_MODEL": "haiku",
-    "AUDIT_CLAUDE_EFFORT": "high"
+    "AUDIT_CLAUDE_EFFORT": "high",
+    "CAVEMAN_DEFAULT_MODE": "ultra"
   },
   "permissions": {
     "defaultMode": "bypassPermissions",
@@ -439,7 +440,7 @@
     "code-review@claude-plugins-official": false,
     "typescript-lsp@claude-plugins-official": true,
     "lua-lsp@claude-plugins-official": true,
-    "caveman@caveman": false,
+    "caveman@caveman": true,
     "superpowers@superpowers-marketplace": true
   },
   "extraKnownMarketplaces": {

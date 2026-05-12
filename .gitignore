@@ -68,3 +68,5 @@ RTK.md
 .claude-usage-cache.json
 .last-cleanup
 .caveman-active
+.caveman-history.jsonl
+.caveman-statusline-suffix

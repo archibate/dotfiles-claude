@@ -15,9 +15,10 @@ Practical C++ coding standards based on the C++ Core Guidelines, adapted for pro
 | Rule | Summary |
 |---|---|
 | **T0.1** | Prefer project `.clang-format` and `.clang-tidy`; otherwise use `~/.claude/formatters/cpp/`. |
-| **T0.2** | Run `clang-format` for layout and `clang-tidy` for naming/static checks when code exists in local files. |
+| **T0.2** | Run `clang-format` for layout and `clang-tidy-18` for naming/static checks when code exists in local files. |
 | **T0.3** | Treat examples in this skill as intent examples; tooling decides formatting and naming details. |
 | **T0.4** | Avoid applying these rules directly to third-party, generated, vendored, build, or system headers. |
+| **T0.5** | Always invoke `clang-tidy-18` (the versioned binary), never `clang-tidy`. The unversioned name may not exist on the system even when the package is installed. |
 
 ### Language Standard Compatibility
 
@@ -54,7 +55,7 @@ Infer the active standard from `compile_commands.json`, build files, compiler fl
 | **NL.8** | Use a consistent naming style, enforced by active `.clang-tidy`. |
 | **NL.9** | Use ALL_CAPS only for macros. |
 | **NL.10** | Use the configured project convention, not ad hoc local style. |
-| **T0.2** | Run `clang-format` and `clang-tidy` before final output when code exists in local files. |
+| **T0.2** | Run `clang-format` and `clang-tidy-18` before final output when code exists in local files. |
 
 ### Default Naming Convention
 
@@ -722,7 +723,7 @@ std::memcpy(&record, buffer, sizeof(record));
 
 Before marking C++ work complete:
 
-- [ ] Active `.clang-format` and `.clang-tidy` were run, or the reason they could not run is stated.
+- [ ] Active `.clang-format` and `.clang-tidy-18` were run, or the reason they could not run is stated.
 - [ ] Code uses only features supported by the project's C++ standard.
 - [ ] Naming follows active `.clang-tidy` conventions.
 - [ ] No ownership is transferred through raw pointers or references.

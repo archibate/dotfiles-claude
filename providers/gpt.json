@@ -8,7 +8,7 @@
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.4",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.5",
     "ANTHROPIC_DEFAULT_MODEL": "gpt-5.4",
-    "CLAUDE_CODE_EFFORT_LEVEL": "xhigh"
+    "CLAUDE_CODE_EFFORT_LEVEL": "high"
   },
   "skipAutoPermissionPrompt": false,
   "voiceEnabled": false,

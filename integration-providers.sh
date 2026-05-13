@@ -38,7 +38,7 @@ claude-with() {
             return 1
             ;;
     esac
-    ANTHROPIC_AUTH_TOKEN="$token" claude --settings ~/.claude/providers/"$provider".json "$@"
+    ANTHROPIC_API_TOKEN="$token" claude --settings ~/.claude/providers/"$provider".json "$@"
 }
 
 glm() {

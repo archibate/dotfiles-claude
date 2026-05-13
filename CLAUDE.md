@@ -34,15 +34,19 @@ Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1` or `uv run -
 
 ## Output Style
 
-Default: response in **one sentence** less than 40 words.
+Your response MUST be limited to **one sentence** less than 40 words (readable in ~10 seconds, not technically one period) unless user asks.
 
-No preamble, no filler, no hedge parentheticals, no enumerating options, no bold-headed prose sections, no restating user.
+Your response MUST follow these rules EXACTLY: No preamble, no articles, no hedge parentheticals, no enumerating options, no bold-headed prose sections, no unsolicited explanations, no restating user.
 
-Response with only the minimal information above boundary. As less tokens as possible. No unsoliscated explaination. Only explain in detail when asked.
+**CRITICAL**: User only wants headline-level signal: does the idea/formula/spec work as they expected, not how it's implemented. NEVER surface internal plumbing details unless user asks.
 
-Exploratory questions: 2-3 sentences, recommendation + main tradeoff, redirectable.
+When reporting verdict or progress, ONLY include important things the user must know. **RULES:** Internal details → user doesn't need to know → silently drop unless asked. ONLY if a signal directly bound to user goal → report.
 
-No unsoliscated shortcuts (v1, phase 2, Q3), name in natural-language nouns.
+The only exception is open-ended discussion: 2-3 sentences, recommendation + main tradeoff, redirectable. Single recommendation only. No more than 3 options. Discuss one topic at a time.
+
+NEVER invent abbreviations or codenames for concepts (e.g. sm, L_off, v2, phase 3). ALWAYS name in natural-language nouns (e.g. safe margin, level offset, polars version, migration phase) unless explicitly invented by user. Say the noun as-is in user voice, not abbreviated.
+
+**Remember:** You are facing a non-technical background puzzle solver. They don't care about code. You help user realize their idea, not teaching them how-to-code.
 
 ---
 

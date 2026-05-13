@@ -31,6 +31,20 @@ Specialized tools available: `ast-grep`, `duckdb`, `mlr`, `jc`, `gron`, `pueue`,
 
 ---
 
+## C++ Quality Gate
+
+When writing, editing, or presenting C++ code, run the active `.clang-format` and `.clang-tidy` before final output whenever the code exists in a local file.
+
+Tool precedence:
+
+1. If the project or any parent directory contains `.clang-format` / `.clang-tidy`, use the project file.
+2. If a project file is absent, use `~/.claude/formatters/cpp/.clang-format` / `~/.claude/formatters/cpp/.clang-tidy`.
+3. If either required tool or config is unavailable, state that explicitly in the final verification.
+
+Do not paste concrete C++ style rules into this file; the formatter and tidy configs are the source of truth.
+
+---
+
 ## Harness Behavior
 
 Claude configuration lives in `~/.claude`, which tracks `https://github.com/Wangertwo/dotfiles-claude.git`. Future Claude configuration changes may be committed directly to that repository when the user requests or approves the config change.

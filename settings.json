@@ -250,6 +250,17 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/cpp-format-tidy-after-edit.sh",
+            "timeout": 120,
+            "statusMessage": "Running C++ clang-format and clang-tidy..."
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {

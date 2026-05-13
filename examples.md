@@ -323,3 +323,108 @@ Retry budget is actually 3 `[verified]` — prior claim was wrong.
 **Sources:**
 - src/rate_limiter.py L8: N_RETRY = 3 — locatable
 </good-example>
+
+<bad-example>
+class TaskManager {
+ public:
+  bool StartTask(const std::string &task_id) {
+    if (task_id.empty()) return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+    return true;
+  }
+ private:
+  std::unordered_map<std::string, TaskInfo> task_map_;
+  std::mutex mutex_;
+};
+</bad-example>
+
+<good-example>
+class TaskManager
+{
+public:
+    bool StartTask(const std::string& task_id);
+
+private:
+    std::unordered_map<std::string, TaskInfo> task_map_;
+    std::mutex mutex_;
+};
+
+bool TaskManager::StartTask(const std::string& task_id)
+{
+    if (task_id.empty())
+    {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    return true;
+}
+</good-example>
+
+<bad-example>
+namespace scheduler {
+class Worker {
+public:
+    void Run() {
+        for (auto &task : tasks_) {
+            if (!task.ready()) { continue; }
+            Execute(task);
+        }
+    }
+};
+}
+</bad-example>
+
+<good-example>
+namespace scheduler
+{
+    class Worker
+    {
+    public:
+        void Run()
+        {
+            for (auto& task : tasks_)
+            {
+                if (!task.ready())
+                {
+                    continue;
+                }
+
+                Execute(task);
+            }
+        }
+    };
+}
+</good-example>
+
+<bad-example>
+std::vector<std::string> LoadNames(){return {"alice", "bob"};}
+
+if (count > 0) { Start(count); }
+</bad-example>
+
+<good-example>
+std::vector<std::string> LoadNames()
+{
+    return {"alice", "bob"};
+}
+
+if (count > 0)
+{
+    Start(count);
+}
+</good-example>
+
+<bad-example>
+void Update(TaskInfo * task, const std::string & name)
+{
+    task->name = name;
+}
+</bad-example>
+
+<good-example>
+void Update(TaskInfo* task, const std::string& name)
+{
+    task->name = name;
+}
+</good-example>

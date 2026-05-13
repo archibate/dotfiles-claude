@@ -24,6 +24,7 @@
       "/tmp"
     ]
   },
+  "model": "opus",
   "enableAllProjectMcpServers": true,
   "skillOverrides": {
     "cache-hygiene": "name-only",
@@ -428,7 +429,7 @@
     "pyright-lsp@claude-plugins-official": true,
     "context7@claude-plugins-official": false,
     "clangd-lsp@claude-plugins-official": true,
-    "claude-hud@claude-hud": false,
+    "claude-hud@claude-hud": true,
     "code-simplifier@claude-plugins-official": false,
     "claude-md-management@claude-plugins-official": false,
     "codex@openai-codex": true,

@@ -1440,6 +1440,19 @@ out=$(jq -nc --arg s "$hsp_sid5" '{session_id:$s,tool_name:"Bash",tool_input:{co
 
 rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint /tmp/claude-compact-events
 
+# 9. Anchor forms: sudo, &&, bash -c wrapper → all deny
+hsp_sid6="hsp6-$$"
+rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint
+for cmd in "sudo pueue status" "git status && pueue add -- foo" "bash -c 'pueue status'"; do
+  out=$(jq -nc --arg s "$hsp_sid6" --arg c "$cmd" '{session_id:$s,tool_name:"Bash",tool_input:{command:$c}}' \
+         | bash ~/.claude/hooks/hint-skill-pueue.sh)
+  echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' > "$test_out" \
+    && echo "OK:   hint-skill-pueue denies anchor form: $cmd" \
+    || { echo "FAIL: hint-skill-pueue should deny anchor form [$cmd]: $out"; fail=1; }
+  rm -f "/tmp/claude-pueue-skill-hint/$hsp_sid6"  # reset one-shot so next form triggers
+done
+rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint /tmp/claude-compact-events
+
 echo ""
 rm -f "$test_out"
 

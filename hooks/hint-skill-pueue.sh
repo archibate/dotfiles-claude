@@ -5,11 +5,12 @@ set -euo pipefail
 
 source "$(dirname "$0")/lib/emit.sh"
 source "$(dirname "$0")/lib/session_lock.sh"
+source "$(dirname "$0")/lib/anchors.sh"
 
 input=$(cat)
 command=$(jq -r '.tool_input.command // ""' <<< "$input")
 
-if ! grep -qP '^\s*pueue\b' <<< "$command"; then
+if ! grep -qP "(${CMD_ANCHOR_SUDO}|${CMD_WRAPPER})pueue${CMD_TRAIL}" <<< "$command"; then
     exit 0
 fi
 

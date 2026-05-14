@@ -41,7 +41,7 @@ if [ "$COUNT" -ge "$RECALL_INTERVAL" ]; then
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "Recall reminder: the long-term memory system hasn't been used recently. You can recall ~/.claude/memory/pitfalls.md for common pitfalls; recall ~/.claude/memory/pages/index.md for relevant facts and lessons. If a pitfall trigger matches your planned action, PAUSE and follow the mitigation. Memorize mistakes, incidents, durable facts or lessons via /memory-add. Ignore this reminder otherwise."
+    "additionalContext": "Recall reminder: the long-term memory system hasn't been used recently. You can recall ~/.claude/memory/pitfalls.md for common pitfalls; recall ~/.claude/memory/pages/index.md for relevant facts and lessons. If a pitfall trigger matches your planned action, PAUSE and follow the mitigation. Memorize mistakes, incidents, durable facts or lessons you learnt via /memory-add. Ignore this reminder if nothing worth recall or memorize."
   }
 }
 EOF

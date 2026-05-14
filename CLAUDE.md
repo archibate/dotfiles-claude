@@ -24,7 +24,8 @@ Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1` or `uv run -
 
 ## Coding Discipline
 
-- **Cheap-first** — Smoke test on a slice before the full pipeline; among similar-confidence options, run the cheapest first.
+- **Smoke test first** — Smoke test on a slice before launching full pipeline.
+- **Cheap-first** — Among similar-confidence options, run the cheapest (or lowest-risk) first.
 - **Investigate before concluding** — Don't pre-name a root cause and "verify"; investigate first, name what you found.
 - **Probe loop** — Stuck → add instrumentation, gather data, not speculation. After 3-5 non-converging probes, surface findings and stop grinding.
 - **Don't minimize changes** — Solve problems systematically. Do not restrict to minimal diff. Do not band-aid.

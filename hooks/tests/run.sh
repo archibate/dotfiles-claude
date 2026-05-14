@@ -1354,6 +1354,92 @@ assert_silent compact-bump '{}'
 
 rm -rf /tmp/claude-compact-events
 
+# hint-skill-pueue: block pueue commands until /pueue skill loaded.
+# Denies once per session per compact; skill load unlocks; subagents pass.
+hsp_sid="hsp-$$"
+rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint /tmp/claude-compact-events
+
+# 1. First pueue command → deny with /pueue mention
+out=$(jq -nc --arg s "$hsp_sid" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue add -- echo hi"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | contains("/pueue"))' > "$test_out" \
+  && echo "OK:   hint-skill-pueue denies first pueue command" \
+  || { echo "FAIL: hint-skill-pueue first pueue: $out"; fail=1; }
+
+# 2. Second pueue command same session (hint already given) → one-shot, allow
+out=$(jq -nc --arg s "$hsp_sid" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue status"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-pueue silent on repeat (one-shot)" \
+  || { echo "FAIL: hint-skill-pueue should be silent after one-shot: $out"; fail=1; }
+
+# 3. Non-pueue command → always silent
+out=$(jq -nc --arg s "$hsp_sid" '{session_id:$s,tool_name:"Bash",tool_input:{command:"echo hello"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-pueue silent for non-pueue command" \
+  || { echo "FAIL: hint-skill-pueue should ignore non-pueue: $out"; fail=1; }
+
+# 4. Subagent (agent-* sid) → always silent
+out=$(jq -nc '{session_id:"agent-deadbeef",tool_name:"Bash",tool_input:{command:"pueue add -- foo"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-pueue silent for subagent" \
+  || { echo "FAIL: hint-skill-pueue should skip subagent: $out"; fail=1; }
+
+# 5. Skill-unlock: track-pueue-skill-load sets flag → hint hook allows
+hsp_sid2="hsp2-$$"
+rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint
+jq -nc --arg s "$hsp_sid2" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"pueue"}}' \
+  | bash ~/.claude/hooks/track-pueue-skill-load.sh
+out=$(jq -nc --arg s "$hsp_sid2" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue status"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-pueue allows after skill loaded" \
+  || { echo "FAIL: hint-skill-pueue should allow once skill loaded: $out"; fail=1; }
+
+# 6. track-pueue-skill-load ignores non-pueue skills
+hsp_sid3="hsp3-$$"
+rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint
+jq -nc --arg s "$hsp_sid3" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"jina-ai"}}' \
+  | bash ~/.claude/hooks/track-pueue-skill-load.sh
+[ ! -f "/tmp/claude-pueue-skill-loaded/$hsp_sid3" ] \
+  && echo "OK:   track-pueue-skill-load ignores non-pueue skill" \
+  || { echo "FAIL: track-pueue-skill-load should not set flag for other skills"; fail=1; }
+
+# 7. Compact re-arm: deny → silent → compact-bump → deny again
+hsp_sid4="hsp4-$$"
+rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint /tmp/claude-compact-events
+out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue add -- echo"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' > "$test_out" \
+  && echo "OK:   hint-skill-pueue first deny (compact-rearm setup)" \
+  || { echo "FAIL: hint-skill-pueue first deny for compact test: $out"; fail=1; }
+out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue status"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+[ -z "$out" ] && echo "OK:   hint-skill-pueue silent before compact" \
+  || { echo "FAIL: hint-skill-pueue pre-compact silent: $out"; fail=1; }
+printf '{"session_id":"%s"}' "$hsp_sid4" | bash ~/.claude/hooks/compact-bump.sh
+out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue add -- echo"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' > "$test_out" \
+  && echo "OK:   hint-skill-pueue re-denies after compact-bump" \
+  || { echo "FAIL: hint-skill-pueue should re-deny after compact: $out"; fail=1; }
+
+# 8. gen-seen sync: skill loaded after compact → pre-bash hook doesn't wipe flag
+hsp_sid5="hsp5-$$"
+rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint /tmp/claude-compact-events
+printf '{"session_id":"%s"}' "$hsp_sid5" | bash ~/.claude/hooks/compact-bump.sh
+jq -nc --arg s "$hsp_sid5" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"pueue"}}' \
+  | bash ~/.claude/hooks/track-pueue-skill-load.sh
+out=$(jq -nc --arg s "$hsp_sid5" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue status"}}' \
+       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-pueue allows when skill loaded after compact" \
+  || { echo "FAIL: hint-skill-pueue should not wipe skill flag set post-compact: $out"; fail=1; }
+
+rm -rf /tmp/claude-pueue-skill-loaded /tmp/claude-pueue-skill-hint /tmp/claude-compact-events
+
 echo ""
 rm -f "$test_out"
 

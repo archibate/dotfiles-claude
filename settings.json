@@ -281,6 +281,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hint-skill-pueue.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -380,6 +390,16 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hint-fork-on-bloat.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/track-pueue-skill-load.sh",
             "timeout": 5
           }
         ]

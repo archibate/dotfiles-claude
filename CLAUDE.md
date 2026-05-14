@@ -14,7 +14,8 @@ Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1` or `uv run -
 
 ## Harness Pitfalls
 
-- **Skills** — Invoking the Skill tool reads a markdown file into context as a system reminder; nothing executes. Skill files are source of truth — load when the topic matches even if you "remember" the content.
+- **Skills are mandatory** — Load ALL matching skills via `Skill` tool before starting ANY task, even if topic seems familiar. Skills define guardrails and workflows — not just reference docs. Never skip because "I already know it."
+- **Skills recall rate** — Bias to load more skills on doubt. Unused skill costs seconds; missed skill violates guardrails and costs user.
 - **Bash output is internal** — Goes to the agent, never the user. Don't truncate (`| head`, `| tail`, `2>/dev/null`); the harness already saves large output and previews the head.
 - **Tables auto-render** — Skip alignment padding; escape literal `|` in cells.
 - **Prior responses collapse** — User sees only the last final response. Each response must be self-contained.

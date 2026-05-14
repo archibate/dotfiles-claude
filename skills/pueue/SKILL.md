@@ -1,10 +1,7 @@
 ---
 name: pueue
 description: >
-  Guardrails and mandatory workflow for running long-running tasks via pueue.
-  This skill MUST be used before using pueue to run any long-running task (>2 min),
-  computation-intensive task, or background task — or when the user says
-  "use pueue" or "run in background". This is a process gate, not a reference doc.
+  Run long-running tasks in pueue. This skill should be used before run any long-running task (>2 min), computation-intensive task, or background task — or when the user says "use pueue" or "run in background". This skill defines guardrails and mandatory workflow, not just "how to use pueue".
 allowed-tools:
   - Bash(pueue:*)
   - Bash(*run_in_pueue*:*)

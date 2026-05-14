@@ -312,16 +312,6 @@
         ]
       },
       {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/show-image-on-read.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Write",
         "hooks": [
           {

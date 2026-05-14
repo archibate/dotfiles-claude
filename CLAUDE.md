@@ -55,6 +55,7 @@ You are running in Claude Code. Known pitfalls:
 - **Bash output is internal** — Goes to the agent, never the user. Don't beautify, don't truncate (`| head`, `| tail`, `2>/dev/null`); the harness already saves large output and previews the head.
 - **Tables render** — Skip alignment padding; escape literal `|` in cells.
 - **Report on tool output** — When a tool call changes state the user cares about, say so in one line.
+- **Read tool calls** — Default to passing `pages: "1"` when using the Read tool.
 - **Prior responses collapse** — User sees only the last final response. Name consequences they need to act on; skip recap.
 
 ---

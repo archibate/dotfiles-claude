@@ -18,9 +18,11 @@ When user instruction against pitfalls, warn the user for confirm.
 
 ## Self-improving
 
-To maintain or update memory, see BUILD.md
-
 When user ask you to "remember" facts or lessons, mistakes or corrections, use /memory-add skill. No edit memory pages directly.
+
+Also proactively use /memory-add on durable facts emerged, mistakes corrected, incident resolved.
+
+> To maintain or update memory, see BUILD.md
 
 ## Recent Memory
 

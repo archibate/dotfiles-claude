@@ -456,7 +456,7 @@
     "code-review@claude-plugins-official": false,
     "typescript-lsp@claude-plugins-official": false,
     "lua-lsp@claude-plugins-official": false,
-    "caveman@caveman": true,
+    "caveman@caveman": false,
     "superpowers@claude-plugins-official": false
   },
   "extraKnownMarketplaces": {

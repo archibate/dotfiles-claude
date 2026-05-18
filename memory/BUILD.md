@@ -6,7 +6,7 @@ Recipes for building and maintaining the long-term memory system.
 
 - `promoted.md` — source of truth. Curated claims under H2 themes.
 - `pages/{index.md,<slug>.md}` — runtime memory, exploded from promoted.md by pages.py. Loaded into sessions via @-include in CLAUDE.md.
-- `staging.md` — ad-hoc inbox written by the `/memory-add` skill. Drained into the next weekly UPDATE round (step 3) as `[?]` bullets, then truncated in step 6.
+- `staging.md` — ad-hoc inbox written by the `/memory-add` skill. Drained into the next weekly UPDATE round for triage.
 - `pending.md`, `cleaned.md`, `rejected.md`, `distilled/*`, `distill-history.md` — pipeline artifacts. Consulted only during the build pipeline.
 - `pitfalls.md` — routing table for fast recall on pitfall triggers, extracted from promoted.py.
 
@@ -85,6 +85,12 @@ Incremental update of ~/.claude/memory/. Same KEEP/DROP rules and FALSE-NEGATIVE
      - Truncate `~/.claude/memory/staging.md` to empty.
      - Then run pages.py.
 
+  7. BUILD PITFALLS:
+     - Walk every new [+] bullet just promoted.
+     - For each with tag `foot-gun`, `costly-error`, or `user-correction`: check if `pitfalls.md` already has a matching trigger; insert if missing, reword if drifted.
+     - Edit `pitfalls.md` directly — no script. Trigger form: "About to X → mitigation."
+     - Cap at ~50 entries; demote stale triggers before adding new ones.
+
 ## CLEAN INSTRUCTION
 
 Audit ~/.claude/memory/promoted.md and prune entries matching any of:
@@ -128,9 +134,9 @@ First-time setup: add `@memory/pages/index.md` to ~/.claude/CLAUDE.md (path is r
 
 After each distill action, append distill-history.md with local timestamp [YYYY-MM-DD]T[HH:MM]+08:00.
 
-After index build, heads to PITFALLS PROJECTION.
+After index build, heads to BUILD PITFALLS.
 
-### PITFALL TRIGGERS
+### BUILD PITFALLS
 
 `~/.claude/memory/pitfalls.md` is a flat catalog of `TRIGGER → mitigation` one-liners for fast pre-action recall, loaded into every session via @-include in CLAUDE.md.
 
@@ -165,3 +171,11 @@ Quarterly review: audit `pitfalls.md` for entries whose source claim in promoted
 ## WEEKLY ROUTINE
 
 Suggest the user to run UPDATE + AUDIT + CLEAN weekly by saying "weekly memory distill".
+
+Self-check before distill completion claim:
+
+- [ ] UPDATE INSTRUCTION
+- [ ] BUILD INDEX
+- [ ] BUILD PITFALLS
+- [ ] AUDIT INSTRUCTION (optional)
+- [ ] CLEAN INSTRUCTION (optional)

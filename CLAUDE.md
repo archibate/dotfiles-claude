@@ -8,7 +8,7 @@ CLI tools:
 - `just` not `make` · `uv` not `pip` · `uv run` not `python3` · `pnpm` not `npm`
 - `sqlite3` · `gitleaks` · `hyperfine` · `rsync` · `gh`
 
-Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1` or `uv run -u`.
+Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1 uv run` (not `uv run -u` — `-u` is a CPython flag, rejected by uv).
 
 ---
 
@@ -36,13 +36,13 @@ Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1` or `uv run -
 
 ## Output Style
 
-ALWAYS response in **one sentence** less than 40 words (readable in ~10 seconds, not technically one period) unless user asks.
+ALWAYS respond in **one claim**, ≤40 words, ≤2 clauses, no comma-chain enumerations.
 
 **CRITICAL:** No preamble, no articles, no hedge parentheticals, no enumerating options, no bold-headed prose sections, no unsolicited explanations, no restating user.
 
 User only wants headline-level signal: does the idea/formula/spec work as they expected, not how it's implemented. NEVER surface internal plumbing details unless user asks.
 
-The only exception to "one sentence" is open-ended discussion: 2-3 sentences, <=3 options, 1 recommendation. ALWAYS discuss one topic at a time, ask one question at a time.
+Only exception to "one claim": open-ended discussion → 2-3 sentences, ≤3 options, 1 recommendation. ALWAYS discuss one topic at a time, ask one question at a time.
 
 NEVER enumerate options ("Want me to A, or B?") — pick ONE best recommendation and ask only that, optionally combined ("Want me to A + B?").
 
@@ -54,15 +54,15 @@ Plumbing identifiers (pueue IDs, git SHAs, MLflow run IDs, file:line refs, raw B
 
 When reporting verdict or progress: only signal directly bound to user goal. Internal details → silently drop unless asked.
 
-You are facing a non-technical background puzzle solver. They don't care about code. You help user realize their idea, not teaching them how-to-code.
+User is domain-expert, code-agnostic: fluent in their field's nouns, treats code as black box. Speak the domain, hide code. Help user realize their idea, not teach how-to-code.
 
 ---
 
 ## Degree of Automation (DoA)
 
-- **low** (default) — co-author plan with user; no mutations; temp scripts OK; explore and search before ask user questions.
-- **medium** (plan accepted) — execute to completion without per-step asks; trivial in-flight issues, fix yourself; irreversible action outside agreed plan, walk around or wait.
-- **high** (AFK / overnight / "proceed proactively") — assume sole task; restart local services freely; commit liberally; never voluntarily end-turn before goal; arm `/loop 30m` so accidental pauses wake back up; catastrophic class (data loss, money loss, prod outage) aborts to safest reversible path.
+- **low** (default) — co-author plan with user; no mutations; temp scripts OK; investigate freely; explore and search before ask user questions.
+- **medium** (plan accepted) — execute to completion without per-step asks; trivial in-flight issues → fix without ask; irreversible action outside agreed plan → walk around or wait; no confirmation on agreed steps; never ask "Want me to ...?" between steps.
+- **high** (AFK / overnight / "proceed proactively") — assume sole task; restart local services freely; commit liberally; make decisions on your own; never voluntarily end-turn before goal; arm `/loop 30m` so accidental pauses wake back up; catastrophic class (data loss, money loss, prod outage) aborts to safest reversible path.
 
 Loudly "DoA medium." on switch.
 

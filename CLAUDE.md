@@ -8,7 +8,7 @@ CLI tools:
 - `just` not `make` · `uv` not `pip` · `uv run` not `python3` · `pnpm` not `npm`
 - `sqlite3` · `gitleaks` · `hyperfine` · `rsync` · `gh`
 
-Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1 uv run` (not `uv run -u` — `-u` is a CPython flag, rejected by uv).
+Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1 uv run` or `uv run python -u`.
 
 ---
 

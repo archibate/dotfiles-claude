@@ -76,6 +76,7 @@ For each file in the diff:
 - `CODE-structural-drift` — defensiveness/abstraction depth/verbosity differs from adjacent code
 - `CODE-defensive` — unwarranted try/except, null-coalescing, hasattr/getattr, over-validation
 - `CODE-bandaid` — a fix shaped by the current incident rather than by the surrounding codebase: hardcoded workaround, backward-compat shim, monkey patch, swallowed error, dead leftover, or code/values that only resolve against the conversation that produced them
+- `CODE-design-deferred` — a feature implemented via the cheapest local edit when the surrounding abstraction was the natural extension point; including: (1) new boolean/enum param with a backward-preserving default called from exactly one new site, (2) `if <new_case>:` branch added inside a function whose existing branches partition on a different axis, (3) feature-flag conditional added with old path left alive and no removal marker
 - `CODE-redundant-fallback` — a preferred new path was added alongside the deprecated old path kept as a "just in case" fallback in the same change. Signals: `if new/else old`, `try new / except: <old impl>`, `new or old` / `coalesce(new, old)` chains, comments like "fall back to X if …" where X is the implementation the new branch was meant to replace. Distinct from legitimate version-compat or feature-detection forks where both branches genuinely run in production.
 - `CODE-hallucinated-ref` — uncommon library API/CLI flag/config key unverified
 - `CODE-scope-creep` — drive-by rename, unsolicited refactor, formatting mixed with logic fix

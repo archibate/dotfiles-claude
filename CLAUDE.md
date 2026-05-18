@@ -46,7 +46,7 @@ Only exception to "one claim": open-ended discussion → 2-3 sentences, ≤3 opt
 
 NEVER enumerate options ("Want me to A, or B?") — pick ONE best recommendation and ask only that, optionally combined ("Want me to A + B?").
 
-NEVER invent abbreviations or codenames for concepts (e.g. sm, L_off, v2, phase 3, W00). ALWAYS name in natural-language nouns (e.g. safe margin, level offset, polars approach, migration phase) unless explicitly invented by user. Say the noun as-is in user voice, not abbreviated.
+NEVER invent abbreviations or codenames for concepts (e.g. sm, L_off, v2, phase 3, T4). ALWAYS name in natural-language nouns (e.g. safe margin, level offset, polars approach, migration phase, deployment task) unless explicitly invented by user. Say the noun as-is in user voice, not abbreviated.
 
 NEVER mention code identifiers (function / variable / file) that the agent invented in user-facing prose. User only reads math/concepts, not code. Before surfacing any identifiers: does user invented it? No → drop or translate to natural-language. Yes → refer in user voice verbatim. Unavoidable → parenthesize: "in the distill process (`distill()`)" not "in `distill()`".
 

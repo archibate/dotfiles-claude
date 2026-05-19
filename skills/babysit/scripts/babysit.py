@@ -1102,13 +1102,35 @@ def cmd_wait(
     columns: str = typer.Option(_DEFAULT_COLS, "--columns"),
     format: str = typer.Option("json", "--format"),
 ) -> None:
-    """Block until a task reaches a terminal status."""
+    """Block until a task reaches a terminal status.
+
+    stdout: single terminal-status JSON object (unchanged contract).
+    stderr: zero-or-more mid-flight event JSON lines, currently
+        `{"event":"runaway_risk", ...}` emitted once when `elapsed_time`
+        first crosses `estimated_time`. Pair with Monitor / Bash
+        run_in_background=true — the harness merges both streams and
+        surfaces each new line as a notification.
+    """
+    runaway_alerted = False
     while True:
         resp = rpc_call("status", name=name)
         t = resp["task"]
         if t["status"] in TERMINAL:
             _print(t, format, columns=_split_cols(columns))
             raise typer.Exit(0 if t["status"] == "completed" else 1)
+        if not runaway_alerted:
+            elapsed = t.get("elapsed_time")
+            estimated = t.get("estimated_time")
+            if elapsed is not None and estimated and elapsed > estimated:
+                print(json.dumps({
+                    "event": "runaway_risk",
+                    "name": name,
+                    "elapsed_time": elapsed,
+                    "estimated_time": estimated,
+                    "kill_timeout": t.get("kill_timeout"),
+                    "hint": "elapsed exceeded estimated_time; inspect `babysit log --tail` or kill if stuck",
+                }), file=sys.stderr, flush=True)
+                runaway_alerted = True
         time.sleep(poll_interval)
 
 

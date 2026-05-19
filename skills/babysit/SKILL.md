@@ -12,12 +12,13 @@ hooks:
         - type: command
           command: bash ${CLAUDE_SKILL_DIR-$HOME/.claude/skills/babysit}/hooks/no-sleep-babysit.sh
           timeout: 5
+compatibilty: Claude Code
 ---
 
 # babysit — Supervised Background Task Runner
 
-!`command -v babysit || (mkdir -p "$HOME/.local/bin" && install -m755 "${CLAUDE_SKILL_DIR}/scripts/babysit.py" "$HOME/.local/bin/babysit" && echo "babysit installed to ~/.local/bin") || echo "babysit installation failed, consider use self-contained scripts/babysit.py"`
-!`command -v babysit && (babysit ping 2>&1 || babysit daemon-start 2>&1 || echo "babysit daemon failed to start")`
+!`command -v babysit || (mkdir -p "$HOME/.local/bin" && install -m755 "${CLAUDE_SKILL_DIR}/scripts/babysit.py" "$HOME/.local/bin/babysit" && echo "babysit installed to ~/.local/bin") || echo "babysit installation failed, consider use self-contained scripts/babysit.py" # auto-install CLI tool on skill load`
+!`command -v babysit && (babysit ping 2>&1 || babysit daemon-start 2>&1 || echo "babysit daemon failed to start") # auto-start daemon on skill load`
 
 ## When to Use
 
@@ -41,9 +42,11 @@ Before launching heavy work, run the `/preflight-check` skill.
 ```bash
 babysit run \
   --name="<unique-name>" \
-  --command="PYTHONUNBUFFERED=1 uv run python -u path/to/script.py" \
-  --estimated_time="30m"
+  --command="uv run python -u path/to/script.py" \
+  --estimated_time="10m"
 ```
+
+> Provide `--estimated_time` with your best-effort estimation. You will get notified on runaway risk (`elapsed_time > estimated_time`).
 
 The call is non-blocking: returns immediately with `queued: <name>`. The daemon dispatches as soon as system has capacity.
 
@@ -55,7 +58,12 @@ Required: `--name` (unique), `--command` (single shell string). Optional: `--est
 babysit wait --name="<unique-name>"
 ```
 
-Run with `run_in_background: true`. You'll get a `<task-notification>` on terminal status. **Do not poll** with `babysit status` in a sleep loop — the daemon already knows; subscribe instead of polling.
+Run with `run_in_background: true` (optionally attach `Monitor` for line-level pushes). You get:
+
+- a mid-flight `{"event":"runaway_risk", ...}` JSON line on **stderr** the first time `elapsed_time > estimated_time` — inspect the log and decide whether to keep waiting or `babysit kill`
+- a terminal-status JSON object on **stdout** plus a `<task-notification>` when the task reaches a terminal state (exit 0 = completed, exit 1 = failed / killed)
+
+**Do not poll** with `babysit status` in a sleep loop — the daemon already knows; subscribe instead of polling.
 
 ### 3. Check log / progress at any time
 
@@ -143,4 +151,4 @@ If commands return `babysit daemon not running`, run `babysit daemon-start`. One
 
 - `references/babysit.md` — full babysit spec (CLI flags, daemon config, resource rules)
 - `hooks/no-sleep-babysit.sh` — blocks `sleep N && babysit log/status` anti-pattern
-- `scripts/babysit.py` — self-contained babysit implementation (installed in `~/.local/bin`)
+- `scripts/babysit.py` — self-contained babysit implementation (installed to `~/.local/bin`)

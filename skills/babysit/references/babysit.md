@@ -68,6 +68,8 @@ babysit wait --name="<task name>"
 babysit wait --name="<task name>" --columns="..." --format=json
 ```
 
+`wait` blocks until terminal status. stdout: single terminal-status JSON object. stderr: zero-or-more event JSON lines, currently `{"event":"runaway_risk", ...}` emitted once when `elapsed_time` first exceeds `estimated_time`. Combine with `run_in_background=true` + `Monitor` to subscribe — the harness merges both streams.
+
 To peek log:
 
 ```bash

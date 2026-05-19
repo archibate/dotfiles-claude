@@ -2,7 +2,7 @@
 name: preflight-check
 description: >
   Resource-aware pre-launch checklist for long-running or heavy tasks — prevents OOM,
-  wasted compute, and daytime disruption. TRIGGER before: any `pueue add` of compute work,
+  wasted compute, and daytime disruption. TRIGGER before: any `babysit run` of compute work,
   builds/benchmarks/renders/training jobs, large-scale scrapes or scripted browser runs,
   spawning 2+ parallel subagents, full-repo test runs, or any Bash call with
   `run_in_background=true` whose runtime is uncertain.
@@ -12,7 +12,8 @@ allowed-tools:
   - Bash(nproc:*)
   - Bash(nvidia-smi:*)
   - Bash(ps aux:*)
-  - Bash(pueue status:*)
+  - Bash(babysit list:*)
+  - Bash(babysit status:*)
   - Bash(*resource_snapshot*:*)
   - Read
   - Grep
@@ -27,7 +28,7 @@ Project-specific data tables (cost lookup, I/O dependencies) should be maintaine
 
 ## When to Use
 
-- Before launching any task via `pueue add` or background shell jobs
+- Before launching any task via `babysit run` or background shell jobs
 - Before starting parallel workers, sweeps, grid searches, or hyperparameter optimization
 - Before running data pipelines, ETL jobs, or batch processing on large datasets
 - Before any computation estimated to take >10 minutes or use >2 GB memory
@@ -82,7 +83,7 @@ When a task is not in the lookup table:
 
 ### 1b. Check Data Race Conflicts
 
-Check for running tasks (e.g., `pueue status`) and compare I/O dependencies using the project's **I/O Dependency Table**:
+Check for running tasks (e.g., `babysit list`) and compare I/O dependencies using the project's **I/O Dependency Table**:
 
 1. **Identify what the planned task reads and writes**
 2. **Check if any running task writes to files the planned task reads, or vice versa**

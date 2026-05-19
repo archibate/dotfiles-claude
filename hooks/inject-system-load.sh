@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 # Inject system-load context only when resources are actually elevated.
 # Silent on idle/normal systems. Reminds the agent to be careful before
-# launching heavy work (builds, training, parallel agents, pueue jobs)
+# launching heavy work (builds, training, parallel agents, babysit jobs)
 # when the box is already loaded.
 #
 # Cooldown: time-based, per session_id. After an emit, suppress further
@@ -153,7 +153,7 @@ TMP="${CACHE_FILE}.tmp.$$"
 printf '%s' "$NOW" > "$TMP"
 mv "$TMP" "$CACHE_FILE"
 
-CTX="System load elevated — be careful before launching heavy work (builds, training, parallel agents, pueue):"
+CTX="System load elevated — be careful before launching heavy work (builds, training, parallel agents, babysit):"
 for line in "${WARN[@]}"; do
   CTX="${CTX}
   - ${line}"

@@ -1,7 +1,9 @@
 ---
 name: pueue
 description: >
-  Run long-running tasks in pueue. This skill should be used before run any long-running task (>2 min), computation-intensive task, or background task — or when the user says "use pueue" or "run in background". This skill defines guardrails and mandatory workflow, not just "how to use pueue".
+  Legacy opt-in pueue workflow. Use ONLY when the user explicitly types "/pueue" or asks for pueue by name. For all other long-running / background tasks, use /babysit.
+disable-model-invocation: true
+user-invocable: true
 allowed-tools:
   - Bash(pueue:*)
   - Bash(*run_in_pueue*:*)
@@ -12,9 +14,8 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: bash ~/.claude/skills/pueue/hooks/no-sleep-pueue.sh
+          command: bash ${CLAUDE_SKILL_DIR:-$HOME/.claude/skills/pueue}/hooks/no-sleep-pueue.sh
           timeout: 5
-compatibility: Claude Code
 ---
 
 # Pueue - Background Task Manager

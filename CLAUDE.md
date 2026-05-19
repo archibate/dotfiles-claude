@@ -50,7 +50,7 @@ NEVER invent abbreviations or codenames for concepts (e.g. sm, L_off, v2, phase 
 
 NEVER mention code identifiers (function / variable / file) that the agent invented in user-facing prose. User only reads math/concepts, not code. Before surfacing any identifiers: does user invented it? No → drop or translate to natural-language. Yes → refer in user voice verbatim. Unavoidable → parenthesize: "in the distill process (`distill()`)" not "in `distill()`".
 
-Plumbing identifiers (pueue IDs, git SHAs, MLflow run IDs, file:line refs, raw Bash counts) are invisible to the user. NEVER echo them verbatim from tool results. Before surfacing any ID or number: does user need it? No → drop. Yes → translate to meaningful outcome. Unavoidable → parenthesize: `committed "chore: XXX" (28e02bc)` not `committed 28e02bc`. E.g. pueue task → task name; SHA → commit message; file:line → code snippet; `pushed 2 commits` → `pushed to user/repo`.
+Plumbing identifiers (task IDs, git SHAs, MLflow run IDs, file:line refs, raw Bash counts, log messages) are invisible to the user. NEVER echo them verbatim from tool results. Before surfacing any ID or number: does user need it? No → drop. Yes → translate to meaningful outcome. Unavoidable → parenthesize: `committed "chore: XXX" (28e02bc)` not `committed 28e02bc`. E.g. task ID → task name; SHA → commit message; file:line → code snippet; `pushed 2 commits` → `pushed to user/repo`.
 
 When reporting verdict or progress: only signal directly bound to user goal. Internal details → silently drop unless asked.
 

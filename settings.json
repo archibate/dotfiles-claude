@@ -277,7 +277,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hint-skill-pueue.sh",
+            "command": "bash ~/.claude/hooks/hint-skill-babysit.sh",
             "timeout": 5
           }
         ]
@@ -379,7 +379,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/track-pueue-skill-load.sh",
+            "command": "bash ~/.claude/hooks/track-babysit-skill-load.sh",
             "timeout": 5
           }
         ]

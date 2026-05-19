@@ -1,15 +1,15 @@
 #!/usr/bin/bash
-# PostToolUse hook: mark /pueue skill as loaded so hint-skill-pueue.sh allows
-# subsequent pueue commands. Also syncs gen-seen so a post-compact skill load
+# PostToolUse hook: mark /babysit skill as loaded so hint-skill-babysit.sh allows
+# subsequent babysit commands. Also syncs gen-seen so a post-compact skill load
 # isn't wiped by the pre-bash hook's reset_on_compact call.
 set -euo pipefail
 
 input=$(cat)
 skill=$(jq -r '.tool_input.skill // ""' <<< "$input")
-case "$skill" in *pueue*) ;; *) exit 0 ;; esac
+case "$skill" in *babysit*) ;; *) exit 0 ;; esac
 
 SID=$(jq -r '.session_id // "unknown"' <<< "$input")
-SKILL_CACHE_DIR=/tmp/claude-${UID}-state/pueue-skill-loaded
+SKILL_CACHE_DIR=/tmp/claude-${UID}-state/babysit-skill-loaded
 mkdir -p -m 700 "$SKILL_CACHE_DIR"
 
 COMPACT_GEN="/tmp/claude-${UID}-state/compact-events/$SID.gen"

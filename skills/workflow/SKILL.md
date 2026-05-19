@@ -5,6 +5,7 @@ description: >
   and compaction-proof session state. TRIGGER when starting any multi-step project
   (≥3 tasks with gates or dependencies), or when the user says "create a workflow",
   "task board", or "project dashboard".
+disable-model-invocation: true
 ---
 
 # Workflow Skill

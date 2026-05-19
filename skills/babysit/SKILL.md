@@ -16,7 +16,8 @@ hooks:
 
 # babysit — Supervised Background Task Runner
 
-!`babysit ping 2>&1 || babysit daemon-start 2>&1   # BYPASS_DEVNULL_CHECK`
+!`command -v babysit || (mkdir -p "$HOME/.local/bin" && install -m755 "${CLAUDE_SKILL_DIR}/scripts/babysit.py" "$HOME/.local/bin/babysit" && echo "babysit installed to ~/.local/bin") || echo "babysit installation failed, consider use self-contained scripts/babysit.py"`
+!`command -v babysit && (babysit ping 2>&1 || babysit daemon-start 2>&1 || echo "babysit daemon failed to start")`
 
 ## When to Use
 
@@ -142,3 +143,4 @@ If commands return `babysit daemon not running`, run `babysit daemon-start`. One
 
 - `references/babysit.md` — full babysit spec (CLI flags, daemon config, resource rules)
 - `hooks/no-sleep-babysit.sh` — blocks `sleep N && babysit log/status` anti-pattern
+- `scripts/babysit.py` — self-contained babysit implementation (installed in `~/.local/bin`)

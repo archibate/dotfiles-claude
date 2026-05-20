@@ -34,6 +34,19 @@ The `babysit run` is non-blocking, push into queue. Once started
 
 > `-u` or `PYTHONUNBUFFERED=1` avoids python buffering stdout which can break observability rule.
 
+Optionally declare peak-resource estimates so the daemon can (a) warn you mid-flight when actual exceeds your prediction and (b) treat your task fairly under system pressure:
+```bash
+babysit run --name="train-mlp" --command="uv run python -u train.py" --estimated_time="30m" --estimated_mem_bytes="4G" --estimated_cpu_cores=8
+```
+
+> `--estimated_mem_bytes` accepts `4G`, `512M`, `1.5T`, raw bytes (default `4G`). `--estimated_cpu_cores` is a float (default `4`). Override explicitly for heavy ML training, big-data scans, or single-threaded scripts — the defaults are tuned for a typical 10m task.
+>
+> Soft warn at 1× (a `{"event":"runaway_risk","dim":"mem|cpu", ...}` line on `babysit wait` stderr — sanity-check on the fly). Hard kill at 2× sustained for the monitor tolerance window (default 30s) with `kill_reason="estimated_mem_exceeded"` / `"estimated_cpu_exceeded"`.
+>
+> Under system pressure (memory/CPU), the daemon picks the kill victim by tier: (1) tasks exceeding their declared estimate first, (2) tasks with no declared estimate, (3) tasks within their estimate last. This protects sunk progress of well-behaved long-running tasks against runaway newcomers. The killed task's spawning agent reads `kill_reason="system_{mem,cpu}_pressure"` and should wait for system load to drop before retrying (use `babysit wait_for_capacity`).
+>
+> Soft-deny on queue: `babysit run` checks `current_sys_used + sum_of_pending_estimates + 2 × your_estimate ≤ max_sys_{mem,cpu}_pct × total` before accepting. On deny, exits 2 with a `{"error":"capacity_exceeded","dim":"mem|cpu","projected_*","limit_*","hint","suggested_command":"babysit wait_for_capacity --mem_bytes=… --cpu_cores=…"}` JSON line on stderr. `babysit wait_for_capacity` runs the same check on a poll loop, emitting `{"event":"waiting_for_capacity","phase":"pressured|debounce", ...}` on stderr per poll. It only exits 0 after the gate stays open for a **random sustained window** in `[--debounce_min, --debounce_max]` (default 1–3 min) — desynchronizes concurrent waiters so they don't all race to `babysit run` the moment capacity opens; any pressure tick during the window resets it. Pass `--force` on `babysit run` to skip the gate entirely.
+
 If babysit daemon not started:
 ```bash
 babysit daemon-start
@@ -47,10 +60,14 @@ To show current tasks:
 ```bash
 babysit list
 # equivalant to:
-babysit list --columns="name,pid,status,command,elapsed_time,estimated_time,kill_timeout,observability_interval,last_observed_log,time_since_last_observe,cpu_cores,cpu_pct,mem_bytes,mem_pct,disk_write_bytes,disk_read_bytes,num_procs,num_threads,claude_session_id" --format=json
+babysit list --columns="name,pid,status,kill_reason,kill_hint,exit_code,command,elapsed_time,estimated_time,kill_timeout,observability_interval,last_observed_log,time_since_last_observe,cpu_cores,cpu_pct,estimated_cpu_cores,mem_bytes,mem_pct,estimated_mem_bytes,disk_write_bytes,disk_read_bytes,num_procs,num_threads,claude_session_id" --format=json
 ```
 
-> `status` can be: pending, running, completed, failed, manual_killed, timeout_killed
+> `status` can be: pending, running, completed, failed, killed, unknown
+>
+> Terminal statuses are `completed` / `failed` / `killed` / `unknown`. For `killed`, `kill_reason` names the trigger (e.g. `manual`, `mem_exceeded`, `cpu_exceeded`, `estimated_mem_exceeded`, `estimated_cpu_exceeded`, `cgroup_oom_killed`, `elapsed_exceeded`, `observability_stall`, `system_cpu_pressure`/`system_mem_pressure`/`system_disk_pressure`, `daemon_shutdown`) and `kill_hint` gives a one-line remediation. A plain `failed` exit (process returned non-zero on its own) has `kill_reason=null` — check `exit_code` instead. `failed`/`unknown` from daemon-restart or spawn corner cases do carry a `kill_reason` (e.g. `process_vanished`, `adopted_exited`, `daemon_restart_dead`, `spawn_error: …`).
+>
+> The cgroup envelope for memory is sized at `min(3 × --estimated_mem_bytes, --mem_pct_limit × total_ram)` (similar for CPU vs `os.cpu_count()`). An explosive allocation that outpaces the daemon's 30s soft-watch hits the kernel OOM boundary at 3× the declared estimate and is reported as `kill_reason="cgroup_oom_killed"` (distinct from the graceful `estimated_mem_exceeded`).
 
 To peek a task progress:
 
@@ -68,7 +85,7 @@ babysit wait --name="<task name>"
 babysit wait --name="<task name>" --columns="..." --format=json
 ```
 
-`wait` blocks until terminal status. stdout: single terminal-status JSON object. stderr: zero-or-more event JSON lines, currently `{"event":"runaway_risk", ...}` emitted once when `elapsed_time` first exceeds `estimated_time`. Combine with `run_in_background=true` + `Monitor` to subscribe — the harness merges both streams.
+`wait` blocks until terminal status. stdout: single terminal-status JSON object. stderr: zero-or-more event JSON lines — `{"event":"runaway_risk","dim":"elapsed|mem|cpu", ...}` emitted once per dim when actual first exceeds the declared estimate. Combine with `run_in_background=true` + `Monitor` to subscribe — the harness merges both streams.
 
 To peek log:
 
@@ -85,6 +102,9 @@ babysit log --follow --name="<task name>"
 ```
 
 you will be notified on log update.
+
+
+For humans only (do not invoke from an agent), there is a `babysit tui` dashboard built on `textual` that renders the task list with live progress, sortable resource columns, log peek, and confirm-to-kill. Agent-facing subcommands above remain the API surface.
 
 
 Use `babysit --help` or `babysit <subcommand> --help` for help.

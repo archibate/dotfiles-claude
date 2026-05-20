@@ -43,14 +43,20 @@ Before launching heavy work, run the `/preflight-check` skill.
 babysit run \
   --name="<unique-name>" \
   --command="uv run python -u path/to/script.py" \
-  --estimated_time="10m"
+  --estimated_time="10m" \
+  --estimated_mem_bytes="4G" \
+  --estimated_cpu_cores=4
 ```
 
-> Provide `--estimated_time` with your best-effort estimation. You will get notified on runaway risk (`elapsed_time > estimated_time`).
+> Provide best-effort estimates for time, peak memory, and peak CPU cores. You'll get a `runaway_risk` notification when any actual exceeds its estimate.
 
 The call is non-blocking: returns immediately with `queued: <name>`. The daemon dispatches as soon as system has capacity.
 
-Required: `--name` (unique), `--command` (single shell string). Optional: `--estimated_time` (default 10m), `--kill_timeout` (default 2× estimated), `--observability_interval` (default 5m), `--mem_pct_limit` (default 40), `--cpu_pct_limit` (default 90).
+Required: `--name` (unique), `--command` (single shell string). Optional: `--estimated_time` (default 10m), `--kill_timeout` (default 2× estimated), `--observability_interval` (default 5m), `--mem_pct_limit` (default 40), `--cpu_pct_limit` (default 90), `--estimated_mem_bytes` (default `4G`), `--estimated_cpu_cores` (default `4`).
+
+> Override the defaults to match your workload — under system memory/CPU pressure the daemon kills estimate-exceeders before within-estimate tasks, so accurate predictions protect long-running work. Hard kill fires at 2× sustained (daemon, graceful) or 3× instant via cgroup OOM.
+>
+> If capacity is tight, `babysit run` may soft-deny with `capacity_exceeded` (exit 2, JSON on stderr) — run the `babysit wait_for_capacity --mem_bytes=… --cpu_cores=…` (blocks until room exists) to wait for room, reduce estimates, or pass `--force` to override.
 
 ### 2. Wait for completion (background)
 
@@ -60,8 +66,8 @@ babysit wait --name="<unique-name>"
 
 Run with `run_in_background: true` (optionally attach `Monitor` for line-level pushes). You get:
 
-- a mid-flight `{"event":"runaway_risk", ...}` JSON line on **stderr** the first time `elapsed_time > estimated_time` — inspect the log and decide whether to keep waiting or `babysit kill`
-- a terminal-status JSON object on **stdout** plus a `<task-notification>` when the task reaches a terminal state (exit 0 = completed, exit 1 = failed / killed)
+- a mid-flight `{"event":"runaway_risk","dim":"elapsed|mem|cpu", ...}` JSON line on stderr the first time an actual exceeds its declared estimate (elapsed > `estimated_time`, mem > `estimated_mem_bytes`, or cpu_cores > `estimated_cpu_cores`) — inspect the log and decide whether to keep waiting or `babysit kill`. Daemon hard-kills for mem/cpu at 2× sustained for the monitor tolerance window; elapsed hard-kills at `--kill_timeout` (default 2× `estimated_time`).
+- a terminal-status JSON object on stdout plus a `<task-notification>` when the task reaches a terminal state (exit 0 only on `completed`; exit 1 for everything else — `failed`, `killed`, `unknown`). For a kill, `kill_reason` + `kill_hint` fields at the top of the JSON tell you what to fix.
 
 **Do not poll** with `babysit status` in a sleep loop — the daemon already knows; subscribe instead of polling.
 

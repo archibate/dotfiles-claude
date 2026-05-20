@@ -5,6 +5,7 @@
 #   "typer>=0.12",
 #   "rich>=13",
 #   "psutil>=7",
+#   "textual>=0.80",
 # ]
 # ///
 """babysit — supervised background task runner.
@@ -21,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import random
 import re
 import selectors
 import shlex
@@ -58,27 +60,58 @@ DEFAULTS = {
     "observability_interval": "5m",
     "mem_pct_limit": 40.0,
     "cpu_pct_limit": 90.0,
+    "estimated_mem_bytes": "4G",
+    "estimated_cpu_cores": 4.0,
     "max_sys_mem_pct": 70.0,
     "max_sys_disk_pct": 90.0,
     "max_sys_cpu_pct": 90.0,
-    "monitor_interval": "1m",
+    "monitor_interval": "10s",
     "monitor_tolerance_count": 3,
     "monitor_disk_infer_by_dir": str(Path.home()),
 }
 
-STATUSES = ("pending", "running", "completed", "failed", "manual_killed", "timeout_killed", "oom_killed", "system_killed", "unknown")
-TERMINAL = {"completed", "failed", "manual_killed", "timeout_killed", "oom_killed", "system_killed", "unknown"}
+STATUSES = ("pending", "running", "completed", "failed", "killed", "unknown")
+TERMINAL = {"completed", "failed", "killed", "unknown"}
 
 SPEC_COLUMNS = (
-    "name", "pid", "status", "command",
+    "name", "pid", "status", "kill_reason", "kill_hint", "exit_code", "command",
     "elapsed_time", "estimated_time", "kill_timeout", "observability_interval",
     "last_observed_log", "time_since_last_observe",
-    "cpu_cores", "cpu_pct",
-    "mem_bytes", "mem_pct",
+    "cpu_cores", "cpu_pct", "estimated_cpu_cores",
+    "mem_bytes", "mem_pct", "estimated_mem_bytes",
     "disk_write_bytes", "disk_read_bytes",
     "num_procs", "num_threads",
     "claude_session_id",
 )
+
+# Agent-facing remediation hints. Keys must match every `kill_reason` string
+# the daemon writes (see `_kill_task`, `_check_task`, `_adopt_running`, `_start_task`).
+KILL_HINTS: dict[str, str] = {
+    "system_cpu_pressure": "system CPU >90% sustained — limit num_threads / parallelism, or defer until load drops",
+    "system_mem_pressure": "system memory >70% sustained — reduce batch size or wait for free RAM",
+    "system_disk_pressure": "system disk >90% sustained — clean outputs or write elsewhere",
+    "mem_exceeded": "task RSS exceeded --mem_pct_limit (default 40% of total RAM) — reduce batch size or pass a higher --mem_pct_limit",
+    "cpu_exceeded": "task CPU exceeded --cpu_pct_limit × cores — reduce parallelism or pass a higher --cpu_pct_limit",
+    "estimated_mem_exceeded": "task RSS exceeded 2× --estimated_mem_bytes sustained — your peak-memory prediction was off; raise --estimated_mem_bytes or reduce footprint, then re-queue",
+    "estimated_cpu_exceeded": "task CPU exceeded 2× --estimated_cpu_cores sustained — your peak-CPU prediction was off; raise --estimated_cpu_cores or reduce parallelism, then re-queue",
+    "cgroup_oom_killed": "kernel OOM-killed the task at the 3× --estimated_mem_bytes cgroup boundary — your peak-memory prediction was severely off (explosive allocation outpaced the 30s soft-watch); raise --estimated_mem_bytes substantially or reduce footprint, then re-queue",
+    "elapsed_exceeded": "task elapsed > --kill_timeout — pass a longer --kill_timeout or speed up the job",
+    "observability_stall": "task wrote no log line for > --observability_interval — ensure progress prints; check PYTHONUNBUFFERED=1",
+    "manual": "killed by user via `babysit kill`",
+    "daemon_shutdown": "daemon stopped (SIGTERM); restart with `babysit daemon-start` and re-queue",
+    "daemon_restart_dead": "task PID was gone when daemon restarted; re-queue",
+    "daemon_restart_pid_reuse": "task PID was reused by another process across daemon restart; re-queue",
+    "process_vanished": "task process disappeared between probes (likely external kill or kernel OOM-killer) — check `dmesg`",
+    "adopted_exited": "adopted task exited across daemon restart; exit code unobservable — inspect the log file",
+}
+
+
+def kill_hint_for(reason: str | None) -> str | None:
+    if not reason:
+        return None
+    if reason.startswith("spawn_error:"):
+        return "systemd-run failed to start the scope — check daemon log; likely missing user-systemd or DBus session"
+    return KILL_HINTS.get(reason)
 
 console = Console()
 
@@ -113,6 +146,21 @@ def fmt_duration(secs: float | None) -> str:
     return f"{h}h{rem // 60}m"
 
 
+_BYTES_RE = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*([KMGT]?)B?\s*$", re.IGNORECASE)
+
+
+def parse_bytes(s: str | int | float) -> int:
+    """Parse human-friendly byte spec ('4G', '512M', '1.5T', '8192') → int."""
+    if isinstance(s, (int, float)):
+        return int(s)
+    m = _BYTES_RE.match(s)
+    if not m:
+        raise ValueError(f"bad bytes spec: {s!r}")
+    n = float(m.group(1))
+    unit = (m.group(2) or "").upper()
+    return int(n * {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4}[unit])
+
+
 def fmt_bytes(n: int | None) -> str:
     if n is None:
         return "-"
@@ -143,6 +191,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     observability_interval REAL,
     mem_pct_limit REAL,
     cpu_pct_limit REAL,
+    estimated_mem_bytes INTEGER,
+    estimated_cpu_cores REAL,
     created_at REAL NOT NULL,
     started_at REAL,
     ended_at REAL,
@@ -192,16 +242,32 @@ def spawn_under_scope(
     mem_pct_limit: float,
     cpu_pct_limit: float,
     log_path: Path,
+    estimated_mem_bytes: int | None = None,
+    estimated_cpu_cores: float | None = None,
 ) -> tuple[subprocess.Popen, str]:
     """Spawn `command` inside a transient systemd --user scope (cgroup v2).
+
+    cgroup envelopes are sized to `min(3 × estimate, pct_limit × total)` per dim
+    when an estimate is provided — bounds explosive runaways at the kernel level
+    while preserving the global pct_limit safety net. The 3× headroom sits above
+    the daemon's 2× sustained soft-kill so the daemon usually fires first with a
+    graceful kill_reason; the kernel only steps in for instant explosions.
 
     Returns (Popen, scope_unit_name). Popen.pid is the task PID — systemd-run
     --scope sets up the cgroup then execs in place, preserving PID.
     """
     n_cores = os.cpu_count() or 1
-    cpu_quota = int(round(cpu_pct_limit * n_cores))  # 90% × 64 cores = 5760%
     mem_total = psutil.virtual_memory().total
-    mem_bytes = int(mem_total * mem_pct_limit / 100)
+    mem_cap_global = int(mem_total * mem_pct_limit / 100)
+    cpu_cap_global_pct = int(round(cpu_pct_limit * n_cores))  # 90% × 64 cores = 5760%
+    mem_bytes = (
+        min(3 * estimated_mem_bytes, mem_cap_global)
+        if estimated_mem_bytes else mem_cap_global
+    )
+    cpu_quota = (
+        min(int(round(3 * estimated_cpu_cores * 100)), cpu_cap_global_pct)
+        if estimated_cpu_cores else cpu_cap_global_pct
+    )
     scope_unit = f"babysit-{re.sub(r'[^A-Za-z0-9_-]', '_', name)}.scope"
 
     cmd = [
@@ -239,6 +305,34 @@ def stop_scope(scope_unit: str) -> None:
             stderr=subprocess.DEVNULL,
             timeout=5,
         )
+
+
+def cgroup_oom_killed(scope_unit: str) -> bool:
+    """Return True iff the scope's cgroup has a non-zero oom_kill counter.
+
+    Must be called BEFORE `stop_scope` — systemd-run --collect removes the
+    cgroup on stop, taking memory.events with it.
+    """
+    try:
+        r = subprocess.run(
+            ["systemctl", "--user", "show", scope_unit,
+             "--property=ControlGroup", "--value"],
+            env=_systemd_env(),
+            capture_output=True, text=True, timeout=2,
+        )
+        cgroup_rel = r.stdout.strip()
+        if not cgroup_rel:
+            return False
+        events_path = Path(f"/sys/fs/cgroup{cgroup_rel}/memory.events")
+        if not events_path.exists():
+            return False
+        for line in events_path.read_text().splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[0] == "oom_kill":
+                return int(parts[1]) > 0
+    except Exception:
+        pass
+    return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -380,19 +474,26 @@ def rpc_recv(sock: socket.socket) -> dict | None:
 
 
 def daemon_alive() -> bool:
-    if not DAEMON_PID_PATH.exists():
-        return False
     try:
         pid = int(DAEMON_PID_PATH.read_text().strip())
         os.kill(pid, 0)
         return True
-    except (ValueError, ProcessLookupError, PermissionError):
+    except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
         return False
+
+
+class RPCError(RuntimeError):
+    """RuntimeError carrying the full daemon response payload (for callers
+    that need to surface structured error fields, e.g. `capacity_exceeded`)."""
+
+    def __init__(self, msg: str, payload: dict | None = None):
+        super().__init__(msg)
+        self.payload: dict = payload or {}
 
 
 def rpc_call(op: str, **kwargs) -> dict:
     if not SOCK_PATH.exists() or not daemon_alive():
-        raise RuntimeError(
+        raise RPCError(
             "babysit daemon not running. Start with: babysit daemon-start"
         )
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -404,9 +505,9 @@ def rpc_call(op: str, **kwargs) -> dict:
     finally:
         s.close()
     if resp is None:
-        raise RuntimeError("empty response from daemon")
+        raise RPCError("empty response from daemon")
     if not resp.get("ok", False):
-        raise RuntimeError(resp.get("error", "unknown daemon error"))
+        raise RPCError(resp.get("error", "unknown daemon error"), resp)
     return resp
 
 
@@ -427,7 +528,11 @@ class RunningTask:
     mem_pct_limit: float
     cpu_pct_limit: float
     started_at: float
+    estimated_mem_bytes: int | None = None
+    estimated_cpu_cores: float | None = None
     obs_violation_count: int = 0
+    mem_overrun_count: int = 0
+    cpu_overrun_count: int = 0
     last_log_mtime: float | None = None
     last_stats: TaskStats | None = None
     prev_cpu_times: dict[int, tuple[float, float]] = field(default_factory=dict)
@@ -519,6 +624,8 @@ class Daemon:
                 mem_pct_limit=r["mem_pct_limit"] or DEFAULTS["mem_pct_limit"],
                 cpu_pct_limit=r["cpu_pct_limit"] or DEFAULTS["cpu_pct_limit"],
                 started_at=started_at or now(),
+                estimated_mem_bytes=r["estimated_mem_bytes"],
+                estimated_cpu_cores=r["estimated_cpu_cores"],
             )
             # prime CPU baseline
             with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
@@ -556,7 +663,7 @@ class Daemon:
         self.shutting_down = True
         self.log("SIGTERM received — stopping running tasks")
         for name in list(self.running):
-            self._kill_task(name, reason="daemon_shutdown", status="manual_killed")
+            self._kill_task(name, reason="daemon_shutdown")
 
     # ── socket I/O ──────────────────────────────────────────────────────────
     def _accept(self, sock: socket.socket) -> None:
@@ -597,6 +704,14 @@ class Daemon:
             # purge terminal record so name can be reused
             self.db.execute("DELETE FROM tasks WHERE name=?", (name,))
 
+        if not req.get("force"):
+            deny = self._capacity_check(
+                int(req.get("estimated_mem_bytes") or 0),
+                float(req.get("estimated_cpu_cores") or 0),
+            )
+            if deny is not None:
+                return {"ok": False, **deny}
+
         log_path = LOG_DIR / f"{name}.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         # Truncate to start fresh
@@ -605,8 +720,10 @@ class Daemon:
 
         self.db.execute(
             "INSERT INTO tasks(name,command,status,estimated_time,kill_timeout,"
-            "observability_interval,mem_pct_limit,cpu_pct_limit,created_at,log_path,"
-            "claude_session_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            "observability_interval,mem_pct_limit,cpu_pct_limit,"
+            "estimated_mem_bytes,estimated_cpu_cores,"
+            "created_at,log_path,claude_session_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 name,
                 command,
@@ -616,6 +733,8 @@ class Daemon:
                 req.get("observability_interval"),
                 req.get("mem_pct_limit"),
                 req.get("cpu_pct_limit"),
+                req.get("estimated_mem_bytes"),
+                req.get("estimated_cpu_cores"),
                 now(),
                 str(log_path),
                 req.get("claude_session_id"),
@@ -644,7 +763,7 @@ class Daemon:
         name = req["name"]
         if name not in self.running:
             return {"ok": False, "error": f"task {name!r} not running"}
-        self._kill_task(name, reason="manual", status="manual_killed")
+        self._kill_task(name, reason="manual")
         return {"ok": True}
 
     def _op_shutdown(self, req: dict) -> dict:
@@ -654,9 +773,87 @@ class Daemon:
     def _op_ping(self, req: dict) -> dict:
         return {"ok": True, "pid": os.getpid(), "running": len(self.running)}
 
+    def _op_wait_for_capacity(self, req: dict) -> dict:
+        em = int(req.get("mem_bytes") or 0)
+        ec = float(req.get("cpu_cores") or 0)
+        deny = self._capacity_check(em, ec)
+        if deny is None:
+            return {"ok": True, "ready": True}
+        return {"ok": True, "ready": False, **deny}
+
+    # ── capacity gate (soft-deny) ──────────────────────────────────────────
+    def _capacity_check(self, new_mem_bytes: int, new_cpu_cores: float) -> dict | None:
+        """Return None if a task with the given estimates fits under
+        max_sys_*_pct headroom, else a structured `capacity_exceeded` dict.
+
+        Formula (per dim): current_sys_used + sum_of_pending_estimates +
+        2 × new_estimate ≤ max_sys_*_pct × total. Running babysit tasks are
+        already in `current_sys_used`; pending tasks haven't started yet so
+        they're added explicitly; the 2× factor reserves burst headroom that
+        matches the daemon's 2× sustained soft-kill threshold.
+        """
+        vm = psutil.virtual_memory()
+        total_mem = vm.total
+        cur_mem_used = vm.used
+        n_cores = float(os.cpu_count() or 1)
+        cur_cpu_cores = psutil.cpu_percent(interval=None) * n_cores / 100.0
+
+        rows = self.db.execute(
+            "SELECT estimated_mem_bytes, estimated_cpu_cores "
+            "FROM tasks WHERE status='pending'"
+        ).fetchall()
+        pending_mem = sum((r["estimated_mem_bytes"] or 0) for r in rows)
+        pending_cpu = sum((r["estimated_cpu_cores"] or 0.0) for r in rows)
+
+        mem_limit = self.max_sys_mem_pct / 100 * total_mem
+        cpu_limit = self.max_sys_cpu_pct / 100 * n_cores
+        mem_projected = cur_mem_used + pending_mem + 2 * new_mem_bytes
+        cpu_projected = cur_cpu_cores + pending_cpu + 2 * new_cpu_cores
+
+        suggest = (
+            f"babysit wait_for_capacity --mem_bytes={new_mem_bytes} "
+            f"--cpu_cores={new_cpu_cores}"
+        )
+        if mem_projected > mem_limit:
+            return {
+                "error": "capacity_exceeded",
+                "dim": "mem",
+                "projected_bytes": int(mem_projected),
+                "limit_bytes": int(mem_limit),
+                "current_sys_used_bytes": int(cur_mem_used),
+                "pending_estimates_bytes": int(pending_mem),
+                "your_estimate_bytes": int(new_mem_bytes),
+                "hint": (
+                    f"projected memory {fmt_bytes(int(mem_projected))} "
+                    f"exceeds {self.max_sys_mem_pct:.0f}% of system RAM "
+                    f"({fmt_bytes(int(mem_limit))}). Wait for capacity, "
+                    f"reduce --estimated_mem_bytes, or pass --force."
+                ),
+                "suggested_command": suggest,
+            }
+        if cpu_projected > cpu_limit:
+            return {
+                "error": "capacity_exceeded",
+                "dim": "cpu",
+                "projected_cores": cpu_projected,
+                "limit_cores": cpu_limit,
+                "current_sys_cores": cur_cpu_cores,
+                "pending_estimates_cores": pending_cpu,
+                "your_estimate_cores": new_cpu_cores,
+                "hint": (
+                    f"projected cpu {cpu_projected:.1f}c exceeds "
+                    f"{self.max_sys_cpu_pct:.0f}% of system cores "
+                    f"({cpu_limit:.1f}c). Wait for capacity, reduce "
+                    f"--estimated_cpu_cores, or pass --force."
+                ),
+                "suggested_command": suggest,
+            }
+        return None
+
     # ── enrichment for list/status responses ───────────────────────────────
     def _enrich(self, r: sqlite3.Row) -> dict:
         d = dict(r)
+        d["kill_hint"] = kill_hint_for(d.get("kill_reason"))
         rt = self.running.get(d["name"])
         # runtime stats: present for running, None for terminal/pending
         stat_keys = ("cpu_pct", "cpu_cores", "mem_bytes", "mem_pct",
@@ -724,15 +921,27 @@ class Daemon:
 
     def _check_task(self, name: str) -> None:
         rt = self.running[name]
-        # liveness check — Popen.poll() if owned, psutil.pid_exists if adopted
+        # liveness check — Popen.poll() if owned, psutil.pid_exists if adopted.
+        # On non-zero exit / vanish, probe the cgroup's memory.events BEFORE the
+        # scope is stopped (collect=yes removes the cgroup on stop) so we can
+        # attribute kernel OOM kills to estimate undershoot rather than losing
+        # them in a generic "failed".
         if rt.popen is not None:
             rc = rt.popen.poll()
             if rc is not None:
+                if rc != 0 and cgroup_oom_killed(rt.scope_unit):
+                    self._finalize(name, status="killed", exit_code=rc,
+                                  reason="cgroup_oom_killed")
+                    return
                 status = "completed" if rc == 0 else "failed"
                 self._finalize(name, status=status, exit_code=rc)
                 return
         else:
             if not psutil.pid_exists(rt.pid):
+                if cgroup_oom_killed(rt.scope_unit):
+                    self._finalize(name, status="killed", exit_code=None,
+                                  reason="cgroup_oom_killed")
+                    return
                 # PID gone — can't waitpid cross-process, so success/failure is unobservable
                 self._finalize(name, status="unknown", exit_code=None,
                               reason="adopted_exited")
@@ -741,6 +950,10 @@ class Daemon:
         result = probe_task(rt.pid, rt.prev_cpu_times)
         if result is None:
             rc = rt.popen.poll() if rt.popen else None
+            if cgroup_oom_killed(rt.scope_unit):
+                self._finalize(name, status="killed", exit_code=rc,
+                              reason="cgroup_oom_killed")
+                return
             self._finalize(name, status="failed", exit_code=(rc if rc is not None else -1),
                           reason="process_vanished")
             return
@@ -762,38 +975,88 @@ class Daemon:
 
         # per-task rule enforcement (immediate kill per spec)
         elapsed = now() - rt.started_at
+
+        # Agent-declared estimate enforcement (soft-then-hard).
+        # Soft warning at 1× is emitted client-side by `babysit wait`; the daemon
+        # only enforces the 2× × monitor_tolerance_count hard kill here. Resets
+        # when usage drops back below 2× — the agent gets a chance to recover.
+        if rt.estimated_mem_bytes:
+            if stats.mem_bytes > 2 * rt.estimated_mem_bytes:
+                rt.mem_overrun_count += 1
+                if rt.mem_overrun_count >= self.monitor_tolerance_count:
+                    self.log(
+                        f"[{name}] mem {fmt_bytes(stats.mem_bytes)} > 2× estimate "
+                        f"({fmt_bytes(rt.estimated_mem_bytes)}) for {rt.mem_overrun_count} ticks — KILL"
+                    )
+                    self._kill_task(name, reason="estimated_mem_exceeded")
+                    return
+            else:
+                rt.mem_overrun_count = 0
+        if rt.estimated_cpu_cores:
+            if stats.cpu_cores > 2 * rt.estimated_cpu_cores:
+                rt.cpu_overrun_count += 1
+                if rt.cpu_overrun_count >= self.monitor_tolerance_count:
+                    self.log(
+                        f"[{name}] cpu {stats.cpu_cores:.1f}c > 2× estimate "
+                        f"({rt.estimated_cpu_cores:.1f}c) for {rt.cpu_overrun_count} ticks — KILL"
+                    )
+                    self._kill_task(name, reason="estimated_cpu_exceeded")
+                    return
+            else:
+                rt.cpu_overrun_count = 0
+
         if stats.mem_pct > rt.mem_pct_limit:
             self.log(f"[{name}] mem {stats.mem_pct:.1f}% > {rt.mem_pct_limit}% — KILL")
-            self._kill_task(name, reason="mem_exceeded", status="oom_killed")
+            self._kill_task(name, reason="mem_exceeded")
             return
         if stats.cpu_pct > rt.cpu_pct_limit * (os.cpu_count() or 1):
             self.log(f"[{name}] cpu {stats.cpu_pct:.0f}% > {rt.cpu_pct_limit * (os.cpu_count() or 1):.0f}% — KILL")
-            self._kill_task(name, reason="cpu_exceeded", status="manual_killed")
+            self._kill_task(name, reason="cpu_exceeded")
             return
         if elapsed > rt.kill_timeout:
             self.log(f"[{name}] elapsed {fmt_duration(elapsed)} > kill_timeout {fmt_duration(rt.kill_timeout)} — KILL")
-            self._kill_task(name, reason="elapsed_exceeded", status="timeout_killed")
+            self._kill_task(name, reason="elapsed_exceeded")
             return
         if rt.obs_violation_count >= 1:
             self.log(f"[{name}] observability stall — KILL")
-            self._kill_task(name, reason="observability_stall", status="timeout_killed")
+            self._kill_task(name, reason="observability_stall")
             return
 
     def _enforce_system_dim(self, dim: str, sys_stats: SysStats) -> None:
         if not self.running:
             return
-        # disk: rank by cumulative write bytes — write-volume heuristic
-        # (per-pid disk footprint is not directly observable)
-        key_map = {
-            "disk": lambda rt: (rt.last_stats.disk_write_bytes if rt.last_stats else 0),
-            "cpu": lambda rt: (rt.last_stats.cpu_pct if rt.last_stats else 0),
-            "mem": lambda rt: (rt.last_stats.mem_bytes if rt.last_stats else 0),
-        }
-        ranked = sorted(self.running.values(), key=key_map[dim], reverse=True)
+        # Fair-ranking tiers (protects sunk progress of well-behaved old tasks):
+        #   tier 0: task exceeds its declared estimate for this dim — most likely culprit
+        #   tier 1: task declared no estimate — opted out of protection
+        #   tier 2: task is within its declared estimate — well-behaved, last to die
+        # Within each tier, rank by absolute resource use (descending).
+        # Disk has no estimate concept — everyone is tier 1, falls back to write-byte ranking.
+        def tier_of(rt: RunningTask) -> int:
+            if dim == "disk" or rt.last_stats is None:
+                return 1
+            if dim == "mem":
+                est, cur = rt.estimated_mem_bytes, rt.last_stats.mem_bytes
+            else:  # cpu
+                est, cur = rt.estimated_cpu_cores, rt.last_stats.cpu_cores
+            if est is None:
+                return 1
+            return 0 if cur > est else 2
+
+        def abs_use(rt: RunningTask) -> float:
+            if rt.last_stats is None:
+                return 0.0
+            if dim == "disk":
+                return rt.last_stats.disk_write_bytes
+            if dim == "cpu":
+                return rt.last_stats.cpu_cores
+            return rt.last_stats.mem_bytes
+
+        ranked = sorted(self.running.values(), key=lambda rt: (tier_of(rt), -abs_use(rt)))
         victim = ranked[0]
         cur = {"mem": sys_stats.mem_pct, "cpu": sys_stats.cpu_pct, "disk": sys_stats.disk_pct}[dim]
-        self.log(f"sys-{dim} pressure ({cur:.0f}%) sustained — KILL {victim.name}")
-        self._kill_task(victim.name, reason=f"system_{dim}_pressure", status="system_killed")
+        tier_label = ("exceeds-estimate", "no-estimate", "within-estimate")[tier_of(victim)]
+        self.log(f"sys-{dim} pressure ({cur:.0f}%) sustained — KILL {victim.name} ({tier_label})")
+        self._kill_task(victim.name, reason=f"system_{dim}_pressure")
 
     def _schedule_pending(self) -> None:
         rows = self.db.execute(
@@ -816,6 +1079,8 @@ class Daemon:
                 mem_pct_limit=mem_lim,
                 cpu_pct_limit=cpu_lim,
                 log_path=log_path,
+                estimated_mem_bytes=r["estimated_mem_bytes"],
+                estimated_cpu_cores=r["estimated_cpu_cores"],
             )
         except Exception as e:  # noqa: BLE001
             self.log(f"[{name}] spawn failed: {e}")
@@ -836,6 +1101,8 @@ class Daemon:
             mem_pct_limit=mem_lim,
             cpu_pct_limit=cpu_lim,
             started_at=started,
+            estimated_mem_bytes=r["estimated_mem_bytes"],
+            estimated_cpu_cores=r["estimated_cpu_cores"],
         )
         # prime cpu_times baseline for accurate per-PID delta on first tick
         with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
@@ -849,7 +1116,7 @@ class Daemon:
         )
         self.log(f"[{name}] started pid={proc.pid} scope={scope_unit}")
 
-    def _kill_task(self, name: str, *, reason: str, status: str) -> None:
+    def _kill_task(self, name: str, *, reason: str) -> None:
         rt = self.running.get(name)
         if rt is None:
             return
@@ -882,7 +1149,7 @@ class Daemon:
                 while time.time() < deadline and psutil.pid_exists(rt.pid):
                     time.sleep(0.1)
             rc = None  # adopted — can't waitpid cross-process
-        self._finalize(name, status=status, exit_code=rc, reason=reason)
+        self._finalize(name, status="killed", exit_code=rc, reason=reason)
 
     def _finalize(self, name: str, *, status: str, exit_code: int, reason: str | None = None) -> None:
         rt = self.running.pop(name, None)
@@ -975,19 +1242,19 @@ def _fmt_cell(col: str, v: Any) -> str:
         return fmt_duration(float(v))
     if col in ("cpu_pct", "mem_pct"):
         return f"{float(v):.1f}"
-    if col == "cpu_cores":
+    if col in ("cpu_cores", "estimated_cpu_cores"):
         return f"{float(v):.2f}"
     return str(v)
 
 
 @app.command("daemon-start")
 def cmd_daemon_start(
-    max_sys_mem_pct: float = typer.Option(DEFAULTS["max_sys_mem_pct"]),
-    max_sys_disk_pct: float = typer.Option(DEFAULTS["max_sys_disk_pct"]),
-    max_sys_cpu_pct: float = typer.Option(DEFAULTS["max_sys_cpu_pct"]),
-    monitor_interval: str = typer.Option(DEFAULTS["monitor_interval"]),
-    monitor_tolerance_count: int = typer.Option(DEFAULTS["monitor_tolerance_count"]),
-    monitor_disk_infer_by_dir: str = typer.Option(DEFAULTS["monitor_disk_infer_by_dir"]),
+    max_sys_mem_pct: float = typer.Option(DEFAULTS["max_sys_mem_pct"], "--max_sys_mem_pct"),
+    max_sys_disk_pct: float = typer.Option(DEFAULTS["max_sys_disk_pct"], "--max_sys_disk_pct"),
+    max_sys_cpu_pct: float = typer.Option(DEFAULTS["max_sys_cpu_pct"], "--max_sys_cpu_pct"),
+    monitor_interval: str = typer.Option(DEFAULTS["monitor_interval"], "--monitor_interval"),
+    monitor_tolerance_count: int = typer.Option(DEFAULTS["monitor_tolerance_count"], "--monitor_tolerance_count"),
+    monitor_disk_infer_by_dir: str = typer.Option(DEFAULTS["monitor_disk_infer_by_dir"], "--monitor_disk_infer_by_dir"),
     foreground: bool = typer.Option(False, "--foreground", "-f", help="Run in foreground (no detach)."),
 ) -> None:
     """Start the babysit daemon (idempotent — exits 0 if already running)."""
@@ -1043,27 +1310,57 @@ def cmd_daemon_stop() -> None:
 def cmd_run(
     name: str = typer.Option(..., help="Unique task name."),
     command: str = typer.Option(..., help="Shell command to run."),
-    estimated_time: str = typer.Option(DEFAULTS["estimated_time"]),
-    kill_timeout: str | None = typer.Option(None, help="Default = 2 × estimated_time."),
-    observability_interval: str = typer.Option(DEFAULTS["observability_interval"]),
-    mem_pct_limit: float = typer.Option(DEFAULTS["mem_pct_limit"]),
-    cpu_pct_limit: float = typer.Option(DEFAULTS["cpu_pct_limit"]),
+    estimated_time: str = typer.Option(DEFAULTS["estimated_time"], "--estimated_time"),
+    kill_timeout: str | None = typer.Option(None, "--kill_timeout", help="Default = 2 × estimated_time."),
+    observability_interval: str = typer.Option(DEFAULTS["observability_interval"], "--observability_interval"),
+    mem_pct_limit: float = typer.Option(DEFAULTS["mem_pct_limit"], "--mem_pct_limit"),
+    cpu_pct_limit: float = typer.Option(DEFAULTS["cpu_pct_limit"], "--cpu_pct_limit"),
+    estimated_mem_bytes: str = typer.Option(
+        DEFAULTS["estimated_mem_bytes"],
+        "--estimated_mem_bytes",
+        help="Predicted peak memory (e.g. '4G', '512M'). Soft warn at 1×, hard kill if >2× sustained for monitor tolerance window. Under system memory pressure, estimate-exceeders are killed before within-estimate tasks.",
+    ),
+    estimated_cpu_cores: float = typer.Option(
+        DEFAULTS["estimated_cpu_cores"],
+        "--estimated_cpu_cores",
+        help="Predicted peak CPU cores. Soft warn at 1×, hard kill if >2× sustained. Under system CPU pressure, estimate-exceeders are killed before within-estimate tasks.",
+    ),
+    force: bool = typer.Option(
+        False, "--force",
+        help="Skip the capacity soft-deny gate. Use only when you've verified the system can absorb the load (e.g. you're replacing a just-killed task).",
+    ),
 ) -> None:
-    """Enqueue a task. Returns immediately (non-blocking)."""
+    """Enqueue a task. Returns immediately (non-blocking).
+
+    On capacity soft-deny: exits 2 with a `{"error":"capacity_exceeded", ...}`
+    JSON line on stderr (carrying `dim`, `projected_*`, `limit_*`, `hint`,
+    `suggested_command`). Run the suggested `babysit wait_for_capacity` or
+    re-run with `--force` / smaller estimates.
+    """
     est = parse_duration(estimated_time)
     kt = parse_duration(kill_timeout) if kill_timeout else est * 2
     obs = parse_duration(observability_interval)
-    resp = rpc_call(
-        "run",
-        name=name,
-        command=command,
-        estimated_time=est,
-        kill_timeout=kt,
-        observability_interval=obs,
-        mem_pct_limit=mem_pct_limit,
-        cpu_pct_limit=cpu_pct_limit,
-        claude_session_id=os.environ.get("CLAUDE_CODE_SESSION_ID"),
-    )
+    em = parse_bytes(estimated_mem_bytes)
+    try:
+        resp = rpc_call(
+            "run",
+            name=name,
+            command=command,
+            estimated_time=est,
+            kill_timeout=kt,
+            observability_interval=obs,
+            mem_pct_limit=mem_pct_limit,
+            cpu_pct_limit=cpu_pct_limit,
+            estimated_mem_bytes=em,
+            estimated_cpu_cores=estimated_cpu_cores,
+            force=force,
+            claude_session_id=os.environ.get("CLAUDE_CODE_SESSION_ID"),
+        )
+    except RPCError as e:
+        if e.payload.get("error") == "capacity_exceeded":
+            print(json.dumps(e.payload), file=sys.stderr, flush=True)
+            raise typer.Exit(2)
+        raise
     typer.echo(f"queued: {resp['name']}")
 
 
@@ -1098,39 +1395,135 @@ def cmd_status(
 @app.command("wait")
 def cmd_wait(
     name: str = typer.Option(..., help="Task name."),
-    poll_interval: float = typer.Option(0.5, help="Poll interval seconds."),
+    poll_interval: float = typer.Option(0.5, "--poll_interval", help="Poll interval seconds."),
     columns: str = typer.Option(_DEFAULT_COLS, "--columns"),
     format: str = typer.Option("json", "--format"),
 ) -> None:
     """Block until a task reaches a terminal status.
 
     stdout: single terminal-status JSON object (unchanged contract).
-    stderr: zero-or-more mid-flight event JSON lines, currently
-        `{"event":"runaway_risk", ...}` emitted once when `elapsed_time`
-        first crosses `estimated_time`. Pair with Monitor / Bash
-        run_in_background=true — the harness merges both streams and
-        surfaces each new line as a notification.
+    stderr: zero-or-more mid-flight event JSON lines —
+        `{"event":"runaway_risk","dim":"elapsed|mem|cpu", ...}` emitted at most
+        once per dim the first time the actual exceeds its declared estimate
+        (`elapsed_time` vs `estimated_time`, `mem_bytes` vs `estimated_mem_bytes`,
+        `cpu_cores` vs `estimated_cpu_cores`). Pair with Monitor / Bash
+        run_in_background=true — the harness merges both streams and surfaces
+        each new line as a notification.
     """
-    runaway_alerted = False
+    alerted = {"elapsed": False, "mem": False, "cpu": False}
     while True:
         resp = rpc_call("status", name=name)
         t = resp["task"]
         if t["status"] in TERMINAL:
             _print(t, format, columns=_split_cols(columns))
             raise typer.Exit(0 if t["status"] == "completed" else 1)
-        if not runaway_alerted:
+        if not alerted["elapsed"]:
             elapsed = t.get("elapsed_time")
             estimated = t.get("estimated_time")
             if elapsed is not None and estimated and elapsed > estimated:
                 print(json.dumps({
                     "event": "runaway_risk",
+                    "dim": "elapsed",
                     "name": name,
                     "elapsed_time": elapsed,
                     "estimated_time": estimated,
                     "kill_timeout": t.get("kill_timeout"),
                     "hint": "elapsed exceeded estimated_time; inspect `babysit log --tail` or kill if stuck",
                 }), file=sys.stderr, flush=True)
-                runaway_alerted = True
+                alerted["elapsed"] = True
+        if not alerted["mem"]:
+            mb, em = t.get("mem_bytes"), t.get("estimated_mem_bytes")
+            if mb is not None and em and mb > em:
+                print(json.dumps({
+                    "event": "runaway_risk",
+                    "dim": "mem",
+                    "name": name,
+                    "mem_bytes": mb,
+                    "estimated_mem_bytes": em,
+                    "hint": "current memory exceeded estimated_mem_bytes; daemon will kill at 2× for monitor_tolerance_count ticks. Re-check footprint or raise --estimated_mem_bytes",
+                }), file=sys.stderr, flush=True)
+                alerted["mem"] = True
+        if not alerted["cpu"]:
+            cc, ec = t.get("cpu_cores"), t.get("estimated_cpu_cores")
+            if cc is not None and ec and cc > ec:
+                print(json.dumps({
+                    "event": "runaway_risk",
+                    "dim": "cpu",
+                    "name": name,
+                    "cpu_cores": cc,
+                    "estimated_cpu_cores": ec,
+                    "hint": "current cpu exceeded estimated_cpu_cores; daemon will kill at 2× for monitor_tolerance_count ticks. Reduce parallelism or raise --estimated_cpu_cores",
+                }), file=sys.stderr, flush=True)
+                alerted["cpu"] = True
+        time.sleep(poll_interval)
+
+
+@app.command("wait_for_capacity")
+def cmd_wait_for_capacity(
+    mem_bytes: str = typer.Option(
+        DEFAULTS["estimated_mem_bytes"], "--mem_bytes",
+        help="Estimated peak memory the task you intend to queue will use (same semantics as `babysit run --estimated_mem_bytes`).",
+    ),
+    cpu_cores: float = typer.Option(
+        DEFAULTS["estimated_cpu_cores"], "--cpu_cores",
+        help="Estimated peak CPU cores (same semantics as `babysit run --estimated_cpu_cores`).",
+    ),
+    poll_interval: float = typer.Option(
+        5.0, "--poll_interval", help="Seconds between capacity checks."
+    ),
+    debounce_min: str = typer.Option(
+        "1m", "--debounce_min",
+        help="Minimum sustained-cool window required before exit.",
+    ),
+    debounce_max: str = typer.Option(
+        "3m", "--debounce_max",
+        help="Maximum sustained-cool window. The actual debounce per ready streak is picked uniformly at random in [min, max] — desynchronizes concurrent waiters to avoid the philosopher's-chopstick where multiple agents all race to `babysit run` the moment capacity opens.",
+    ),
+) -> None:
+    """Block until the daemon has sustained room for a task with the given
+    estimates. Exits 0 on success.
+
+    Per poll the daemon computes `current_sys_used + sum_of_pending_estimates
+    + 2 × your_estimate ≤ max_sys_*_pct × total`. To pass, this must hold for
+    a *sustained* random window in [--debounce_min, --debounce_max] (default
+    1–3 min). Any pressure tick during the window resets the debounce. The
+    random window breaks symmetry between concurrent waiters.
+
+    Emits `{"event":"waiting_for_capacity","phase":"pressured|debounce", ...}`
+    JSON lines on stderr each poll — pair with Monitor / Bash
+    run_in_background=true to subscribe.
+    """
+    em = parse_bytes(mem_bytes)
+    dmin = parse_duration(debounce_min)
+    dmax = parse_duration(debounce_max)
+    if dmax < dmin:
+        raise typer.BadParameter("--debounce_max must be >= --debounce_min")
+    debounce_start: float | None = None
+    debounce_target: float | None = None
+    while True:
+        resp = rpc_call("wait_for_capacity", mem_bytes=em, cpu_cores=cpu_cores)
+        ready = resp.get("ready")
+        if ready:
+            now_t = time.time()
+            if debounce_start is None:
+                debounce_start = now_t
+                debounce_target = random.uniform(dmin, dmax)
+            elapsed = now_t - debounce_start
+            if elapsed >= (debounce_target or 0):
+                return
+            event = {
+                "event": "waiting_for_capacity",
+                "phase": "debounce",
+                "elapsed_debounce_s": round(elapsed, 1),
+                "target_debounce_s": round(debounce_target or 0, 1),
+            }
+        else:
+            debounce_start = None
+            debounce_target = None
+            event = {k: v for k, v in resp.items() if k not in ("ok", "ready")}
+            event["event"] = "waiting_for_capacity"
+            event["phase"] = "pressured"
+        print(json.dumps(event), file=sys.stderr, flush=True)
         time.sleep(poll_interval)
 
 
@@ -1183,6 +1576,318 @@ def cmd_ping() -> None:
     """Check daemon liveness."""
     resp = rpc_call("ping")
     typer.echo(json.dumps({k: v for k, v in resp.items() if k != "ok"}))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Human-facing TUI dashboard (textual)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@app.command("tui")
+def cmd_tui(
+    refresh: str = typer.Option("1s", help="Refresh interval (e.g. 1s, 5s)."),
+) -> None:
+    """Interactive dashboard for humans. Other subcommands are for agents.
+
+    Keys: ↑/↓ navigate · Enter open log · k kill · s sort · f filter · r refresh · q quit
+    Sorts cycle: cpu → mem → elapsed → silent → name. Running tasks float to top.
+    """
+    if not daemon_alive():
+        typer.echo("babysit daemon not running. Start with: babysit daemon-start", err=True)
+        raise typer.Exit(1)
+
+    # Lazy import — textual is heavy and only this command needs it.
+    from textual.app import App, ComposeResult
+    from textual.binding import Binding
+    from textual.containers import Vertical
+    from textual.screen import ModalScreen, Screen
+    from textual.widgets import DataTable, Footer, Label, RichLog, Static
+
+    SORT_KEYS: list[tuple[str, Any]] = [
+        ("cpu", lambda r: -(r.get("cpu_cores") or 0)),
+        ("mem", lambda r: -(r.get("mem_bytes") or 0)),
+        ("elapsed", lambda r: -(r.get("elapsed_time") or 0)),
+        ("silent", lambda r: -(r.get("time_since_last_observe") or 0)),
+        ("name", lambda r: r.get("name") or ""),
+    ]
+    FILTERS: list[tuple[str, Any]] = [
+        ("running", lambda r: r["status"] == "running"),
+        ("all", lambda r: True),
+        ("terminal", lambda r: r["status"] in TERMINAL),
+    ]
+    STATUS_COLOR = {
+        "running": "green",
+        "pending": "yellow",
+        "completed": "blue",
+        "killed": "red",
+        "failed": "red",
+        "unknown": "magenta",
+    }
+
+    def progress_bar(elapsed, estimated, kill_timeout) -> str:
+        if not elapsed:
+            return "-"
+        if not estimated:
+            return fmt_duration(elapsed)
+        ratio = elapsed / estimated
+        width = 10
+        filled = min(width, int(ratio * width))
+        bar = "█" * filled + "░" * (width - filled)
+        if ratio <= 1.0:
+            color = "green"
+        elif kill_timeout and elapsed >= kill_timeout * 0.9:
+            color = "red"
+        else:
+            color = "yellow"
+        return f"[{color}]{bar}[/] {fmt_duration(elapsed)}/{fmt_duration(estimated)}"
+
+    def last_log_line(log_path: Path) -> str:
+        try:
+            size = log_path.stat().st_size
+            if size == 0:
+                return ""
+            with open(log_path, "rb") as f:
+                f.seek(max(0, size - 4096))
+                data = f.read()
+            for line in reversed(data.decode("utf-8", "replace").splitlines()):
+                if line.strip():
+                    return line[:200]
+        except (FileNotFoundError, OSError):
+            pass
+        return ""
+
+    class KillConfirm(ModalScreen[bool]):
+        DEFAULT_CSS = """
+        KillConfirm { align: center middle; }
+        KillConfirm > Vertical {
+            background: $surface;
+            border: heavy $error;
+            padding: 1 2;
+            width: 60;
+            height: auto;
+        }
+        """
+
+        def __init__(self, task_name: str) -> None:
+            super().__init__()
+            self._task_name = task_name
+
+        def compose(self) -> ComposeResult:
+            yield Vertical(
+                Label(f"Kill task [b]{self._task_name}[/]?"),
+                Label(""),
+                Label("[bold]y[/] = yes    [bold]n[/] / Esc = cancel"),
+            )
+
+        def on_key(self, event) -> None:
+            if event.key == "y":
+                self.dismiss(True)
+            elif event.key in ("n", "escape"):
+                self.dismiss(False)
+
+    class LogScreen(Screen):
+        BINDINGS = [Binding("escape,q", "app.pop_screen", "back")]
+
+        def __init__(self, task_name: str, log_path: Path) -> None:
+            super().__init__()
+            self._task_name = task_name
+            self._log_path = log_path
+            self._pos = 0
+
+        def compose(self) -> ComposeResult:
+            yield Label(f" log: [b]{self._task_name}[/] — {self._log_path}    (Esc to close)")
+            self._viewer = RichLog(highlight=False, markup=False, wrap=False, auto_scroll=True)
+            yield self._viewer
+            yield Footer()
+
+        def on_mount(self) -> None:
+            self._load_tail()
+            self.set_interval(0.5, self._tail_new)
+
+        def _load_tail(self) -> None:
+            try:
+                with open(self._log_path, "rb") as f:
+                    f.seek(0, os.SEEK_END)
+                    size = f.tell()
+                    start = max(0, size - 64 * 1024)
+                    f.seek(start)
+                    data = f.read()
+                self._pos = size
+                for line in data.decode("utf-8", "replace").splitlines():
+                    self._viewer.write(line)
+            except FileNotFoundError:
+                self._viewer.write("(no log file)")
+
+        def _tail_new(self) -> None:
+            try:
+                with open(self._log_path, "rb") as f:
+                    f.seek(self._pos)
+                    data = f.read()
+                    self._pos = f.tell()
+                if data:
+                    for line in data.decode("utf-8", "replace").splitlines():
+                        self._viewer.write(line)
+            except FileNotFoundError:
+                pass
+
+    class BabysitTUI(App):
+        CSS = """
+        Screen { layout: vertical; }
+        #header { dock: top; height: 1; padding: 0 1; background: $boost; }
+        DataTable { height: 1fr; }
+        #log-pane {
+            height: 12;
+            border-top: solid $accent;
+            padding: 0 1;
+        }
+        """
+        BINDINGS = [
+            Binding("q", "quit", "quit"),
+            Binding("k", "kill_task", "kill"),
+            Binding("enter", "open_log", "log"),
+            Binding("s", "cycle_sort", "sort"),
+            Binding("f", "cycle_filter", "filter"),
+            Binding("r", "refresh_now", "refresh"),
+        ]
+
+        def __init__(self, refresh_secs: float) -> None:
+            super().__init__()
+            self._refresh_secs = refresh_secs
+            self._sort_idx = 0
+            self._filter_idx = 0
+            self._displayed: list[dict] = []
+
+        def compose(self) -> ComposeResult:
+            yield Label(self._header_text(), id="header")
+            self._table = DataTable(cursor_type="row", zebra_stripes=True)
+            self._table.add_columns(
+                "NAME", "STATUS", "ELAPSED / ETA", "CPU", "MEM", "SILENT", "LAST LINE"
+            )
+            yield self._table
+            self._log_pane = Static("", id="log-pane", markup=True)
+            yield self._log_pane
+            yield Footer()
+
+        def on_mount(self) -> None:
+            self._tick()
+            self.set_interval(self._refresh_secs, self._tick)
+
+        def _header_text(self) -> str:
+            sort_name = SORT_KEYS[self._sort_idx][0]
+            filter_name = FILTERS[self._filter_idx][0]
+            return (
+                f"[b]babysit[/]   sort=[cyan]{sort_name}[/]   "
+                f"filter=[cyan]{filter_name}[/]   "
+                f"refresh={self._refresh_secs:g}s   {time.strftime('%H:%M:%S')}"
+            )
+
+        def _tick(self) -> None:
+            try:
+                resp = rpc_call("list")
+                tasks = resp.get("tasks", [])
+            except Exception as e:  # noqa: BLE001
+                self.query_one("#header", Label).update(f"[red]daemon error: {e}[/]")
+                return
+
+            sort_fn = SORT_KEYS[self._sort_idx][1]
+            filter_fn = FILTERS[self._filter_idx][1]
+            rows = [r for r in tasks if filter_fn(r)]
+            rows.sort(key=lambda r: (0 if r["status"] == "running" else 1, sort_fn(r)))
+
+            cur_name = None
+            if 0 <= self._table.cursor_row < len(self._displayed):
+                cur_name = self._displayed[self._table.cursor_row]["name"]
+            # DataTable.clear() resets scroll to (0, 0); snapshot and restore
+            # so refreshes don't yank the viewport away from the user.
+            saved_scroll = (self._table.scroll_x, self._table.scroll_y)
+
+            self._table.clear()
+            self._displayed = rows
+            for r in rows:
+                status = r["status"]
+                color = STATUS_COLOR.get(status, "white")
+                kr = r.get("kill_reason")
+                status_cell = f"[{color}]{status}[/]"
+                if kr:
+                    status_cell += f" [dim]({kr})[/]"
+                cpu = f"{r['cpu_cores']:.1f}c" if r.get("cpu_cores") is not None else "-"
+                mem = fmt_bytes(r["mem_bytes"]) if r.get("mem_bytes") is not None else "-"
+                silent_secs = r.get("time_since_last_observe")
+                obs_int = r.get("observability_interval") or 0
+                if silent_secs is None:
+                    silent_cell = "-"
+                elif silent_secs > obs_int and status == "running":
+                    silent_cell = f"[bold red]{fmt_duration(silent_secs)}[/]"
+                else:
+                    silent_cell = fmt_duration(silent_secs)
+                last = last_log_line(Path(r["log_path"])) if r.get("log_path") else ""
+                self._table.add_row(
+                    r["name"],
+                    status_cell,
+                    progress_bar(r.get("elapsed_time"), r.get("estimated_time"), r.get("kill_timeout")),
+                    cpu,
+                    mem,
+                    silent_cell,
+                    last,
+                )
+
+            if cur_name:
+                for i, r in enumerate(rows):
+                    if r["name"] == cur_name:
+                        self._table.move_cursor(row=i, scroll=False)
+                        break
+            self._table.scroll_to(x=saved_scroll[0], y=saved_scroll[1], animate=False)
+
+            self.query_one("#header", Label).update(self._header_text())
+            self._update_log_pane()
+
+        def _current_task(self) -> dict | None:
+            cur = self._table.cursor_row
+            if 0 <= cur < len(self._displayed):
+                return self._displayed[cur]
+            return None
+
+        def _update_log_pane(self) -> None:
+            t = self._current_task()
+            if not t or not t.get("log_path"):
+                self._log_pane.update("(no task selected)")
+                return
+            text = tail_n(Path(t["log_path"]), 8)
+            self._log_pane.update(f"[dim]log: {t['name']}[/]\n{text}")
+
+        def on_data_table_row_highlighted(self, event) -> None:
+            self._update_log_pane()
+
+        def action_cycle_sort(self) -> None:
+            self._sort_idx = (self._sort_idx + 1) % len(SORT_KEYS)
+            self._tick()
+
+        def action_cycle_filter(self) -> None:
+            self._filter_idx = (self._filter_idx + 1) % len(FILTERS)
+            self._tick()
+
+        def action_refresh_now(self) -> None:
+            self._tick()
+
+        def action_open_log(self) -> None:
+            t = self._current_task()
+            if t and t.get("log_path"):
+                self.push_screen(LogScreen(t["name"], Path(t["log_path"])))
+
+        def action_kill_task(self) -> None:
+            t = self._current_task()
+            if not t or t["status"] in TERMINAL:
+                return
+
+            def after(confirmed: bool | None) -> None:
+                if confirmed:
+                    with contextlib.suppress(Exception):
+                        rpc_call("kill", name=t["name"])
+                    self._tick()
+
+            self.push_screen(KillConfirm(t["name"]), after)
+
+    BabysitTUI(refresh_secs=parse_duration(refresh)).run()
 
 
 def main() -> None:

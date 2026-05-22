@@ -51,7 +51,7 @@ When your task hits the resource cap, the first reflex is NOT to raise the limit
 
 ### 0. Smoke test
 
-Before launching heavy work, smoke test on small scale for correctness (if appliable). Only proceed full-scale after the program is verified working.
+Before launching heavy work, smoke test on small scale for correctness and performance whenever appliable. Only proceed full-scale after the program is verified working and effcient in time and space.
 
 ### 1. Enqueue
 

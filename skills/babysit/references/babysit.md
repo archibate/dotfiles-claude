@@ -39,7 +39,7 @@ Optionally declare peak-resource estimates so the daemon can (a) warn you mid-fl
 babysit run --name="train-mlp" --command="uv run python -u train.py" --estimated_time="30m" --estimated_mem_bytes="4G" --estimated_cpu_cores=8
 ```
 
-> `--estimated_mem_bytes` accepts `4G`, `512M`, `1.5T`, raw bytes (default `4G`). `--estimated_cpu_cores` is a float (default `4`). Override explicitly for heavy ML training, big-data scans, or single-threaded scripts — the defaults are tuned for a typical 10m task.
+> `--estimated_mem_bytes` accepts `4G`, `512M`, `1.5T`, raw bytes (default `4G`). `--estimated_cpu_cores` is a float (default `4`). Override explicitly for heavy ML training, big-data scans, or single-threaded scripts — the defaults are tuned for a typical 10m task. Values exceeding host total RAM / cores are rejected at `babysit run` time.
 >
 > `--cwd` (existing absolute path; default current shell cwd) is the task's working directory, shown as `PROJECT` in `babysit list` / `tui`.
 >
@@ -114,8 +114,8 @@ For humans only (do not invoke from an agent), there is a `babysit tui` dashboar
 To purge stale finished tasks and their logs:
 
 ```bash
-babysit clean                                        # purge all terminal rows immediately + their log files
-babysit clean --older_than=24h                       # only rows whose ended_at is >24h ago
+babysit clean                                        # default: purge terminal rows older than 24h + their log files
+babysit clean --older_than=0s                        # purge all terminal rows immediately
 babysit clean --status=killed,failed --dry_run       # preview without deleting
 ```
 

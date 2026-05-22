@@ -54,14 +54,25 @@ SOCK_PATH = STATE_DIR / "sock"
 DAEMON_PID_PATH = STATE_DIR / "daemon.pid"
 DAEMON_LOG_PATH = STATE_DIR / "daemon.log"
 
+def _host_default_mem() -> str:
+    """4G default, but clamped to half host RAM so it never exceeds total on tiny hosts."""
+    total = psutil.virtual_memory().total
+    target = min(4 * 1024**3, total // 2)
+    return f"{max(target // (1024**2), 1)}M"
+
+
+def _host_default_cores() -> float:
+    return float(min(4, os.cpu_count() or 1))
+
+
 DEFAULTS = {
     "estimated_time": "10m",
     "kill_timeout": "20m",
     "observability_interval": "5m",
     "mem_pct_limit": 40.0,
     "cpu_pct_limit": 90.0,
-    "estimated_mem_bytes": "4G",
-    "estimated_cpu_cores": 4.0,
+    "estimated_mem_bytes": _host_default_mem(),
+    "estimated_cpu_cores": _host_default_cores(),
     "max_sys_mem_pct": 70.0,
     "max_sys_disk_pct": 90.0,
     "max_sys_cpu_pct": 90.0,
@@ -708,6 +719,22 @@ class Daemon:
         if cwd is not None:
             if not cwd or not cwd.strip() or not Path(cwd).is_absolute() or not Path(cwd).is_dir():
                 return {"ok": False, "error": f"cwd {cwd!r} must be an existing absolute directory"}
+        total_mem = psutil.virtual_memory().total
+        n_cores = os.cpu_count() or 1
+        em = req.get("estimated_mem_bytes")
+        ec = req.get("estimated_cpu_cores")
+        if em is not None and int(em) > total_mem:
+            return {"ok": False, "error": f"estimated_mem_bytes {int(em)} exceeds host total RAM {total_mem} — infeasible; reduce estimate or split the task"}
+        if ec is not None and float(ec) > n_cores:
+            return {"ok": False, "error": f"estimated_cpu_cores {float(ec)} exceeds host total cores {n_cores} — infeasible; reduce estimate or split the task"}
+        for key in ("mem_pct_limit", "cpu_pct_limit"):
+            v = req.get(key)
+            if v is not None and not (0 < float(v) <= 100):
+                return {"ok": False, "error": f"{key} {v} must be in (0, 100]"}
+        for key in ("estimated_time", "kill_timeout", "observability_interval"):
+            v = req.get(key)
+            if v is not None and float(v) <= 0:
+                return {"ok": False, "error": f"{key} {v} must be > 0"}
         existing = self.db.execute(
             "SELECT status FROM tasks WHERE name=?", (name,)
         ).fetchone()
@@ -1339,6 +1366,23 @@ def cmd_daemon_start(
     if daemon_alive():
         typer.echo(f"daemon already running (pid={DAEMON_PID_PATH.read_text().strip()})")
         return
+    for k, v in (
+        ("max_sys_mem_pct", max_sys_mem_pct),
+        ("max_sys_disk_pct", max_sys_disk_pct),
+        ("max_sys_cpu_pct", max_sys_cpu_pct),
+    ):
+        if not (0 < v <= 100):
+            typer.echo(f"error: {k} {v} must be in (0, 100]", err=True)
+            raise typer.Exit(1)
+    if monitor_tolerance_count <= 0:
+        typer.echo(f"error: monitor_tolerance_count {monitor_tolerance_count} must be > 0", err=True)
+        raise typer.Exit(1)
+    if parse_duration(monitor_interval) <= 0:
+        typer.echo(f"error: monitor_interval {monitor_interval!r} must be > 0", err=True)
+        raise typer.Exit(1)
+    if parse_duration(cleanup_ttl) <= 0:
+        typer.echo(f"error: cleanup_ttl {cleanup_ttl!r} must be > 0", err=True)
+        raise typer.Exit(1)
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1365,11 +1409,31 @@ def cmd_daemon_start(
 
 
 @app.command("daemon-stop")
-def cmd_daemon_stop() -> None:
-    """Stop the daemon (kills all running tasks)."""
+def cmd_daemon_stop(
+    force: bool = typer.Option(
+        False, "--force",
+        help="Stop even if tasks are running (will mark each as killed with kill_reason=daemon_shutdown). Without --force, daemon-stop refuses while any task is running/pending — kill them first.",
+    ),
+) -> None:
+    """Stop the daemon. Refuses if any task is running/pending unless --force."""
     if not daemon_alive():
         typer.echo("daemon not running")
         return
+    if not force:
+        try:
+            resp = rpc_call("list")
+            active = [t for t in resp.get("tasks", []) if t["status"] in ("running", "pending")]
+        except Exception as e:  # noqa: BLE001
+            typer.echo(f"error: cannot query running tasks before stop: {e}", err=True)
+            raise typer.Exit(1)
+        if active:
+            names = ", ".join(t["name"] for t in active)
+            typer.echo(
+                f"error: daemon-stop refused — {len(active)} task(s) running/pending: {names}. "
+                "Use `babysit kill --name=<name>` per task first, or pass --force to kill them all.",
+                err=True,
+            )
+            raise typer.Exit(1)
     try:
         rpc_call("shutdown")
     except Exception:
@@ -1670,8 +1734,8 @@ def cmd_log(
 @app.command("clean")
 def cmd_clean(
     older_than: str = typer.Option(
-        "0s", "--older_than",
-        help="Only purge terminal-status rows older than this. Default 0s (purge all terminals).",
+        "24h", "--older_than",
+        help="Only purge terminal-status rows older than this. Default 24h. Pass `0s` to purge all terminals.",
     ),
     status: str = typer.Option(
         ",".join(sorted(TERMINAL)), "--status",

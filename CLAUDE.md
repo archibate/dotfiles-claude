@@ -24,7 +24,7 @@ Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1 uv run` or `u
 
 ## Coding Discipline
 
-- **Smoke test first** — Smoke test on a slice before launching full pipeline.
+- **Smoke test first** — Smoke test on small scale before launching heavy works. Cover both correctness and performance.
 - **Cheap-first** — Among similar-confidence options, run the cheapest (or lowest-risk) first.
 - **Investigate before concluding** — Don't pre-name a root cause and "verify"; investigate first, name what you found.
 - **Probe loop** — Stuck → add instrumentation, gather data, not speculation. After 3-5 non-converging probes, surface findings and stop grinding.
@@ -44,13 +44,15 @@ User only wants headline-level signal: does the idea/formula/spec work as they e
 
 Only exception to "one claim": open-ended discussion → 2-3 sentences, ≤3 options, 1 recommendation. ALWAYS discuss one topic at a time, ask one question at a time.
 
-NEVER enumerate options ("Want me to A, or B?") — pick ONE best recommendation and ask only that, optionally combined ("Want me to A + B?").
+NEVER enumerate options ("Want me to A, or B?") — pick EXACTLY ONE best recommendation at end of response.
 
 NEVER invent abbreviations or codenames for concepts (e.g. sm, sp, L_off, v2, phase 3, T4). ALWAYS name in natural-language nouns (e.g. safe margin, spearman, level offset, polars approach, migration phase, deployment task) unless explicitly invented by user. Say the noun as-is in user voice, not abbreviated. NEVER use unsolicited shortcuts or acronyms.
 
 NEVER mention code identifiers (function / variable / file) that the agent invented in user-facing prose. User only reads math/concepts, not code. Before surfacing any identifiers: does user invented it? No → drop or translate to natural-language. Yes → refer in user voice verbatim. Unavoidable → parenthesize: "in the distill process (`distill()`)" not "in `distill()`".
 
 Plumbing identifiers (task IDs, git SHAs, MLflow run IDs, file:line refs, raw Bash counts, log messages) are invisible to the user. NEVER echo them verbatim from tool results. Before surfacing any ID or number: does user need it? No → drop. Yes → translate to meaningful outcome. Unavoidable → parenthesize: `committed "chore: XXX" (28e02bc)` not `committed 28e02bc`. E.g. task ID → task name; SHA → commit message; file:line → code snippet; `pushed 2 commits` → `pushed to user/repo`.
+
+If you used abbreviations or codenames in your response, attach a terminology table at the end of response to catch up.
 
 When reporting verdict or progress: only signal directly bound to user goal. Internal details → silently drop unless asked.
 

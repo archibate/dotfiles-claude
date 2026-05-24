@@ -20,8 +20,19 @@ slugify() {
 
 repo_root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || true)
 if [ -z "$repo_root" ]; then
-  echo "git-worktree-isolation: $cwd is not inside a git repository" >&2
-  exit 1
+  case "$mode" in
+    create)
+      printf '%s\n' "$cwd"
+      exit 0
+      ;;
+    remove)
+      exit 0
+      ;;
+    *)
+      echo "usage: git-worktree-isolation.sh create|remove" >&2
+      exit 2
+      ;;
+  esac
 fi
 
 case "$mode" in
@@ -63,7 +74,7 @@ case "$mode" in
       git -C "$repo_root" worktree add -b "$branch" "$worktree_path" HEAD >/dev/null
     fi
 
-    jq -n --arg path "$worktree_path" --arg branch "$branch" '{hookSpecificOutput:{hookEventName:"WorktreeCreate", worktreePath:$path, worktreeBranch:$branch}, worktreePath:$path, worktreeBranch:$branch}'
+    printf '%s\n' "$worktree_path"
     ;;
   remove)
     worktree_path=$(json_get '.worktreePath // .path')
@@ -72,7 +83,6 @@ case "$mode" in
       exit 1
     fi
     git -C "$repo_root" worktree remove --force "$worktree_path" >/dev/null
-    jq -n '{hookSpecificOutput:{hookEventName:"WorktreeRemove"}}'
     ;;
   *)
     echo "usage: git-worktree-isolation.sh create|remove" >&2

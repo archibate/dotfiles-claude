@@ -1136,22 +1136,7 @@ class Daemon:
     def _enforce_system_dim(self, dim: str, sys_stats: SysStats) -> None:
         if not self.running:
             return
-        # Fair-ranking tiers (protects sunk progress of well-behaved old tasks):
-        #   tier 0: task exceeds its declared estimate for this dim — most likely culprit
-        #   tier 1: task declared no estimate — opted out of protection
-        #   tier 2: task is within its declared estimate — well-behaved, last to die
-        # Within each tier, rank by absolute resource use (descending).
-        # Disk has no estimate concept — everyone is tier 1, falls back to write-byte ranking.
-        def tier_of(rt: RunningTask) -> int:
-            if dim == "disk" or rt.last_stats is None:
-                return 1
-            if dim == "mem":
-                est, cur = rt.estimated_mem_bytes, rt.last_stats.mem_bytes
-            else:  # cpu
-                est, cur = rt.estimated_cpu_cores, rt.last_stats.cpu_cores
-            if est is None:
-                return 1
-            return 0 if cur > est else 2
+        cur = {"mem": sys_stats.mem_pct, "cpu": sys_stats.cpu_pct, "disk": sys_stats.disk_pct}[dim]
 
         def abs_use(rt: RunningTask) -> float:
             if rt.last_stats is None:
@@ -1162,9 +1147,53 @@ class Daemon:
                 return rt.last_stats.cpu_cores
             return rt.last_stats.mem_bytes
 
+        # ── external-cause shortcut (mem/cpu only) ────────────────────────
+        # Babysit can only kill its own managed tasks. If the *sum* of all
+        # managed tasks' usage is smaller than the excess over threshold,
+        # the pressure is driven by an external (non-babysit) process —
+        # killing even every managed task would not bring the system below
+        # threshold. In that case the kill is collateral damage: the
+        # external process continues unscathed and the user loses their
+        # work for nothing. Skip and let the next tolerance-count window
+        # re-check; if the external process eventually finishes, pressure
+        # clears on its own. (Disk: no external-cause shortcut — every
+        # writer shares the same pool and we can't distinguish.)
+        if dim in ("mem", "cpu"):
+            total_managed = sum(abs_use(rt) for rt in self.running.values())
+            if dim == "mem":
+                total_resource = float(psutil.virtual_memory().total)
+                limit_pct = self.max_sys_mem_pct
+            else:
+                total_resource = float(os.cpu_count() or 1)
+                limit_pct = self.max_sys_cpu_pct
+            excess_abs = max(0.0, (cur - limit_pct) / 100.0 * total_resource)
+            if excess_abs > 0 and total_managed < excess_abs:
+                self.log(
+                    f"sys-{dim} pressure ({cur:.0f}%) but all babysit tasks "
+                    f"combined cannot relieve the excess — external process "
+                    f"is the cause, skipping kill"
+                )
+                return
+
+        # Fair-ranking tiers (protects sunk progress of well-behaved old tasks):
+        #   tier 0: task exceeds its declared estimate for this dim — most likely culprit
+        #   tier 1: task declared no estimate — opted out of protection
+        #   tier 2: task is within its declared estimate — well-behaved, last to die
+        # Within each tier, rank by absolute resource use (descending).
+        # Disk has no estimate concept — everyone is tier 1, falls back to write-byte ranking.
+        def tier_of(rt: RunningTask) -> int:
+            if dim == "disk" or rt.last_stats is None:
+                return 1
+            if dim == "mem":
+                est, use = rt.estimated_mem_bytes, rt.last_stats.mem_bytes
+            else:  # cpu
+                est, use = rt.estimated_cpu_cores, rt.last_stats.cpu_cores
+            if est is None:
+                return 1
+            return 0 if use > est else 2
+
         ranked = sorted(self.running.values(), key=lambda rt: (tier_of(rt), -abs_use(rt)))
         victim = ranked[0]
-        cur = {"mem": sys_stats.mem_pct, "cpu": sys_stats.cpu_pct, "disk": sys_stats.disk_pct}[dim]
         tier_label = ("exceeds-estimate", "no-estimate", "within-estimate")[tier_of(victim)]
         self.log(f"sys-{dim} pressure ({cur:.0f}%) sustained — KILL {victim.name} ({tier_label})")
         self._kill_task(victim.name, reason=f"system_{dim}_pressure")
@@ -1469,12 +1498,12 @@ def cmd_run(
     estimated_mem_bytes: str = typer.Option(
         DEFAULTS["estimated_mem_bytes"],
         "--estimated_mem_bytes",
-        help="Predicted peak memory (e.g. '4G', '512M'). Soft warn at 1×, hard kill if >2× sustained for monitor tolerance window. Under system memory pressure, estimate-exceeders are killed before within-estimate tasks.",
+        help="Predicted peak memory (e.g. '4G', '512M'). Soft warn at 1×, hard kill if >2× sustained for monitor tolerance window. Under system memory pressure, estimate-exceeders are killed before within-estimate tasks; if the pressure is caused by an external (non-babysit) process and managed tasks combined cannot relieve the excess, the kill is skipped.",
     ),
     estimated_cpu_cores: float = typer.Option(
         DEFAULTS["estimated_cpu_cores"],
         "--estimated_cpu_cores",
-        help="Predicted peak CPU cores. Soft warn at 1×, hard kill if >2× sustained. Under system CPU pressure, estimate-exceeders are killed before within-estimate tasks.",
+        help="Predicted peak CPU cores. Soft warn at 1×, hard kill if >2× sustained. Under system CPU pressure, estimate-exceeders are killed before within-estimate tasks; if the pressure is caused by an external (non-babysit) process and managed tasks combined cannot relieve the excess, the kill is skipped.",
     ),
     force: bool = typer.Option(
         False, "--force",

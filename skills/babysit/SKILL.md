@@ -70,7 +70,7 @@ The call is non-blocking: returns immediately with `queued: <name>`. The daemon 
 
 Required: `--name` (unique), `--command` (single shell string). Optional: `--estimated_time` (default 10m), `--kill_timeout` (default 2× estimated), `--observability_interval` (default 5m), `--mem_pct_limit` (default 40), `--cpu_pct_limit` (default 90), `--estimated_mem_bytes` (default `4G`), `--estimated_cpu_cores` (default `4`), `--cwd` (default current shell cwd).
 
-> Override the defaults to match your workload — under system memory/CPU pressure the daemon kills estimate-exceeders before within-estimate tasks, so accurate predictions protect long-running work. Hard kill fires at 2× sustained (daemon, graceful) or 3× instant via cgroup OOM.
+> Override the defaults to match your workload — under system memory/CPU pressure the daemon kills estimate-exceeders before within-estimate tasks, so accurate predictions protect long-running work. Hard kill fires at 2× sustained (daemon, graceful) or 3× instant via cgroup OOM. If the pressure is caused by an external (non-babysit) process — when the sum of all managed tasks' usage is smaller than the excess over threshold — the daemon logs and skips the kill rather than punishing its own tasks for someone else's load.
 >
 > If capacity is tight, `babysit run` may soft-deny with `capacity_exceeded` (exit 2, JSON on stderr) — run the `babysit wait_for_capacity --mem_bytes=… --cpu_cores=…` (blocks until room exists) to wait for room, reduce estimates, or pass `--force` to override.
 

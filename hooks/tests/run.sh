@@ -912,10 +912,12 @@ rm -f "$sysl_cache"
 
 # recall-reminder: silent for first (interval-1) turns, fires on the
 # interval-th turn, then resets and stays silent again. Counter is per
-# session_id under /tmp/claude-${UID}-state/recall-reminder/.
+# session_id under /tmp/claude-${UID}-state/recall-reminder/. Successive
+# fires alternate between memorize (odd fires) and recall (even fires)
+# prompts on a 1-0-1-0 pattern.
 rr_sid="rr-$$"
 rr_cache="/tmp/claude-${UID}-state/recall-reminder/$rr_sid"
-rm -f "$rr_cache"
+rm -f "$rr_cache" "$rr_cache.fires"
 rr_in=$(jq -nc --arg s "$rr_sid" '{session_id:$s}')
 
 # Interval forced to 3 so the test stays small.
@@ -929,18 +931,29 @@ out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$r
   && echo "OK:   recall-reminder silent on turn 2 (interval=3)" \
   || { echo "FAIL: recall-reminder should be silent on turn 2: $out"; fail=1; }
 
+# Fire 1 (odd) → memorize prompt (mentions /memory-add).
 out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$rr_in")
-echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("memory/pitfalls.md")' > "$test_out" \
-  && echo "OK:   recall-reminder fires on turn 3 (interval=3)" \
-  || { echo "FAIL: recall-reminder should fire on turn 3: $out"; fail=1; }
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("/memory-add")' > "$test_out" \
+  && echo "OK:   recall-reminder fire 1 → memorize prompt (interval=3)" \
+  || { echo "FAIL: recall-reminder fire 1 should be memorize prompt: $out"; fail=1; }
 
-# After fire, counter should be reset → next turn silent again.
+# Next two turns silent again.
 out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$rr_in")
 [ -z "$out" ] \
-  && echo "OK:   recall-reminder silent on turn after reset" \
-  || { echo "FAIL: recall-reminder should be silent after reset: $out"; fail=1; }
+  && echo "OK:   recall-reminder silent on turn after fire 1" \
+  || { echo "FAIL: recall-reminder should be silent after fire 1: $out"; fail=1; }
+out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$rr_in")
+[ -z "$out" ] \
+  && echo "OK:   recall-reminder silent two turns after fire 1" \
+  || { echo "FAIL: recall-reminder should be silent two turns after fire 1: $out"; fail=1; }
 
-rm -f "$rr_cache"
+# Fire 2 (even) → recall prompt (mentions memory/pitfalls.md).
+out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$rr_in")
+echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("memory/pitfalls.md")' > "$test_out" \
+  && echo "OK:   recall-reminder fire 2 → recall prompt (interval=3)" \
+  || { echo "FAIL: recall-reminder fire 2 should be recall prompt: $out"; fail=1; }
+
+rm -f "$rr_cache" "$rr_cache.fires"
 
 # recall-reminder-reset: zeros the counter when Read touches a
 # memory page (incl. pitfalls.md), or when Skill invokes memory-add.

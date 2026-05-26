@@ -7,6 +7,7 @@ Preferred over defaults:
 - `rg` not `grep`
 - `fd` not `find`
 - `eza` not `ls`
+- Prefer `eza` for directory/file discovery; use `fd` only when pattern-based search is necessary.
 - `sd` not `sed`
 - `just` not `make`
 - `uv` not `pip`
@@ -39,7 +40,8 @@ Tool precedence:
 
 1. If the project or any parent directory contains `.clang-format` / `.clang-tidy`, use the project file.
 2. If a project file is absent, use `~/.claude/formatters/cpp/.clang-format` / `~/.claude/formatters/cpp/.clang-tidy`.
-3. If either required tool or config is unavailable, state that explicitly in the final verification.
+3. When searching for these config files with `fd`, use `fd -H` so hidden `.clang-format` / `.clang-tidy` files are not missed.
+4. If either required tool or config is unavailable, state that explicitly in the final verification.
 
 Do not paste concrete C++ style rules into this file; the formatter and tidy configs are the source of truth.
 

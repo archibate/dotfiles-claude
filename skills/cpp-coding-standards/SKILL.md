@@ -19,6 +19,7 @@ Practical C++ coding standards based on the C++ Core Guidelines, adapted for pro
 | **T0.3** | Treat examples in this skill as intent examples; tooling decides formatting and naming details. |
 | **T0.4** | Avoid applying these rules directly to third-party, generated, vendored, build, or system headers. |
 | **T0.5** | Always invoke `clang-tidy-18` (the versioned binary), never `clang-tidy`. The unversioned name may not exist on the system even when the package is installed. |
+| **T0.6** | When searching for `.clang-format` or `.clang-tidy` with `fd`, use `fd -H` so hidden config files are not missed. |
 
 ### Language Standard Compatibility
 

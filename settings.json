@@ -24,7 +24,7 @@
       "/tmp"
     ]
   },
-  "model": "opus",
+  "model": "haiku",
   "enableAllProjectMcpServers": true,
   "skillOverrides": {
     "cache-hygiene": "name-only",
@@ -337,6 +337,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "~/.claude/hooks/cpp-stop-clang-tidy.sh",
+            "timeout": 180,
+            "statusMessage": "Running C++ clang-tidy checks..."
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "~/.claude/hooks/audit-edits.py stop-hook",
             "timeout": 300,
             "asyncRewake": true
@@ -405,6 +415,18 @@
             "command": "bash ~/.claude/hooks/git-worktree-isolation.sh remove",
             "timeout": 60,
             "statusMessage": "Running WorktreeRemove hook..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/cpp-bootstrap-clang-tidy-on-session-start.sh",
+            "timeout": 20,
+            "statusMessage": "Checking .clang-tidy bootstrap..."
           }
         ]
       }

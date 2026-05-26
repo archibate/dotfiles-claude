@@ -74,7 +74,7 @@ DEFAULTS = {
     "estimated_mem_bytes": _host_default_mem(),
     "estimated_cpu_cores": _host_default_cores(),
     "max_sys_mem_pct": 70.0,
-    "max_sys_disk_pct": 90.0,
+    "max_sys_disk_pct": 98.0,
     "max_babysit_cpu_pct": 90.0,
     "monitor_interval": "10s",
     "monitor_tolerance_count": 3,
@@ -101,7 +101,7 @@ SPEC_COLUMNS = (
 # the daemon writes (see `_kill_task`, `_check_task`, `_adopt_running`, `_start_task`).
 KILL_HINTS: dict[str, str] = {
     "system_mem_pressure": "system memory >70% sustained — reduce batch size or wait for free RAM",
-    "system_disk_pressure": "system disk >90% sustained — clean outputs or write elsewhere",
+    "system_disk_pressure": "system disk >98% sustained — clean outputs or write elsewhere",
     "mem_exceeded": "task RSS exceeded --mem_pct_limit (default 40% of total RAM) — reduce batch size or pass a higher --mem_pct_limit",
     "cpu_exceeded": "task CPU exceeded --cpu_pct_limit × cores — reduce parallelism or pass a higher --cpu_pct_limit",
     "estimated_mem_exceeded": "task RSS exceeded 2× --estimated_mem_bytes sustained — your peak-memory prediction was off; raise --estimated_mem_bytes or reduce footprint, then re-queue",
@@ -810,6 +810,64 @@ class Daemon:
             return {"ok": False, "error": f"task {name!r} not running"}
         self._kill_task(name, reason="manual")
         return {"ok": True}
+
+    def _op_adjust(self, req: dict) -> dict:
+        # Mutate a pending or running task's resource estimate. DB row is
+        # updated unconditionally so admission accounting picks up the new
+        # numbers on the next capacity check. If the task is running, the
+        # in-memory RunningTask is updated and overrun counters are reset
+        # so the 2×-sustained kill threshold restarts against the new
+        # estimate; the cgroup memory.max set at launch (= min(3× estimate,
+        # 40% host RAM)) is NOT re-set on the running scope.
+        name = req["name"]
+        r = self.db.execute("SELECT * FROM tasks WHERE name=?", (name,)).fetchone()
+        if r is None:
+            return {"ok": False, "error": f"no such task: {name!r}"}
+        if r["status"] in TERMINAL:
+            return {"ok": False, "error": f"task {name!r} is in terminal status {r['status']!r}; adjust applies only to pending/running"}
+        new_em = req.get("estimated_mem_bytes")
+        new_ec = req.get("estimated_cpu_cores")
+        if new_em is None and new_ec is None:
+            return {"ok": False, "error": "nothing to adjust; pass estimated_mem_bytes and/or estimated_cpu_cores"}
+        total_mem = psutil.virtual_memory().total
+        n_cores = os.cpu_count() or 1
+        if new_em is not None:
+            new_em = int(new_em)
+            if new_em <= 0:
+                return {"ok": False, "error": "estimated_mem_bytes must be > 0"}
+            if new_em > total_mem:
+                return {"ok": False, "error": f"estimated_mem_bytes {new_em} exceeds host total RAM {total_mem}"}
+        if new_ec is not None:
+            new_ec = float(new_ec)
+            if new_ec <= 0:
+                return {"ok": False, "error": "estimated_cpu_cores must be > 0"}
+            if new_ec > n_cores:
+                return {"ok": False, "error": f"estimated_cpu_cores {new_ec} exceeds host total cores {n_cores}"}
+        sets, args = [], []
+        if new_em is not None:
+            sets.append("estimated_mem_bytes=?")
+            args.append(new_em)
+        if new_ec is not None:
+            sets.append("estimated_cpu_cores=?")
+            args.append(new_ec)
+        args.append(name)
+        self.db.execute(f"UPDATE tasks SET {', '.join(sets)} WHERE name=?", args)
+        rt = self.running.get(name)
+        if rt is not None:
+            if new_em is not None:
+                rt.estimated_mem_bytes = new_em
+                rt.mem_overrun_count = 0
+            if new_ec is not None:
+                rt.estimated_cpu_cores = new_ec
+                rt.cpu_overrun_count = 0
+        self.log(f"[{name}] adjusted estimates: mem={new_em} cpu={new_ec} live={rt is not None}")
+        return {
+            "ok": True,
+            "name": name,
+            "estimated_mem_bytes": new_em,
+            "estimated_cpu_cores": new_ec,
+            "live": rt is not None,
+        }
 
     def _op_shutdown(self, req: dict) -> dict:
         self._begin_shutdown()
@@ -1688,12 +1746,26 @@ def cmd_wait(
         each new line as a notification.
     """
     alerted = {"elapsed": False, "mem": False, "cpu": False}
+    # Last-seen estimates: if `babysit adjust` raises an estimate while wait
+    # is in-flight, reset the matching dim's alert latch so a fresh warning
+    # can fire against the new threshold (and a lowered estimate doesn't
+    # re-warn for already-counted overruns).
+    last_estimates: dict[str, float | int | None] = {
+        "elapsed": None, "mem": None, "cpu": None,
+    }
     while True:
         resp = rpc_call("status", name=name)
         t = resp["task"]
         if t["status"] in TERMINAL:
             _print(t, format, columns=_split_cols(columns))
             raise typer.Exit(0 if t["status"] == "completed" else 1)
+        for dim, key in (("elapsed", "estimated_time"),
+                         ("mem", "estimated_mem_bytes"),
+                         ("cpu", "estimated_cpu_cores")):
+            cur = t.get(key)
+            if last_estimates[dim] is not None and cur != last_estimates[dim]:
+                alerted[dim] = False
+            last_estimates[dim] = cur
         if not alerted["elapsed"]:
             elapsed = t.get("elapsed_time")
             estimated = t.get("estimated_time")
@@ -1813,6 +1885,40 @@ def cmd_kill(
     """Kill a running task."""
     rpc_call("kill", name=name)
     typer.echo(f"killed: {name}")
+
+
+@app.command("adjust")
+def cmd_adjust(
+    name: str = typer.Option(..., help="Task name."),
+    estimated_mem_bytes: str | None = typer.Option(
+        None, "--estimated_mem_bytes",
+        help="New peak-memory estimate (e.g. 32G). Accepted suffixes: B/K/M/G/T.",
+    ),
+    estimated_cpu_cores: float | None = typer.Option(
+        None, "--estimated_cpu_cores",
+        help="New peak-CPU estimate (cores).",
+    ),
+) -> None:
+    """Adjust a pending or running task's resource estimate.
+
+    Updates the DB so the next admission check (`run` / `wait_for_capacity`)
+    sees the new numbers. If the task is running, the in-memory estimate is
+    swapped in and the 2×-sustained overrun counter is reset so the kill
+    threshold restarts against the new estimate. The cgroup memory.max set
+    at launch (= min(3× estimate, 40% host RAM)) is NOT re-set on the live
+    scope — re-queue if you need a tighter hard cap.
+    """
+    if estimated_mem_bytes is None and estimated_cpu_cores is None:
+        raise typer.BadParameter(
+            "pass --estimated_mem_bytes and/or --estimated_cpu_cores"
+        )
+    kwargs: dict = {"name": name}
+    if estimated_mem_bytes is not None:
+        kwargs["estimated_mem_bytes"] = parse_bytes(estimated_mem_bytes)
+    if estimated_cpu_cores is not None:
+        kwargs["estimated_cpu_cores"] = estimated_cpu_cores
+    resp = rpc_call("adjust", **kwargs)
+    typer.echo(json.dumps({k: v for k, v in resp.items() if k != "ok"}))
 
 
 @app.command("log")
@@ -2130,9 +2236,12 @@ def cmd_tui(
                 status = r["status"]
                 color = STATUS_COLOR.get(status, "white")
                 kr = r.get("kill_reason")
+                ec = r.get("exit_code")
                 status_cell = f"[{color}]{status}[/]"
                 if kr:
                     status_cell += f" [dim]({kr})[/]"
+                elif status == "failed" and ec is not None:
+                    status_cell += f" [dim](exit code {ec})[/]"
                 cpu = f"{r['cpu_cores']:.1f}c" if r.get("cpu_cores") is not None else "-"
                 mem = fmt_bytes(r["mem_bytes"]) if r.get("mem_bytes") is not None else "-"
                 silent_secs = r.get("time_since_last_observe")

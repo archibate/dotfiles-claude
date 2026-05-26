@@ -94,12 +94,13 @@ babysit log --tail=15 --name="<unique-name>"
 babysit log --follow --name="<unique-name>"   # stream; use with run_in_background: true
 ```
 
-### 4. List / kill
+### 4. List / kill / adjust
 
 ```bash
 babysit list                           # running/pending + terminal ended within 24h; --all for full history
 babysit status --name="<name>"         # one task, JSON
 babysit kill --name="<name>"           # SIGTERM, then scope-stop fallback
+babysit adjust --name="<name>" --estimated_mem_bytes=32G  # retune estimated peak memory
 ```
 
 ## The Observability Contract
@@ -109,7 +110,7 @@ babysit **kills tasks that go silent** for longer than `observability_interval` 
 - `PYTHONUNBUFFERED=1` (or `python -u`) to defeat block-buffering
 - Periodic progress markers with real signal: `[3/42] ETA ~3m loss=1.2e-4`
 - LightGBM / native C++ stdout under pipes: write a custom Python callback with `flush=True` — `lgb.log_evaluation` is silent under non-tty stdout
-- Generic keep-alives (`Keep-alive`, dots) defeat the purpose; emit progress, not noise
+- Generic keep-alives (`Keep-alive`, `heartbeat`, dots) defeat the purpose; emit progress, not noise
 
 ## Conversation Example
 

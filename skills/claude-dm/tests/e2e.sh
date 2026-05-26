@@ -85,6 +85,16 @@ first="${out%%$'\n'*}"
 grep -q '^hint:' <<<"$out" || fail "expected re-arm hint line, got: $out"
 pass "cmd /compact + wait DONE+hint"
 
+echo "=== wait debounce_s defers DONE until gate holds ==="
+wait_state t:0.0 idle 30 || fail "not idle before debounce wait"
+t0=$(date +%s)
+out=$("$CLAUDE_DM" wait t:0.0 2 60 6) || fail "wait debounce timed out / errored"
+elapsed=$(( $(date +%s) - t0 ))
+first="${out%%$'\n'*}"
+[[ "$first" == "DONE" ]] || fail "expected DONE, got '$first' (full: $out)"
+(( elapsed >= 6 )) || fail "DONE fired in ${elapsed}s, expected >=6s (debounce floor)"
+pass "wait debounce DONE after ${elapsed}s (>=6s gate hold)"
+
 # The `answer` verb is NOT covered automatically because triggering a
 # permission modal depends on the peer's settings (defaultMode, allowed-tools)
 # and Claude Code's auto-approval heuristics for simple commands. In an

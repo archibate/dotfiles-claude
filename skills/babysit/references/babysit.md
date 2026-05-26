@@ -15,7 +15,7 @@ Kill immediately when one of above are violated, and follow the mitigation after
 Keep monitoring system resource exhaustion risk:
 
 1. system memory usage exceeds >70% -> kill top-memory task -> reduce memory footprint, avoid running multiple memory-consuming tasks in parallel
-2. system disk usage exceeds >90% -> kill any disk writing task -> reduce disk footprint, wait for user to clean up space
+2. system disk usage exceeds >98% -> kill any disk writing task -> reduce disk footprint, wait for user to clean up space
 
 Follow mitigation on violation for more than 30 consecutive seconds. Restart task after system usage dropped.
 
@@ -52,7 +52,7 @@ If babysit daemon not started:
 ```bash
 babysit daemon-start
 # equivalant to:
-babysit daemon-start --max_sys_mem_pct=70 --max_sys_disk_pct=90 --max_babysit_cpu_pct=90 --monitor_interval="10s" --monitor_tolerance_count=3 --monitor_disk_infer_by_dir="$HOME"
+babysit daemon-start --max_sys_mem_pct=70 --max_sys_disk_pct=98 --max_babysit_cpu_pct=90 --monitor_interval="10s" --monitor_tolerance_count=3 --monitor_disk_infer_by_dir="$HOME"
 ```
 
 > `babysit` monitors resource usage via psutil and kills violating processes. All spawned task processes run at lower priority (`nice +10`) so that the monitor thread stays responsive.
@@ -100,6 +100,16 @@ babysit log --head=15 --name="<task name>"
 babysit log --full --name="<task name>" | rg ...
 ```
 
+To re-tune an existing task's resource estimate without re-queueing:
+
+```bash
+babysit adjust --name="<task name>" --estimated_mem_bytes=32G
+babysit adjust --name="<task name>" --estimated_cpu_cores=8
+babysit adjust --name="<task name>" --estimated_mem_bytes=32G --estimated_cpu_cores=8
+```
+
+> `adjust` rewrites the task's `estimated_mem_bytes` / `estimated_cpu_cores` in the DB and, if the task is running, swaps the value into the in-memory `RunningTask` and resets the 2×-sustained overrun counter so the kill threshold restarts against the new estimate. Use after a `runaway_risk` warning when you've decided the new actual is acceptable and want to widen the kill cap (or, conversely, tighten it on a task you no longer trust). The cgroup `memory.max` set at launch (= `min(3 × estimate, mem_pct_limit × total_ram)`) is NOT re-applied to the running scope — re-queue if you need a tighter hard cap. Admission accounting for running tasks uses live RSS rather than the stored estimate, so adjusting a running task only retunes the kill threshold; it doesn't free admission headroom for new tasks. For pending tasks, the adjusted estimate is reflected in the next `_capacity_check`.
+
 To subscribe for log update, run with `run_in_background=true` + `Monitor`:
 
 ```bash
@@ -121,6 +131,35 @@ babysit clean --status=killed,failed --dry_run       # preview without deleting
 ```
 
 > The daemon also auto-purges terminal rows past `--cleanup_ttl` (default `7d`) once per minute on its tick loop, unlinking the corresponding `log_path` file. Override with `babysit daemon-start --cleanup_ttl=30d` etc.
+
+
+## Surviving systemd-oomd slice kills
+
+Ubuntu ships `systemd-oomd` with a default policy on `user@<UID>.service`:
+
+```
+ManagedOOMMemoryPressure=kill
+ManagedOOMMemoryPressureLimit=50%
+```
+
+When PSI memory pressure on the user slice exceeds 50% sustained >20s with active reclaim, oomd SIGKILLs the entire `user@UID.service` slice — wiping the babysit daemon, dbus, every shell, every supervised task. The kill is at the *slice* layer above any cgroup `memory.max` babysit sets per task, so per-task caps are bypassed.
+
+A common trigger: swap saturation combined with a fresh large allocation. Even when nominal RAM is free, every new alloc forces live-page reclaim instead of swap-out, spiking PSI.
+
+To replace overbroad slice kill with targeted per-cgroup kernel-OOM (which respects babysit's `MemoryMax` + `MemorySwapMax=0`), install a drop-in:
+
+```bash
+sudo mkdir -p /etc/systemd/system/user@.service.d
+sudo tee /etc/systemd/system/user@.service.d/oomd.conf <<'EOF'
+[Service]
+ManagedOOMMemoryPressure=auto
+EOF
+sudo systemctl daemon-reload
+```
+
+After this, only kernel OOM picks a victim. A runaway task hits its own cgroup `memory.max` and dies alone instead of taking the slice with it.
+
+Trade-off: if cumulative memory truly exhausts RAM, kernel OOM still chooses by `oom_score`. With `MemorySwapMax=0` on babysit cgroups, an over-budget task gets cgroup-OOM'd before slice-wide pressure builds.
 
 
 Use `babysit --help` or `babysit <subcommand> --help` for help.

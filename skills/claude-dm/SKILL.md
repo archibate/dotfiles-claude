@@ -47,6 +47,8 @@ claude-dm self   /<slash>                      # queue a user-only slash command
 
 `list` marks the current session's row with a trailing `*` on the ADDR column (e.g. `_claude:7.1*`). Strip the `*` before passing the addr to other verbs. Self detection only fires when `$CLAUDE_DM_SOCKET` matches the socket from `$TMUX`.
 
+The `LAST` column shows compact elapsed time (`17s`, `8m`, `1h21m`, `3d20h`) since the peer's transcript JSONL was last written — useful for triaging which idle peers are stale-idle vs just-finished. `-` means no transcript could be resolved.
+
 ## Peer states
 
 `peer_state` reports one of five values, shown in `status` and used by every gate:
@@ -127,10 +129,13 @@ Block until a peer finishes its current turn (e.g. after dispatching work via `s
 claude-dm send HOME:8.1 "Run the full test suite and summarise failures."
 claude-dm wait HOME:8.1                    # 30s polls, no timeout, blocks until DONE/MODAL
 claude-dm wait HOME:8.1 10 600             # 10s polls, give up after 10 min
+claude-dm wait HOME:8.1 10 600 60          # also require DONE gate to hold 60s
 ```
 Output is one of:
 - `DONE` — peer passes the same gate as `safe_to_dm`: pane title `✳` AND transcript's last assistant turn is `end_turn`. Title-idle alone is not enough; the loop keeps polling while a tool result is still pending so DONE never fires mid-turn.
 - `MODAL` — peer hit a permission / AskUserQuestion modal.
+
+The optional 4th arg `debounce_s` suppresses DONE until the gate has held that many consecutive seconds — guards against peers that chain short tool-result turns and would otherwise look transiently DONE between them. Resolution is one poll interval; `debounce_s < interval_s` effectively means "fire on the second consecutive idle poll".
 
 Exit 1 (no stdout sentinel) on timeout or if the peer pane vanishes.
 

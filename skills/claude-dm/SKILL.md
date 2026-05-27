@@ -18,14 +18,15 @@ Peer-to-peer messaging between independent Claude Code sessions that share a tmu
 ## When NOT to use
 
 - To spawn a child Claude for one-shot work → use the `Agent` tool.
-- To schedule a future Claude run on the cloud → use the `schedule` skill or `RemoteTrigger`.
-- To send a message to another *user's* Claude on a different machine → this skill can't.
+- To spawn a headless Claude from CLI → use the `/claude-headless` skill.
+- To schedule a future Claude run → use the `CronCreate` (local) or `/schedule` (remote).
+- To send a message to remote Claude on a different machine → see `portable/README.md`.
 
 ## Prerequisites
 
 - Peers must run in tmux (any socket). Default resolution: `$CLAUDE_DM_SOCKET` or `/tmp/tmux-$(id -u)/default`.
 - Same Unix user (or a shared socket with group perms).
-- `tmux`, `jq`, `awk`, `sed`, `pgrep` in `$PATH` (all present on this box).
+- `claude-dm` available in `$PATH` (otherwise fallback to `bin/claude-dm` under skill dir).
 
 ## Verbs
 

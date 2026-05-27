@@ -44,7 +44,7 @@ For reference, my personal configs that pair well with this setup:
 - **skills/** — 53 skill packs (browser automation, translation, shader dev, and more)
 - **plugins/** — installed plugins via marketplaces (`claude-hud`, `claude-plugins-official`, `openai-codex`)
 - **integration.sh / .fish** — `claude` wrapper, model shortcuts, and `commit` helper
-- **integration-providers.sh / .fish** — optional shortcuts that route claude through third-party Anthropic-compatible endpoints (see the file header for the provider list and prerequisites; the `gpt` shortcut needs the [codex-to-claude](https://github.com/archibate/codex-to-claude) proxy running locally).
+- **integration-providers.sh / .fish** — optional shortcuts that route claude through third-party Anthropic-compatible endpoints (see the file header for the provider list and prerequisites; the `gpt` shortcut needs [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) running locally).
 - **CLAUDE.md** — global coding preferences and rules
 
 ## Defaults you should know

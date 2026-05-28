@@ -1,7 +1,7 @@
 ---
 name: claude-dm
 description: >
-  Send peer-to-peer message and control to Claude Code sessions. Use when coordinating multiple simultaneous Claude sessions, or user says "dm another claude", "list claude sessions", "peek peer claude", "spawn claude in tmux", "monitor remote claude", "notify peer in tmux", "handover to claude", "orchestrate claude sessions".
+  Send peer-to-peer message and control to Claude Code sessions. Use when coordinating multiple simultaneous Claude sessions, or user says "dm another claude", "list claude sessions", "peek peer claude", "spawn claude in tmux", "monitor remote claude", "notify peer in tmux", "handover to claude", "inspect peer transcript", "orchestrate claude sessions".
 ---
 
 # claude-dm

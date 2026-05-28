@@ -5,9 +5,8 @@
 #   OPENROUTER_API_KEY → openrouter
 #   OFOX_API_KEY       → ofox    (OfoxAI aggregator, Gemini 3.1 pro
 #   LLAMA_API_KEY      → qwen
-#   (none)             → gpt     (ChatGPT OAuth — needs the codex-to-claude
-#                                 proxy running locally; see
-#                                 https://github.com/archibate/codex-to-claude)
+#   (none)             → gpt     (Codex OAuth — needs CLIProxyAPI running
+#                                 locally; see https://github.com/router-for-me/CLIProxyAPI)
 #
 # Each shortcut routes claude through ~/.claude/providers/<name>.json which
 # rebinds ANTHROPIC_BASE_URL and the haiku/sonnet/opus model aliases to the
@@ -27,8 +26,8 @@ function claude-with
         case qwen
             set -fx ANTHROPIC_AUTH_TOKEN $LLAMA_API_KEY
         case gpt
-            # codex-to-claude proxy: ChatGPT OAuth backend, no real token needed.
-            set -fx ANTHROPIC_AUTH_TOKEN dummy
+            # CLIProxyAPI: Codex OAuth backend, no real token needed.
+            set -fx ANTHROPIC_AUTH_TOKEN sk-cpa-local
         case '*'
             echo "claude-with: unknown provider '$provider'" >&2
             return 1

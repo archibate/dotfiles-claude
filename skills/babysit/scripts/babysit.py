@@ -1684,7 +1684,8 @@ def cmd_run(
             print(json.dumps(e.payload), file=sys.stderr, flush=True)
             raise typer.Exit(2)
         raise
-    typer.echo(f"queued: {resp['name']}")
+    name = resp['name']
+    typer.echo(f"queued: {name}  (babysit wait --name={shlex.quote(name)} to monitor)")
 
 
 _DEFAULT_COLS = ",".join(SPEC_COLUMNS)

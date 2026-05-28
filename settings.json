@@ -389,7 +389,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/show-image-after-send.sh",
+            "command": "bash ~/.claude/hooks/track-sent-file.sh",
             "timeout": 10
           }
         ]

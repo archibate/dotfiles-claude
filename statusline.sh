@@ -135,7 +135,7 @@ fi
 
 # --- last-file segment -------------------------------------------------------
 # URL of the most recent SendUserFile delivery in this session. Written by
-# hooks/show-image-after-send.sh; kitty's ctrl+shift+e hints can select it.
+# hooks/track-sent-file.sh; kitty's ctrl+shift+e hints can select it.
 file_segment=""
 if [[ -n "$session_id" ]]; then
   file_state="/tmp/claude-${UID}-state/last-file-url/${session_id}"

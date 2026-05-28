@@ -22,13 +22,17 @@ cwd=$(jq -r '.cwd // empty' <<< "$input")
 
 # Build a netloc the user's local machine can ssh back to: prefer the server IP
 # the SSH client used to reach us (from SSH_CONNECTION), with our own username.
-# When Claude runs on localhost (no SSH), leave host empty so the URL is the
-# hostless `file:///path` form — the local handler then opens it directly
-# without a redundant scp round-trip.
+# When Claude runs on localhost (no SSH) or under loopback SSH (127.*, ::1) —
+# i.e. the user is already on the same box — leave host empty so the URL is the
+# hostless `file:///path` form and the local handler opens it directly without a
+# redundant scp round-trip.
 host=""
 if [ -n "${SSH_CONNECTION:-}" ]; then
     server_ip=$(awk '{print $3}' <<< "$SSH_CONNECTION")
-    [ -n "$server_ip" ] && host="$(whoami)@${server_ip}"
+    case "$server_ip" in
+        ""|127.*|::1|0:0:0:0:0:0:0:1|localhost) ;;
+        *) host="$(whoami)@${server_ip}" ;;
+    esac
 fi
 
 last_url=""

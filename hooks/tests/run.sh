@@ -1477,6 +1477,78 @@ out=$(jq -nc --arg s "$hsp_sid5" '{session_id:$s,tool_name:"Bash",tool_input:{co
 
 rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint /tmp/claude-${UID}-state/compact-events
 
+# hint-skill-agent-browser: soft one-shot advisory — advertises the
+# /agent-browser skill when Claude drives a headless Chrome/Chromium binary by
+# hand. Non-blocking (additionalContext, no permissionDecision). Two-signal
+# discriminator: chrome-family binary + --headless, OR a *-headless-shell
+# binary alone. Skips when agent-browser is already in use, and subagents.
+echo ""
+echo "=== hint-skill-agent-browser ==="
+ab_dir=/tmp/claude-${UID}-state/skill-hint-agent-browser
+ab_msg="agent-browser skill"
+rm -rf "$ab_dir" /tmp/claude-${UID}-state/compact-events
+
+# 1. First fire: `chromium --headless ...` → advisory, no permissionDecision
+ab_sid="ab-$$"
+out=$(jq -nc --arg s "$ab_sid" --arg c "chromium --headless --screenshot=/tmp/s.png https://x" '{session_id:$s,tool_input:{command:$c}}' \
+       | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+echo "$out" | jq -e "(.hookSpecificOutput.permissionDecision | not) and (.hookSpecificOutput.additionalContext | contains(\"$ab_msg\"))" > "$test_out" \
+  && echo "OK:   hint-skill-agent-browser fires on chromium --headless" \
+  || { echo "FAIL: hint-skill-agent-browser first fire: $out"; fail=1; }
+
+# 2. Repeat same session → one-shot lock, silent
+out=$(jq -nc --arg s "$ab_sid" --arg c "google-chrome --headless --dump-dom https://y" '{session_id:$s,tool_input:{command:$c}}' \
+       | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-agent-browser silent on repeat in same session" \
+  || { echo "FAIL: hint-skill-agent-browser should be silent on repeat: $out"; fail=1; }
+
+# 3. New session → re-fires; covers path prefix + --headless=new + wrapper
+for variant in "/usr/bin/chromium --headless=new --print-to-pdf=/tmp/p.pdf https://x" \
+               "timeout 30 chromium --headless https://x" \
+               "chrome-headless-shell --remote-debugging-port=9222"; do
+  ab_sid_v="ab-v-$$-$RANDOM"
+  out=$(jq -nc --arg s "$ab_sid_v" --arg c "$variant" '{session_id:$s,tool_input:{command:$c}}' \
+         | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+  echo "$out" | jq -e ".hookSpecificOutput.additionalContext | contains(\"$ab_msg\")" > "$test_out" \
+    && echo "OK:   hint-skill-agent-browser fires on: $variant" \
+    || { echo "FAIL: hint-skill-agent-browser should fire on [$variant]: $out"; fail=1; }
+done
+
+# 4. Non-trigger → silent. Headed chromium (no --headless), agent-browser
+# already in use, --headless on a non-chrome tool, and chromedriver substring.
+for safe in "chromium https://example.com" \
+            "agent-browser open https://x && agent-browser snapshot -i" \
+            "mytool --headless run" \
+            "echo building chromedriver"; do
+  ab_sid_s="ab-safe-$$-$RANDOM"
+  out=$(jq -nc --arg s "$ab_sid_s" --arg c "$safe" '{session_id:$s,tool_input:{command:$c}}' \
+         | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+  [ -z "$out" ] \
+    && echo "OK:   hint-skill-agent-browser silent on '$safe'" \
+    || { echo "FAIL: hint-skill-agent-browser should be silent on '$safe': $out"; fail=1; }
+done
+
+# 5. Subagent (agent-* session_id) → silent even on a trigger command
+out=$(jq -nc --arg c "chromium --headless --screenshot https://x" '{session_id:"agent-deadbeef",tool_input:{command:$c}}' \
+       | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-agent-browser skips subagents" \
+  || { echo "FAIL: hint-skill-agent-browser should skip subagents: $out"; fail=1; }
+
+# 6. Compact-reset: PostCompact bump re-arms the one-shot.
+ab_sid_c="ab-cmp-$$"
+rm -rf "$ab_dir" /tmp/claude-${UID}-state/compact-events
+jq -nc --arg s "$ab_sid_c" --arg c "chromium --headless https://x" '{session_id:$s,tool_input:{command:$c}}' \
+  | bash ~/.claude/hooks/hint-skill-agent-browser.sh > "$test_out"
+printf '{"session_id":"%s"}' "$ab_sid_c" | bash ~/.claude/hooks/compact-bump.sh
+out=$(jq -nc --arg s "$ab_sid_c" --arg c "chromium --headless https://x" '{session_id:$s,tool_input:{command:$c}}' \
+       | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+echo "$out" | jq -e ".hookSpecificOutput.additionalContext | contains(\"$ab_msg\")" > "$test_out" \
+  && echo "OK:   hint-skill-agent-browser re-fires after compact-bump" \
+  || { echo "FAIL: hint-skill-agent-browser should re-fire after compact: $out"; fail=1; }
+rm -rf "$ab_dir" /tmp/claude-${UID}-state/compact-events
+
 # 9. Anchor forms: sudo, &&, bash -c wrapper → all deny
 hsp_sid6="hsp6-$$"
 rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint

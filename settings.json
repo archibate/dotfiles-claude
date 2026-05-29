@@ -16,7 +16,7 @@
     "CLAUDE_AUTO_BACKGROUND_TASKS": "1",
     "CLAUDE_CODE_NEW_INIT": "1",
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
-    "AUDIT_BACKEND": "codex",
+    "AUDIT_BACKEND": "both",
     "AUDIT_CODEX_MODEL": "gpt-5.4",
     "AUDIT_CODEX_EFFORT": "medium",
     "AUDIT_CLAUDE_MODEL": "haiku",
@@ -278,6 +278,16 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hint-skill-babysit.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hint-skill-agent-browser.sh",
             "timeout": 5
           }
         ]

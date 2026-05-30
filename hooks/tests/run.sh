@@ -1220,27 +1220,6 @@ echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("/read-url
   || { echo "FAIL: hint-skill-read-url should re-fire after compact: $out"; fail=1; }
 rm -rf /tmp/claude-${UID}-state/skill-hint-read-url /tmp/claude-${UID}-state/compact-events
 
-# === prefer-limited-read ===
-plr_big_lines=$(mktemp /tmp/plr-big-lines-XXXXXX)
-plr_big_bytes=$(mktemp /tmp/plr-big-bytes-XXXXXX)
-plr_small=$(mktemp /tmp/plr-small-XXXXXX)
-# 400 lines × ~3 bytes/line ≈ 1.6 KB — triggers by line count, NOT by bytes.
-seq 1 400 > "$plr_big_lines"
-# 50 lines × 401 bytes ≈ 20 KB — triggers by bytes, NOT by line count.
-awk 'BEGIN{for(i=0;i<50;i++){for(j=0;j<400;j++)printf"x";print""}}' > "$plr_big_bytes"
-# 50 lines × ~3 bytes — under both thresholds, allowed.
-seq 1 50 > "$plr_small"
-
-assert_deny   prefer-limited-read "$(jq -n --arg fp "$plr_big_lines" '{tool_input:{file_path:$fp}}')" "400 lines"
-assert_deny   prefer-limited-read "$(jq -n --arg fp "$plr_big_bytes" '{tool_input:{file_path:$fp}}')" "KB"
-assert_silent prefer-limited-read "$(jq -n --arg fp "$plr_big_lines" '{tool_input:{file_path:$fp,limit:100}}')"
-assert_silent prefer-limited-read "$(jq -n --arg fp "$plr_big_bytes" '{tool_input:{file_path:$fp,limit:100}}')"
-assert_silent prefer-limited-read "$(jq -n --arg fp "$plr_small" '{tool_input:{file_path:$fp}}')"
-assert_silent prefer-limited-read '{"tool_input":{"file_path":"/tmp/does-not-exist-plr"}}'
-assert_silent prefer-limited-read '{"tool_input":{}}'
-
-rm -f "$plr_big_lines" "$plr_big_bytes" "$plr_small"
-
 # === hint-fork-on-bloat ===
 # 60 KB string payload — single call crosses the 50 KB threshold.
 hfb_big_payload=$(awk 'BEGIN{for(i=0;i<60;i++){for(j=0;j<1024;j++)printf"x";print""}}')

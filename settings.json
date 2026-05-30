@@ -263,16 +263,6 @@
         ]
       },
       {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/prefer-limited-read.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -502,7 +492,7 @@
     }
   },
   "viewMode": "default",
-  "effortLevel": "xhigh",
+  "effortLevel": "high",
   "advisorModel": "opus",
   "awaySummaryEnabled": true,
   "showClearContextOnPlanAccept": true,

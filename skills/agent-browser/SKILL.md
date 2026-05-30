@@ -1,7 +1,7 @@
 ---
 name: agent-browser
 description: >
-  Inspect or debug web pages in a headless browser — fill forms, click buttons, take screenshots, test web apps, review frontend UI/UX aesthetics. Use for headless browser automation. This skill should be used when user says "test web app interactively", "use a headless browser", "browser automation", "headless web test", "review frontend layout", "screenshot of this page", "frontend UI polish".
+  Inspect or debug web pages in a headless browser — fill forms, click buttons, take screenshots, test web apps, review frontend UI/UX aesthetics. Use for headless browser automation. This skill should be used when user says "test web app", "headless browser", "browser automation", "chromium --headless", "screenshot of this page", "look the page".
 allowed-tools:
   - Bash(npx agent-browser:*)
   - Bash(pnpx agent-browser:*)

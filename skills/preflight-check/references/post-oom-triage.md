@@ -1,14 +1,14 @@
 # Post-OOM Triage
 
-When a task is killed unexpectedly (exits with signal 9, disappears from `pueue status`, or shows `Killed`):
+When a task is killed unexpectedly (exits with signal 9, vanishes from `babysit list`, or status shows `oom_killed`/`system_killed`):
 
 ## 1. Detect & Confirm
 
 ```bash
 # Check kernel OOM killer logs (most recent first)
 dmesg | grep -i 'oom\|killed process' | tail -10
-# Check pueue for killed tasks
-pueue status --json | jq '.tasks | to_entries[] | select(.value.status | keys[0] == "Done") | select(.value.status.Done.result != "Success") | {id: .value.id, result: .value.status.Done.result, cmd: .value.original_command[:60]}'
+# Check babysit for killed tasks
+babysit list --format=json | jq '.[] | select(.status | test("killed")) | {name, status, kill_reason, command: (.command[:60])}'
 ```
 
 ## 2. Measure Actual Cost

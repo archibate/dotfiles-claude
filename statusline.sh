@@ -133,7 +133,19 @@ if [[ -n "$session_id" ]]; then
   drift_segment=$(~/.claude/hooks/drift-detect.py statusline "$session_id" 2>/dev/null || true)
 fi
 
+# --- last-file segment -------------------------------------------------------
+# URL of the most recent SendUserFile delivery in this session. Written by
+# hooks/track-sent-file.sh; kitty's ctrl+shift+e hints can select it.
+file_segment=""
+if [[ -n "$session_id" ]]; then
+  file_state="/tmp/claude-${UID}-state/last-file-url/${session_id}"
+  if [[ -f "$file_state" ]]; then
+    url=$(head -n1 "$file_state" 2>/dev/null)
+    [[ -n "$url" ]] && file_segment="  ${CYAN}${url}${RESET}"
+  fi
+fi
+
 # --- compose -----------------------------------------------------------------
 left="${model_segment}${ctx_segment}"
 [[ -n "$left" && -n "$cwd_segment" ]] && left+="  "
-printf '%s%s%s%s%s%s\n' "$left" "$cwd_segment" "$git_segment" "$audit_segment" "$idle_segment" "$drift_segment"
+printf '%s%s%s%s%s%s%s\n' "$left" "$cwd_segment" "$git_segment" "$audit_segment" "$idle_segment" "$drift_segment" "$file_segment"

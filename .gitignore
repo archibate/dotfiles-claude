@@ -30,6 +30,9 @@
 /image-cache
 /uploads
 /teams
+/daemon-auth-cooldown
+/daemon-auth-status.json
+/.last-update-result.json
 # /*
 # !/.gitignore
 # !/agents/*

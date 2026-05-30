@@ -8,6 +8,8 @@ if [ -z "$ARG" ]; then
   exit 1
 fi
 
+ARG="${ARG#- }"
+
 if [[ "$ARG" == *$'\n'* ]]; then
   echo "ERROR: /memory-add bullet must be a single line. Multi-line input is not allowed (one bullet per invocation)."
   exit 1

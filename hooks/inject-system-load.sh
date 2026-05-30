@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 # Inject system-load context only when resources are actually elevated.
 # Silent on idle/normal systems. Reminds the agent to be careful before
-# launching heavy work (builds, training, parallel agents, pueue jobs)
+# launching heavy work (builds, training, parallel agents, babysit jobs)
 # when the box is already loaded.
 #
 # Cooldown: time-based, per session_id. After an emit, suppress further
@@ -13,7 +13,6 @@
 # Thresholds are env-overridable (also lets tests force trip/silent paths):
 #   SYSLOAD_CPU_FACTOR   load5 / nproc threshold (default 0.7)
 #   SYSLOAD_MEM_PCT      memory %used threshold (default 80)
-#   SYSLOAD_SWAP_PCT     swap %used threshold (default 50)
 #   SYSLOAD_DISK_PCT     disk %used threshold on / (default 90)
 #   SYSLOAD_GPU_UTIL     per-GPU %util threshold (default 70)
 #   SYSLOAD_GPU_MEM      per-GPU mem% threshold (default 80)
@@ -29,7 +28,6 @@ export LC_ALL=C
 
 CPU_FACTOR="${SYSLOAD_CPU_FACTOR:-0.7}"
 MEM_THRESH="${SYSLOAD_MEM_PCT:-80}"
-SWAP_THRESH="${SYSLOAD_SWAP_PCT:-50}"
 DISK_THRESH="${SYSLOAD_DISK_PCT:-90}"
 GPU_UTIL_THRESH="${SYSLOAD_GPU_UTIL:-70}"
 GPU_MEM_THRESH="${SYSLOAD_GPU_MEM:-80}"
@@ -56,13 +54,13 @@ if awk -v l="$LOAD5" -v t="$LOAD_THRESH" 'BEGIN{exit !(l+0>t+0)}'; then
   LOAD_TRIPPED=1
 fi
 
-# --- Memory & swap (locale-independent via /proc/meminfo) ---
-read -r MEM_TOTAL MEM_AVAIL SWAP_TOTAL SWAP_FREE < <(awk '
+# --- Memory (locale-independent via /proc/meminfo) ---
+# Swap intentionally not surfaced — saturated swap is paged-out cold data,
+# not a constraint on new allocations as long as free RAM is plenty.
+read -r MEM_TOTAL MEM_AVAIL < <(awk '
   /^MemTotal:/      {m=$2}
   /^MemAvailable:/  {a=$2}
-  /^SwapTotal:/     {st=$2}
-  /^SwapFree:/      {sf=$2}
-  END {print m+0, a+0, st+0, sf+0}
+  END {print m+0, a+0}
 ' /proc/meminfo)
 
 if [ "$MEM_TOTAL" -gt 0 ]; then
@@ -72,15 +70,6 @@ if [ "$MEM_TOTAL" -gt 0 ]; then
     USED_GB=$(awk -v u="$MEM_USED" 'BEGIN{printf "%.1f", u/1048576}')
     TOT_GB=$(awk -v t="$MEM_TOTAL" 'BEGIN{printf "%.1f", t/1048576}')
     WARN+=("MEM: ${MEM_PCT}% used (${USED_GB}/${TOT_GB} GiB)")
-  fi
-fi
-
-if [ "$SWAP_TOTAL" -gt 0 ]; then
-  SWAP_USED=$((SWAP_TOTAL - SWAP_FREE))
-  SWAP_PCT=$((SWAP_USED * 100 / SWAP_TOTAL))
-  if [ "$SWAP_PCT" -gt "$SWAP_THRESH" ]; then
-    SU_GB=$(awk -v u="$SWAP_USED" 'BEGIN{printf "%.1f", u/1048576}')
-    WARN+=("SWAP: ${SWAP_PCT}% used (${SU_GB} GiB) — thrashing risk")
   fi
 fi
 
@@ -153,11 +142,13 @@ TMP="${CACHE_FILE}.tmp.$$"
 printf '%s' "$NOW" > "$TMP"
 mv "$TMP" "$CACHE_FILE"
 
-CTX="System load elevated — be careful before launching heavy work (builds, training, parallel agents, pueue):"
+CTX="System load elevated — be careful before launching heavy work (builds, training, parallel agents):"
 for line in "${WARN[@]}"; do
   CTX="${CTX}
   - ${line}"
 done
+CTX="${CTX}
+Wait for existing processes to complete before starting new heavy work. If DoA is high, periodically (~30m) re-check until system resources drop. Use /babysit to schedule heavy work and prevent overload."
 
 jq -n --arg ctx "$CTX" '{
   hookSpecificOutput: {

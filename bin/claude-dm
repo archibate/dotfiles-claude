@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec "$HOME/.claude/skills/claude-dm/bin/claude-dm" "$@"

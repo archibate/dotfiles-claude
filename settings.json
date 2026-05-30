@@ -16,7 +16,7 @@
     "CLAUDE_AUTO_BACKGROUND_TASKS": "1",
     "CLAUDE_CODE_NEW_INIT": "1",
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
-    "AUDIT_BACKEND": "codex",
+    "AUDIT_BACKEND": "both",
     "AUDIT_CODEX_MODEL": "gpt-5.4",
     "AUDIT_CODEX_EFFORT": "medium",
     "AUDIT_CLAUDE_MODEL": "haiku",
@@ -233,16 +233,6 @@
         ]
       },
       {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/hint-skill-frontend-design.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
@@ -287,7 +277,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hint-skill-pueue.sh",
+            "command": "bash ~/.claude/hooks/hint-skill-babysit.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hint-skill-agent-browser.sh",
             "timeout": 5
           }
         ]
@@ -345,16 +345,6 @@
         ]
       },
       {
-        "matcher": "Read|Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/recall-reminder-reset.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Write",
         "hooks": [
           {
@@ -389,8 +379,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/track-pueue-skill-load.sh",
+            "command": "bash ~/.claude/hooks/track-babysit-skill-load.sh",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "SendUserFile",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/track-sent-file.sh",
+            "timeout": 10
           }
         ]
       }
@@ -427,7 +427,7 @@
           },
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/recall-reminder.sh",
+            "command": "bash ~/.claude/hooks/block-note-prompt.sh",
             "timeout": 5
           }
         ]
@@ -466,7 +466,7 @@
     "code-review@claude-plugins-official": false,
     "typescript-lsp@claude-plugins-official": false,
     "lua-lsp@claude-plugins-official": false,
-    "caveman@caveman": true,
+    "caveman@caveman": false,
     "superpowers@claude-plugins-official": false
   },
   "extraKnownMarketplaces": {

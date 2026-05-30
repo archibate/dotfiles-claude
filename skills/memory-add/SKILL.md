@@ -7,10 +7,10 @@ argument-hint: "<durable fact to remember>"
 
 # /memory-add
 
-!```bash
+```!
 MEMADD_ARG="$(cat <<'__MEMADD_EOF__'
 $ARGUMENTS
 __MEMADD_EOF__
 )"
-MEMADD_ARG="$MEMADD_ARG" bash "${CLAUDE_SKILL_DIR}/append.sh"
+MEMADD_ARG="$MEMADD_ARG" bash "${CLAUDE_SKILL_DIR}/append.sh" || echo "This is a skill works by consuming arguments. Consider invoke with /memory-add [one line prose of a durable fact to remember]"
 ```

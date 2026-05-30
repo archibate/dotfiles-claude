@@ -1,8 +1,7 @@
 ---
 name: claude-dm
 description: >
-  Peer-to-peer messaging between Claude Code sessions sharing a tmux server.
-  Use when coordinating multiple simultaneous Claude sessions — e.g. "dm another claude", "list claude sessions", "peek peer claude", "spawn claude in tmux", "monitor remote claude", "orchestrate claude sessions".
+  Send peer-to-peer message and control to Claude Code sessions. Use when coordinating multiple simultaneous Claude sessions, or user says "dm another claude", "list claude sessions", "peek peer claude", "spawn claude in tmux", "monitor remote claude", "notify peer in tmux", "handover to claude", "inspect peer transcript", "orchestrate claude sessions".
 ---
 
 # claude-dm
@@ -19,14 +18,15 @@ Peer-to-peer messaging between independent Claude Code sessions that share a tmu
 ## When NOT to use
 
 - To spawn a child Claude for one-shot work → use the `Agent` tool.
-- To schedule a future Claude run on the cloud → use the `schedule` skill or `RemoteTrigger`.
-- To send a message to another *user's* Claude on a different machine → this skill can't.
+- To spawn a headless Claude from CLI → use the `/claude-headless` skill.
+- To schedule a future Claude run → use the `CronCreate` (local) or `/schedule` (remote).
+- To send a message to remote Claude on a different machine → see `portable/README.md`.
 
 ## Prerequisites
 
 - Peers must run in tmux (any socket). Default resolution: `$CLAUDE_DM_SOCKET` or `/tmp/tmux-$(id -u)/default`.
 - Same Unix user (or a shared socket with group perms).
-- `tmux`, `jq`, `awk`, `sed`, `pgrep` in `$PATH` (all present on this box).
+- `claude-dm` available in `$PATH` (otherwise fallback to `bin/claude-dm` under skill dir).
 
 ## Verbs
 
@@ -47,6 +47,8 @@ claude-dm self   /<slash>                      # queue a user-only slash command
 `<target>` is `session:window.pane` on the current socket (e.g. `HOME:8.1`).
 
 `list` marks the current session's row with a trailing `*` on the ADDR column (e.g. `_claude:7.1*`). Strip the `*` before passing the addr to other verbs. Self detection only fires when `$CLAUDE_DM_SOCKET` matches the socket from `$TMUX`.
+
+The `LAST` column shows compact elapsed time (`17s`, `8m`, `1h21m`, `3d20h`) since the peer's transcript JSONL was last written — useful for triaging which idle peers are stale-idle vs just-finished. `-` means no transcript could be resolved.
 
 ## Peer states
 
@@ -128,10 +130,13 @@ Block until a peer finishes its current turn (e.g. after dispatching work via `s
 claude-dm send HOME:8.1 "Run the full test suite and summarise failures."
 claude-dm wait HOME:8.1                    # 30s polls, no timeout, blocks until DONE/MODAL
 claude-dm wait HOME:8.1 10 600             # 10s polls, give up after 10 min
+claude-dm wait HOME:8.1 10 600 60          # also require DONE gate to hold 60s
 ```
 Output is one of:
 - `DONE` — peer passes the same gate as `safe_to_dm`: pane title `✳` AND transcript's last assistant turn is `end_turn`. Title-idle alone is not enough; the loop keeps polling while a tool result is still pending so DONE never fires mid-turn.
 - `MODAL` — peer hit a permission / AskUserQuestion modal.
+
+The optional 4th arg `debounce_s` suppresses DONE until the gate has held that many consecutive seconds — guards against peers that chain short tool-result turns and would otherwise look transiently DONE between them. Resolution is one poll interval; `debounce_s < interval_s` effectively means "fire on the second consecutive idle poll".
 
 Exit 1 (no stdout sentinel) on timeout or if the peer pane vanishes.
 

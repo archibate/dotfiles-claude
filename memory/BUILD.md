@@ -6,7 +6,7 @@ Recipes for building and maintaining the long-term memory system.
 
 - `promoted.md` — source of truth. Curated claims under H2 themes.
 - `pages/{index.md,<slug>.md}` — runtime memory, exploded from promoted.md by pages.py. Loaded into sessions via @-include in CLAUDE.md.
-- `staging.md` — ad-hoc inbox written by the `/memory-add` skill. Drained into the next weekly UPDATE round (step 3) as `[?]` bullets, then truncated in step 6.
+- `staging.md` — ad-hoc inbox written by the `/memory-add` skill. Drained into the next weekly UPDATE round for triage.
 - `pending.md`, `cleaned.md`, `rejected.md`, `distilled/*`, `distill-history.md` — pipeline artifacts. Consulted only during the build pipeline.
 - `pitfalls.md` — routing table for fast recall on pitfall triggers, extracted from promoted.py.
 
@@ -29,6 +29,8 @@ Pipeline (parallelize via subagents where volume warrants):
 KEEP: user feedback or conventions against AI defaults, user corrected AI mistakes that likely violate again, stucking errors or costly corrections, repeatitive trial and errors, common pitfalls, repatitive friction point collabrate with user, user feel confused or angry, reusable repeatitive workflows, hard env facts (working projects, reusable utilities, available tools, services, API endpoints, crontab, hardware, identity), durable project knowledges, lessons while building projects, user asked "remember" a thing survives long-term, cross-project recurrence ≥2.
 
 DROP: in-flight project state, plan on paper, hypotheses, reverted changes, AI defaults, narrow empirical findings, context easily obtained from Read/rg/Explore, volatile project-internal mechanics, project file citations, temporary files, opinionated speculations, claims too narrow to justify always-loaded cost.
+
+Name-stripping test for "narrow empirical findings": if a bullet names a single experiment / feature / label / model, strip the names. If a universal mechanism survives → promote the generalized form. If not → drop; the empirical result is a one-off note, not always-loaded routing.
 
 Bias FALSE NEGATIVES > false positives — promoted memory pollutes every future Claude session. Target ~40–70 nuggets per week. Head to BUILD INDEX after promoted.md creation.
 
@@ -85,6 +87,12 @@ Incremental update of ~/.claude/memory/. Same KEEP/DROP rules and FALSE-NEGATIVE
      - Truncate `~/.claude/memory/staging.md` to empty.
      - Then run pages.py.
 
+  7. BUILD PITFALLS:
+     - Walk every new [+] bullet just promoted.
+     - For each with tag `foot-gun`, `costly-error`, or `user-correction`: check if `pitfalls.md` already has a matching trigger; insert if missing, reword if drifted.
+     - Edit `pitfalls.md` directly — no script. Trigger form: "About to X → mitigation."
+     - Cap at ~50 entries; demote stale triggers before adding new ones.
+
 ## CLEAN INSTRUCTION
 
 Audit ~/.claude/memory/promoted.md and prune entries matching any of:
@@ -128,9 +136,9 @@ First-time setup: add `@memory/pages/index.md` to ~/.claude/CLAUDE.md (path is r
 
 After each distill action, append distill-history.md with local timestamp [YYYY-MM-DD]T[HH:MM]+08:00.
 
-After index build, heads to PITFALLS PROJECTION.
+After index build, heads to BUILD PITFALLS.
 
-### PITFALL TRIGGERS
+### BUILD PITFALLS
 
 `~/.claude/memory/pitfalls.md` is a flat catalog of `TRIGGER → mitigation` one-liners for fast pre-action recall, loaded into every session via @-include in CLAUDE.md.
 
@@ -152,9 +160,20 @@ Format: `- TRIGGER → mitigation.`
 
 Self-audit (heuristic, not tag-gated): walk promoted.md and judge each bullet — if it warrants a pre-action trigger entry in the routing table (typical signals: mistake-correction pattern, recurring AI default that backfires, irreversible foot-gun), check whether `pitfalls.md` already carries a matching trigger; insert if missing, reword if drifted. Tags like `foot-gun` / `costly-error` / `user-correction` are hints, not gates — promote based on whether a future Claude would benefit from PAUSE-before-action recall.
 
-Cap at ~50 entries. Beyond that, demote stale or rarely-fired triggers — move details to memory pages, shorten the projection line, or drop entirely.
+Prune triage — walk every existing entry and assign ONE of FOUR dispositions:
 
-Quarterly review: audit `pitfalls.md` for entries whose source claim in promoted.md has changed, been removed, or no longer applies. Re-sync rather than letting the projection drift.
+- **KEEP** verbatim — action-blocking guardrail, mitigation non-intuitive, mechanism universal.
+- **GENERALIZE in place** — match-moment is real and recurring, but trigger/mitigation names a specific feature/label/experiment that won't recur as-named. Strip the names so the universal mechanism remains. If no kernel survives stripping → DROP.
+- **DEMOTE to pages** — entry teaches a fact / methodology / domain identity rather than blocking an action ("X is unreliable", "Y is mathematically equivalent to Z"). Append to the matching `## H2` in `promoted.md`, rerun `pages.py`, remove from pitfalls.md.
+- **DROP** — entry matches any of:
+  1. **Duplicate of always-loaded context** — system prompt / `~/.claude/CLAUDE.md` / `~/CLAUDE.md` / tool description already states the same rule. Pitfalls.md should not echo what every session already sees.
+  2. **Self-correcting error** — the mistake produces an immediate, unambiguous error (CLI flag rejected, missing-arg) that the agent reads and retries from. No pre-action PAUSE saves time.
+  3. **Single-experiment empirical** — names a one-off experiment/feature/label/model and the generalize-in-place test fails (no kernel survives stripping).
+  4. **Source-claim drift** — underlying promoted.md claim has been edited, removed, superseded, or no longer applies.
+
+Section breadth, domain specificity, and single-fire history are NOT evidence for dropping — only the four criteria above are.
+
+Cap at ~50 entries. Beyond that, prefer GENERALIZE / DEMOTE over outright DROP to preserve the lesson trail.
 
 ## SCRIPTS TO USE
 
@@ -165,3 +184,11 @@ Quarterly review: audit `pitfalls.md` for entries whose source claim in promoted
 ## WEEKLY ROUTINE
 
 Suggest the user to run UPDATE + AUDIT + CLEAN weekly by saying "weekly memory distill".
+
+Self-check before distill completion claim:
+
+- [ ] UPDATE INSTRUCTION
+- [ ] BUILD INDEX
+- [ ] BUILD PITFALLS
+- [ ] AUDIT INSTRUCTION (optional)
+- [ ] CLEAN INSTRUCTION (optional)

@@ -739,6 +739,62 @@ assert_silent cache-keepalive-hint '{"tool_name":"Bash","tool_input":{"command":
 # Subagent session_id (agent-* prefix): silent even on backgrounded Bash.
 assert_silent cache-keepalive-hint '{"session_id":"agent-deadbeef1234","tool_name":"Bash","tool_input":{"run_in_background":true,"command":"sleep 60"}}'
 
+# track-sent-file: write a plain file:// URL to a per-session state file
+# after SendUserFile (read by the Claude Code statusline renderer). Host comes
+# from SSH_CONNECTION when set (file://user@ip/path) and is omitted otherwise
+# (file:///path). Always silent on hook stdout (URL goes to disk, not Claude's
+# context).
+assert_silent track-sent-file '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+assert_silent track-sent-file '{"tool_name":"SendUserFile","tool_input":{"files":[],"status":"normal"}}'
+assert_silent track-sent-file '{"tool_name":"SendUserFile","tool_input":{"files":["/tmp/notes.txt"],"status":"normal"}}'
+assert_silent track-sent-file '{"tool_name":"SendUserFile","tool_input":{"files":["/tmp/does-not-exist.png"],"status":"normal"}}'
+
+# track-sent-file: with a real file + session_id, state file is written
+# containing the URL. Probe by creating a temp file and asserting state contents.
+_sis_tmp=$(mktemp --suffix=.png)
+_sis_sid="sis-test-$$"
+_sis_state="/tmp/claude-${UID}-state/last-file-url/${_sis_sid}"
+rm -f "$_sis_state"
+# Localhost case: no SSH_CONNECTION → hostless file:///path
+env -u SSH_CONNECTION bash ~/.claude/hooks/track-sent-file.sh <<< \
+  "{\"session_id\":\"${_sis_sid}\",\"tool_name\":\"SendUserFile\",\"tool_input\":{\"files\":[\"${_sis_tmp}\"],\"status\":\"normal\"}}" \
+  >/dev/null 2>&1
+if [ -f "$_sis_state" ] && [ "$(cat "$_sis_state")" = "file://${_sis_tmp}" ]; then
+  echo "OK:   track-sent-file state file localhost ($_sis_state)"
+else
+  echo "FAIL: track-sent-file localhost did not write expected hostless URL"
+  echo "  got: $(cat "$_sis_state" 2>&1)"
+  fail=1
+fi
+# SSH case: SSH_CONNECTION set → file://user@ip/path
+rm -f "$_sis_state"
+SSH_CONNECTION="10.0.0.1 5000 10.0.0.2 22" bash ~/.claude/hooks/track-sent-file.sh <<< \
+  "{\"session_id\":\"${_sis_sid}\",\"tool_name\":\"SendUserFile\",\"tool_input\":{\"files\":[\"${_sis_tmp}\"],\"status\":\"normal\"}}" \
+  >/dev/null 2>&1
+if [ -f "$_sis_state" ] && [ "$(cat "$_sis_state")" = "file://$(whoami)@10.0.0.2${_sis_tmp}" ]; then
+  echo "OK:   track-sent-file state file ssh"
+else
+  echo "FAIL: track-sent-file ssh did not write expected user@ip URL"
+  echo "  got: $(cat "$_sis_state" 2>&1)"
+  fail=1
+fi
+# Loopback SSH case: ssh localhost → still treated as local, hostless URL
+# (ssh'ing back via bate@::1 is a no-op round-trip; opener should treat as local)
+for _sis_loop_ip in "::1" "127.0.0.1"; do
+  rm -f "$_sis_state"
+  SSH_CONNECTION="${_sis_loop_ip} 5000 ${_sis_loop_ip} 22" bash ~/.claude/hooks/track-sent-file.sh <<< \
+    "{\"session_id\":\"${_sis_sid}\",\"tool_name\":\"SendUserFile\",\"tool_input\":{\"files\":[\"${_sis_tmp}\"],\"status\":\"normal\"}}" \
+    >/dev/null 2>&1
+  if [ -f "$_sis_state" ] && [ "$(cat "$_sis_state")" = "file://${_sis_tmp}" ]; then
+    echo "OK:   track-sent-file state file ssh-loopback ${_sis_loop_ip}"
+  else
+    echo "FAIL: track-sent-file ssh-loopback ${_sis_loop_ip} did not write hostless URL"
+    echo "  got: $(cat "$_sis_state" 2>&1)"
+    fail=1
+  fi
+done
+rm -f "$_sis_state" "$_sis_tmp"
+
 # prefer-uv-run: fires on bare python3; silent when uv run is already used
 assert_context prefer-uv-run '{"tool_input":{"command":"python3 foo.py"}}' "uv run python"
 assert_silent prefer-uv-run '{"tool_input":{"command":"uv run python foo.py"}}'
@@ -800,7 +856,6 @@ rm -f "/tmp/claude-${UID}-state/git-status/$sid"
 SILENT_ENV=(
   SYSLOAD_CPU_FACTOR=999
   SYSLOAD_MEM_PCT=101
-  SYSLOAD_SWAP_PCT=101
   SYSLOAD_DISK_PCT=101
   SYSLOAD_GPU_UTIL=101
   SYSLOAD_GPU_MEM=101
@@ -808,7 +863,6 @@ SILENT_ENV=(
 TRIP_ENV=(
   SYSLOAD_CPU_FACTOR=999
   SYSLOAD_MEM_PCT=101
-  SYSLOAD_SWAP_PCT=101
   SYSLOAD_DISK_PCT=0
   SYSLOAD_GPU_UTIL=101
   SYSLOAD_GPU_MEM=101
@@ -828,9 +882,9 @@ out=$(env "${SILENT_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sy
 
 # Force DISK trip: %used from `df -P /` is always >0 on a mounted root
 # (filesystem metadata + journal alone exceed 1%), so DISK_PCT=0 reliably
-# trips. Avoid the MEM/SWAP paths for forcing — both compute %used via
+# trips. Avoid the MEM path for forcing — its %used is computed via
 # integer division, which floors to 0 on a high-RAM box (≥200 GB) when
-# absolute usage is <1% of total, making those tests non-deterministic on
+# absolute usage is <1% of total, making that test non-deterministic on
 # lightly-loaded CI runners.
 out=$(env "${TRIP_ENV[@]}" bash ~/.claude/hooks/inject-system-load.sh <<< "$sysl_in")
 echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("DISK")' > "$test_out" \
@@ -869,161 +923,51 @@ echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("DISK")' >
 
 rm -f "$sysl_cache"
 
-# recall-reminder: silent for first (interval-1) turns, fires on the
-# interval-th turn, then resets and stays silent again. Counter is per
-# session_id under /tmp/claude-${UID}-state/recall-reminder/.
-rr_sid="rr-$$"
-rr_cache="/tmp/claude-${UID}-state/recall-reminder/$rr_sid"
-rm -f "$rr_cache"
-rr_in=$(jq -nc --arg s "$rr_sid" '{session_id:$s}')
+# block-note-prompt: blocks /note prompts; saves text; lists on bare /note; silent otherwise.
+bn_sid="bn-$$"
+bn_notes="/tmp/claude-${UID}-state/notes/$bn_sid"
+rm -f "$bn_notes"
 
-# Interval forced to 3 so the test stays small.
-out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$rr_in")
+# Non-/note prompt → silent.
+out=$(jq -nc --arg s "$bn_sid" --arg p "hello world" '{session_id:$s,prompt:$p}' \
+      | bash ~/.claude/hooks/block-note-prompt.sh)
 [ -z "$out" ] \
-  && echo "OK:   recall-reminder silent on turn 1 (interval=3)" \
-  || { echo "FAIL: recall-reminder should be silent on turn 1: $out"; fail=1; }
+  && echo "OK:   block-note-prompt silent on non-/note prompt" \
+  || { echo "FAIL: block-note-prompt should be silent: $out"; fail=1; }
 
-out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$rr_in")
-[ -z "$out" ] \
-  && echo "OK:   recall-reminder silent on turn 2 (interval=3)" \
-  || { echo "FAIL: recall-reminder should be silent on turn 2: $out"; fail=1; }
+# /note <text> → block + save.
+out=$(jq -nc --arg s "$bn_sid" --arg p "/note buy milk" '{session_id:$s,prompt:$p}' \
+      | bash ~/.claude/hooks/block-note-prompt.sh)
+echo "$out" | jq -e '.decision == "block" and (.reason | contains("buy milk"))' > "$test_out" \
+  && echo "OK:   block-note-prompt blocks and echoes /note text" \
+  || { echo "FAIL: block-note-prompt save: $out"; fail=1; }
 
-out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$rr_in")
-echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("memory/pitfalls.md")' > "$test_out" \
-  && echo "OK:   recall-reminder fires on turn 3 (interval=3)" \
-  || { echo "FAIL: recall-reminder should fire on turn 3: $out"; fail=1; }
+# Second note → count increments.
+out=$(jq -nc --arg s "$bn_sid" --arg p "/note call dentist" '{session_id:$s,prompt:$p}' \
+      | bash ~/.claude/hooks/block-note-prompt.sh)
+echo "$out" | jq -e '.decision == "block" and (.reason | contains("#2"))' > "$test_out" \
+  && echo "OK:   block-note-prompt increments note count" \
+  || { echo "FAIL: block-note-prompt count: $out"; fail=1; }
 
-# After fire, counter should be reset → next turn silent again.
-out=$(RECALL_REMINDER_INTERVAL=3 bash ~/.claude/hooks/recall-reminder.sh <<< "$rr_in")
-[ -z "$out" ] \
-  && echo "OK:   recall-reminder silent on turn after reset" \
-  || { echo "FAIL: recall-reminder should be silent after reset: $out"; fail=1; }
+# Bare /note → list both notes.
+out=$(jq -nc --arg s "$bn_sid" --arg p "/note" '{session_id:$s,prompt:$p}' \
+      | bash ~/.claude/hooks/block-note-prompt.sh)
+echo "$out" | jq -e '.decision == "block" and (.reason | contains("buy milk")) and (.reason | contains("call dentist"))' > "$test_out" \
+  && echo "OK:   block-note-prompt lists saved notes on bare /note" \
+  || { echo "FAIL: block-note-prompt list: $out"; fail=1; }
 
-rm -f "$rr_cache"
+# Bare /note with no prior notes → "No notes yet".
+bn_empty_sid="bn-empty-$$"
+out=$(jq -nc --arg s "$bn_empty_sid" --arg p "/note" '{session_id:$s,prompt:$p}' \
+      | bash ~/.claude/hooks/block-note-prompt.sh)
+echo "$out" | jq -e '.decision == "block" and (.reason | contains("No notes"))' > "$test_out" \
+  && echo "OK:   block-note-prompt reports no notes on empty session" \
+  || { echo "FAIL: block-note-prompt empty list: $out"; fail=1; }
 
-# recall-reminder-reset: zeros the counter when Read touches a
-# memory page (incl. pitfalls.md), or when Skill invokes memory-add.
-rrr_sid="rrr-$$"
-rrr_cache="/tmp/claude-${UID}-state/recall-reminder/$rrr_sid"
-mkdir -p /tmp/claude-${UID}-state/recall-reminder
-
-# Pre-seed counter at 7 so we can observe reset to 0.
-echo 7 > "$rrr_cache"
-rrr_in=$(jq -nc --arg s "$rrr_sid" '{session_id:$s,tool_name:"Read",tool_input:{file_path:"/home/ubuntu/.claude/memory/pitfalls.md"}}')
-bash ~/.claude/hooks/recall-reminder-reset.sh <<< "$rrr_in"
-[ "$(cat "$rrr_cache")" = "0" ] \
-  && echo "OK:   recall-reminder-reset zeros on Read of pitfalls page" \
-  || { echo "FAIL: recall-reminder-reset Read pitfalls page: $(cat "$rrr_cache")"; fail=1; }
-
-echo 7 > "$rrr_cache"
-rrr_in=$(jq -nc --arg s "$rrr_sid" '{session_id:$s,tool_name:"Read",tool_input:{file_path:"/home/ubuntu/.claude/memory/pages/git-and-commits.md"}}')
-bash ~/.claude/hooks/recall-reminder-reset.sh <<< "$rrr_in"
-[ "$(cat "$rrr_cache")" = "0" ] \
-  && echo "OK:   recall-reminder-reset zeros on Read of memory page" \
-  || { echo "FAIL: recall-reminder-reset Read memory page: $(cat "$rrr_cache")"; fail=1; }
-
-# Read of unrelated file → counter untouched.
-echo 7 > "$rrr_cache"
-rrr_in=$(jq -nc --arg s "$rrr_sid" '{session_id:$s,tool_name:"Read",tool_input:{file_path:"/tmp/other.md"}}')
-bash ~/.claude/hooks/recall-reminder-reset.sh <<< "$rrr_in"
-[ "$(cat "$rrr_cache")" = "7" ] \
-  && echo "OK:   recall-reminder-reset leaves counter on Read of unrelated file" \
-  || { echo "FAIL: recall-reminder-reset Read unrelated: $(cat "$rrr_cache")"; fail=1; }
-
-# Skill invocation of memory-add → reset.
-echo 7 > "$rrr_cache"
-rrr_in=$(jq -nc --arg s "$rrr_sid" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"memory-add"}}')
-bash ~/.claude/hooks/recall-reminder-reset.sh <<< "$rrr_in"
-[ "$(cat "$rrr_cache")" = "0" ] \
-  && echo "OK:   recall-reminder-reset zeros on Skill=memory-add" \
-  || { echo "FAIL: recall-reminder-reset Skill memory-add: $(cat "$rrr_cache")"; fail=1; }
-
-# Skill invocation of unrelated skill → counter untouched.
-echo 7 > "$rrr_cache"
-rrr_in=$(jq -nc --arg s "$rrr_sid" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"read-url"}}')
-bash ~/.claude/hooks/recall-reminder-reset.sh <<< "$rrr_in"
-[ "$(cat "$rrr_cache")" = "7" ] \
-  && echo "OK:   recall-reminder-reset leaves counter on Skill=read-url" \
-  || { echo "FAIL: recall-reminder-reset Skill unrelated: $(cat "$rrr_cache")"; fail=1; }
-
-rm -f "$rrr_cache"
+rm -f "$bn_notes"
 
 echo ""
 echo "=== Skill-recall hint hooks ==="
-
-# hint-skill-frontend-design: nudge agent to load the frontend-design skill
-# before writing an HTML file. Once-per-session cache (signature: session_id).
-hsfd_sid="hsfd-$$"
-hsfd_cache="/tmp/claude-${UID}-state/skill-hint-frontend-design/$hsfd_sid"
-rm -f "$hsfd_cache"
-
-# 1. .html first fire → emit hint
-out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid" '{session_id:$s,tool_input:{file_path:"/tmp/x.html",content:"<html/>"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-echo "$out" | jq -e '(.hookSpecificOutput.permissionDecision | not) and (.hookSpecificOutput.additionalContext | contains("frontend-design"))' > "$test_out" \
-  && echo "OK:   hint-skill-frontend-design fires on first .html write" \
-  || { echo "FAIL: hint-skill-frontend-design first .html: $out"; fail=1; }
-
-# 2. .html second fire same session → cache hit, silent
-out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid" '{session_id:$s,tool_input:{file_path:"/tmp/y.html",content:"<html/>"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-[ -z "$out" ] \
-  && echo "OK:   hint-skill-frontend-design silent on repeat in same session" \
-  || { echo "FAIL: hint-skill-frontend-design should be silent on repeat: $out"; fail=1; }
-
-# 3. Non-html extension → silent
-out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid" '{session_id:$s,tool_input:{file_path:"/tmp/x.py",content:"x=1"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-[ -z "$out" ] \
-  && echo "OK:   hint-skill-frontend-design silent on .py write" \
-  || { echo "FAIL: hint-skill-frontend-design wrong-extension: $out"; fail=1; }
-
-# 4. Different session → hint emitted again (cache is per-session)
-hsfd_sid2="hsfd2-$$"
-hsfd_cache2="/tmp/claude-${UID}-state/skill-hint-frontend-design/$hsfd_sid2"
-rm -f "$hsfd_cache2"
-out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid2" '{session_id:$s,tool_input:{file_path:"/tmp/z.html",content:"<html/>"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("frontend-design")' > "$test_out" \
-  && echo "OK:   hint-skill-frontend-design re-fires for new session_id" \
-  || { echo "FAIL: hint-skill-frontend-design new session: $out"; fail=1; }
-
-# 5. .htm extension also covered
-hsfd_sid3="hsfd3-$$"
-out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid3" '{session_id:$s,tool_input:{file_path:"/tmp/legacy.htm",content:"<html/>"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("frontend-design")' > "$test_out" \
-  && echo "OK:   hint-skill-frontend-design fires on .htm too" \
-  || { echo "FAIL: hint-skill-frontend-design .htm: $out"; fail=1; }
-
-rm -f "$hsfd_cache" "$hsfd_cache2" "/tmp/claude-${UID}-state/skill-hint-frontend-design/$hsfd_sid3"
-
-# Subagent skip: agent-* session_id silences the hint.
-out=$(printf '%s' "$(jq -nc '{session_id:"agent-deadbeef",tool_input:{file_path:"/tmp/x.html",content:"<html/>"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-[ -z "$out" ] \
-  && echo "OK:   hint-skill-frontend-design silent in subagent (agent-* sid)" \
-  || { echo "FAIL: hint-skill-frontend-design should skip subagent: $out"; fail=1; }
-
-# Compact-reset: PostCompact bump re-arms the one-shot post-compact.
-hsfd_sid_cmp="hsfd-cmp-$$"
-rm -rf /tmp/claude-${UID}-state/skill-hint-frontend-design /tmp/claude-${UID}-state/compact-events
-out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid_cmp" '{session_id:$s,tool_input:{file_path:"/tmp/a.html",content:"<html/>"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("frontend-design")' > "$test_out" \
-  && echo "OK:   hint-skill-frontend-design first fire (compact-rearm setup)" \
-  || { echo "FAIL: hint-skill-frontend-design first fire for compact test: $out"; fail=1; }
-out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid_cmp" '{session_id:$s,tool_input:{file_path:"/tmp/b.html",content:"<html/>"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-[ -z "$out" ] && echo "OK:   hint-skill-frontend-design silent before compact" \
-  || { echo "FAIL: hint-skill-frontend-design pre-compact silent: $out"; fail=1; }
-printf '{"session_id":"%s"}' "$hsfd_sid_cmp" | bash ~/.claude/hooks/compact-bump.sh
-out=$(printf '%s' "$(jq -nc --arg s "$hsfd_sid_cmp" '{session_id:$s,tool_input:{file_path:"/tmp/c.html",content:"<html/>"}}')" \
-       | bash ~/.claude/hooks/hint-skill-frontend-design.sh)
-echo "$out" | jq -e '.hookSpecificOutput.additionalContext | contains("frontend-design")' > "$test_out" \
-  && echo "OK:   hint-skill-frontend-design re-fires after compact-bump" \
-  || { echo "FAIL: hint-skill-frontend-design should re-fire after compact: $out"; fail=1; }
-rm -rf /tmp/claude-${UID}-state/skill-hint-frontend-design /tmp/claude-${UID}-state/compact-events
 
 
 # hint-agent-claude-code-guide: nudge the agent to consult the
@@ -1355,104 +1299,176 @@ assert_silent compact-bump '{}'
 
 rm -rf /tmp/claude-${UID}-state/compact-events
 
-# hint-skill-pueue: block pueue commands until /pueue skill loaded.
+# hint-skill-babysit: block babysit commands until /babysit skill loaded.
 # Denies once per session per compact; skill load unlocks; subagents pass.
 hsp_sid="hsp-$$"
-rm -rf /tmp/claude-${UID}-state/pueue-skill-loaded /tmp/claude-${UID}-state/pueue-skill-hint /tmp/claude-${UID}-state/compact-events
+rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint /tmp/claude-${UID}-state/compact-events
 
-# 1. First pueue command → deny with /pueue mention
-out=$(jq -nc --arg s "$hsp_sid" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue add -- echo hi"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
-echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | contains("/pueue"))' > "$test_out" \
-  && echo "OK:   hint-skill-pueue denies first pueue command" \
-  || { echo "FAIL: hint-skill-pueue first pueue: $out"; fail=1; }
+# 1. First babysit command → deny with /babysit mention
+out=$(jq -nc --arg s "$hsp_sid" '{session_id:$s,tool_name:"Bash",tool_input:{command:"babysit add -- echo hi"}}' \
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
+echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | contains("/babysit"))' > "$test_out" \
+  && echo "OK:   hint-skill-babysit denies first babysit command" \
+  || { echo "FAIL: hint-skill-babysit first babysit: $out"; fail=1; }
 
-# 2. Second pueue command same session (hint already given) → one-shot, allow
-out=$(jq -nc --arg s "$hsp_sid" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue status"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+# 2. Second babysit command same session (hint already given) → one-shot, allow
+out=$(jq -nc --arg s "$hsp_sid" '{session_id:$s,tool_name:"Bash",tool_input:{command:"babysit status"}}' \
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
 [ -z "$out" ] \
-  && echo "OK:   hint-skill-pueue silent on repeat (one-shot)" \
-  || { echo "FAIL: hint-skill-pueue should be silent after one-shot: $out"; fail=1; }
+  && echo "OK:   hint-skill-babysit silent on repeat (one-shot)" \
+  || { echo "FAIL: hint-skill-babysit should be silent after one-shot: $out"; fail=1; }
 
-# 3. Non-pueue command → always silent
+# 3. Non-babysit command → always silent
 out=$(jq -nc --arg s "$hsp_sid" '{session_id:$s,tool_name:"Bash",tool_input:{command:"echo hello"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
 [ -z "$out" ] \
-  && echo "OK:   hint-skill-pueue silent for non-pueue command" \
-  || { echo "FAIL: hint-skill-pueue should ignore non-pueue: $out"; fail=1; }
+  && echo "OK:   hint-skill-babysit silent for non-babysit command" \
+  || { echo "FAIL: hint-skill-babysit should ignore non-babysit: $out"; fail=1; }
 
 # 4. Subagent (agent-* sid) → always silent
-out=$(jq -nc '{session_id:"agent-deadbeef",tool_name:"Bash",tool_input:{command:"pueue add -- foo"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+out=$(jq -nc '{session_id:"agent-deadbeef",tool_name:"Bash",tool_input:{command:"babysit add -- foo"}}' \
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
 [ -z "$out" ] \
-  && echo "OK:   hint-skill-pueue silent for subagent" \
-  || { echo "FAIL: hint-skill-pueue should skip subagent: $out"; fail=1; }
+  && echo "OK:   hint-skill-babysit silent for subagent" \
+  || { echo "FAIL: hint-skill-babysit should skip subagent: $out"; fail=1; }
 
-# 5. Skill-unlock: track-pueue-skill-load sets flag → hint hook allows
+# 5. Skill-unlock: track-babysit-skill-load sets flag → hint hook allows
 hsp_sid2="hsp2-$$"
-rm -rf /tmp/claude-${UID}-state/pueue-skill-loaded /tmp/claude-${UID}-state/pueue-skill-hint
-jq -nc --arg s "$hsp_sid2" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"pueue"}}' \
-  | bash ~/.claude/hooks/track-pueue-skill-load.sh
-out=$(jq -nc --arg s "$hsp_sid2" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue status"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint
+jq -nc --arg s "$hsp_sid2" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"babysit"}}' \
+  | bash ~/.claude/hooks/track-babysit-skill-load.sh
+out=$(jq -nc --arg s "$hsp_sid2" '{session_id:$s,tool_name:"Bash",tool_input:{command:"babysit status"}}' \
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
 [ -z "$out" ] \
-  && echo "OK:   hint-skill-pueue allows after skill loaded" \
-  || { echo "FAIL: hint-skill-pueue should allow once skill loaded: $out"; fail=1; }
+  && echo "OK:   hint-skill-babysit allows after skill loaded" \
+  || { echo "FAIL: hint-skill-babysit should allow once skill loaded: $out"; fail=1; }
 
-# 6. track-pueue-skill-load ignores non-pueue skills
+# 6. track-babysit-skill-load ignores non-babysit skills
 hsp_sid3="hsp3-$$"
-rm -rf /tmp/claude-${UID}-state/pueue-skill-loaded /tmp/claude-${UID}-state/pueue-skill-hint
+rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint
 jq -nc --arg s "$hsp_sid3" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"jina-ai"}}' \
-  | bash ~/.claude/hooks/track-pueue-skill-load.sh
-[ ! -f "/tmp/claude-${UID}-state/pueue-skill-loaded/$hsp_sid3" ] \
-  && echo "OK:   track-pueue-skill-load ignores non-pueue skill" \
-  || { echo "FAIL: track-pueue-skill-load should not set flag for other skills"; fail=1; }
+  | bash ~/.claude/hooks/track-babysit-skill-load.sh
+[ ! -f "/tmp/claude-${UID}-state/babysit-skill-loaded/$hsp_sid3" ] \
+  && echo "OK:   track-babysit-skill-load ignores non-babysit skill" \
+  || { echo "FAIL: track-babysit-skill-load should not set flag for other skills"; fail=1; }
 
 # 7. Compact re-arm: deny → silent → compact-bump → deny again
 hsp_sid4="hsp4-$$"
-rm -rf /tmp/claude-${UID}-state/pueue-skill-loaded /tmp/claude-${UID}-state/pueue-skill-hint /tmp/claude-${UID}-state/compact-events
-out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue add -- echo"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint /tmp/claude-${UID}-state/compact-events
+out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"babysit add -- echo"}}' \
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
 echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' > "$test_out" \
-  && echo "OK:   hint-skill-pueue first deny (compact-rearm setup)" \
-  || { echo "FAIL: hint-skill-pueue first deny for compact test: $out"; fail=1; }
-out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue status"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
-[ -z "$out" ] && echo "OK:   hint-skill-pueue silent before compact" \
-  || { echo "FAIL: hint-skill-pueue pre-compact silent: $out"; fail=1; }
+  && echo "OK:   hint-skill-babysit first deny (compact-rearm setup)" \
+  || { echo "FAIL: hint-skill-babysit first deny for compact test: $out"; fail=1; }
+out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"babysit status"}}' \
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
+[ -z "$out" ] && echo "OK:   hint-skill-babysit silent before compact" \
+  || { echo "FAIL: hint-skill-babysit pre-compact silent: $out"; fail=1; }
 printf '{"session_id":"%s"}' "$hsp_sid4" | bash ~/.claude/hooks/compact-bump.sh
-out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue add -- echo"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+out=$(jq -nc --arg s "$hsp_sid4" '{session_id:$s,tool_name:"Bash",tool_input:{command:"babysit add -- echo"}}' \
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
 echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' > "$test_out" \
-  && echo "OK:   hint-skill-pueue re-denies after compact-bump" \
-  || { echo "FAIL: hint-skill-pueue should re-deny after compact: $out"; fail=1; }
+  && echo "OK:   hint-skill-babysit re-denies after compact-bump" \
+  || { echo "FAIL: hint-skill-babysit should re-deny after compact: $out"; fail=1; }
 
 # 8. gen-seen sync: skill loaded after compact → pre-bash hook doesn't wipe flag
 hsp_sid5="hsp5-$$"
-rm -rf /tmp/claude-${UID}-state/pueue-skill-loaded /tmp/claude-${UID}-state/pueue-skill-hint /tmp/claude-${UID}-state/compact-events
+rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint /tmp/claude-${UID}-state/compact-events
 printf '{"session_id":"%s"}' "$hsp_sid5" | bash ~/.claude/hooks/compact-bump.sh
-jq -nc --arg s "$hsp_sid5" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"pueue"}}' \
-  | bash ~/.claude/hooks/track-pueue-skill-load.sh
-out=$(jq -nc --arg s "$hsp_sid5" '{session_id:$s,tool_name:"Bash",tool_input:{command:"pueue status"}}' \
-       | bash ~/.claude/hooks/hint-skill-pueue.sh)
+jq -nc --arg s "$hsp_sid5" '{session_id:$s,tool_name:"Skill",tool_input:{skill:"babysit"}}' \
+  | bash ~/.claude/hooks/track-babysit-skill-load.sh
+out=$(jq -nc --arg s "$hsp_sid5" '{session_id:$s,tool_name:"Bash",tool_input:{command:"babysit status"}}' \
+       | bash ~/.claude/hooks/hint-skill-babysit.sh)
 [ -z "$out" ] \
-  && echo "OK:   hint-skill-pueue allows when skill loaded after compact" \
-  || { echo "FAIL: hint-skill-pueue should not wipe skill flag set post-compact: $out"; fail=1; }
+  && echo "OK:   hint-skill-babysit allows when skill loaded after compact" \
+  || { echo "FAIL: hint-skill-babysit should not wipe skill flag set post-compact: $out"; fail=1; }
 
-rm -rf /tmp/claude-${UID}-state/pueue-skill-loaded /tmp/claude-${UID}-state/pueue-skill-hint /tmp/claude-${UID}-state/compact-events
+rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint /tmp/claude-${UID}-state/compact-events
+
+# hint-skill-agent-browser: soft one-shot advisory — advertises the
+# /agent-browser skill when Claude drives a headless Chrome/Chromium binary by
+# hand. Non-blocking (additionalContext, no permissionDecision). Two-signal
+# discriminator: chrome-family binary + --headless, OR a *-headless-shell
+# binary alone. Skips when agent-browser is already in use, and subagents.
+echo ""
+echo "=== hint-skill-agent-browser ==="
+ab_dir=/tmp/claude-${UID}-state/skill-hint-agent-browser
+ab_msg="agent-browser skill"
+rm -rf "$ab_dir" /tmp/claude-${UID}-state/compact-events
+
+# 1. First fire: `chromium --headless ...` → advisory, no permissionDecision
+ab_sid="ab-$$"
+out=$(jq -nc --arg s "$ab_sid" --arg c "chromium --headless --screenshot=/tmp/s.png https://x" '{session_id:$s,tool_input:{command:$c}}' \
+       | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+echo "$out" | jq -e "(.hookSpecificOutput.permissionDecision | not) and (.hookSpecificOutput.additionalContext | contains(\"$ab_msg\"))" > "$test_out" \
+  && echo "OK:   hint-skill-agent-browser fires on chromium --headless" \
+  || { echo "FAIL: hint-skill-agent-browser first fire: $out"; fail=1; }
+
+# 2. Repeat same session → one-shot lock, silent
+out=$(jq -nc --arg s "$ab_sid" --arg c "google-chrome --headless --dump-dom https://y" '{session_id:$s,tool_input:{command:$c}}' \
+       | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-agent-browser silent on repeat in same session" \
+  || { echo "FAIL: hint-skill-agent-browser should be silent on repeat: $out"; fail=1; }
+
+# 3. New session → re-fires; covers path prefix + --headless=new + wrapper
+for variant in "/usr/bin/chromium --headless=new --print-to-pdf=/tmp/p.pdf https://x" \
+               "timeout 30 chromium --headless https://x" \
+               "chrome-headless-shell --remote-debugging-port=9222"; do
+  ab_sid_v="ab-v-$$-$RANDOM"
+  out=$(jq -nc --arg s "$ab_sid_v" --arg c "$variant" '{session_id:$s,tool_input:{command:$c}}' \
+         | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+  echo "$out" | jq -e ".hookSpecificOutput.additionalContext | contains(\"$ab_msg\")" > "$test_out" \
+    && echo "OK:   hint-skill-agent-browser fires on: $variant" \
+    || { echo "FAIL: hint-skill-agent-browser should fire on [$variant]: $out"; fail=1; }
+done
+
+# 4. Non-trigger → silent. Headed chromium (no --headless), agent-browser
+# already in use, --headless on a non-chrome tool, and chromedriver substring.
+for safe in "chromium https://example.com" \
+            "agent-browser open https://x && agent-browser snapshot -i" \
+            "mytool --headless run" \
+            "echo building chromedriver"; do
+  ab_sid_s="ab-safe-$$-$RANDOM"
+  out=$(jq -nc --arg s "$ab_sid_s" --arg c "$safe" '{session_id:$s,tool_input:{command:$c}}' \
+         | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+  [ -z "$out" ] \
+    && echo "OK:   hint-skill-agent-browser silent on '$safe'" \
+    || { echo "FAIL: hint-skill-agent-browser should be silent on '$safe': $out"; fail=1; }
+done
+
+# 5. Subagent (agent-* session_id) → silent even on a trigger command
+out=$(jq -nc --arg c "chromium --headless --screenshot https://x" '{session_id:"agent-deadbeef",tool_input:{command:$c}}' \
+       | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+[ -z "$out" ] \
+  && echo "OK:   hint-skill-agent-browser skips subagents" \
+  || { echo "FAIL: hint-skill-agent-browser should skip subagents: $out"; fail=1; }
+
+# 6. Compact-reset: PostCompact bump re-arms the one-shot.
+ab_sid_c="ab-cmp-$$"
+rm -rf "$ab_dir" /tmp/claude-${UID}-state/compact-events
+jq -nc --arg s "$ab_sid_c" --arg c "chromium --headless https://x" '{session_id:$s,tool_input:{command:$c}}' \
+  | bash ~/.claude/hooks/hint-skill-agent-browser.sh > "$test_out"
+printf '{"session_id":"%s"}' "$ab_sid_c" | bash ~/.claude/hooks/compact-bump.sh
+out=$(jq -nc --arg s "$ab_sid_c" --arg c "chromium --headless https://x" '{session_id:$s,tool_input:{command:$c}}' \
+       | bash ~/.claude/hooks/hint-skill-agent-browser.sh)
+echo "$out" | jq -e ".hookSpecificOutput.additionalContext | contains(\"$ab_msg\")" > "$test_out" \
+  && echo "OK:   hint-skill-agent-browser re-fires after compact-bump" \
+  || { echo "FAIL: hint-skill-agent-browser should re-fire after compact: $out"; fail=1; }
+rm -rf "$ab_dir" /tmp/claude-${UID}-state/compact-events
 
 # 9. Anchor forms: sudo, &&, bash -c wrapper → all deny
 hsp_sid6="hsp6-$$"
-rm -rf /tmp/claude-${UID}-state/pueue-skill-loaded /tmp/claude-${UID}-state/pueue-skill-hint
-for cmd in "sudo pueue status" "git status && pueue add -- foo" "bash -c 'pueue status'"; do
+rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint
+for cmd in "sudo babysit status" "git status && babysit add -- foo" "bash -c 'babysit status'"; do
   out=$(jq -nc --arg s "$hsp_sid6" --arg c "$cmd" '{session_id:$s,tool_name:"Bash",tool_input:{command:$c}}' \
-         | bash ~/.claude/hooks/hint-skill-pueue.sh)
+         | bash ~/.claude/hooks/hint-skill-babysit.sh)
   echo "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' > "$test_out" \
-    && echo "OK:   hint-skill-pueue denies anchor form: $cmd" \
-    || { echo "FAIL: hint-skill-pueue should deny anchor form [$cmd]: $out"; fail=1; }
-  rm -f "/tmp/claude-${UID}-state/pueue-skill-hint/$hsp_sid6"  # reset one-shot so next form triggers
+    && echo "OK:   hint-skill-babysit denies anchor form: $cmd" \
+    || { echo "FAIL: hint-skill-babysit should deny anchor form [$cmd]: $out"; fail=1; }
+  rm -f "/tmp/claude-${UID}-state/babysit-skill-hint/$hsp_sid6"  # reset one-shot so next form triggers
 done
-rm -rf /tmp/claude-${UID}-state/pueue-skill-loaded /tmp/claude-${UID}-state/pueue-skill-hint /tmp/claude-${UID}-state/compact-events
+rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint /tmp/claude-${UID}-state/compact-events
 
 echo ""
 rm -f "$test_out"

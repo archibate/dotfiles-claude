@@ -17,6 +17,7 @@ Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1 uv run` or `u
 - **Skills are mandatory** — Load ALL matching skills via `Skill` tool before starting ANY task, even if topic seems familiar. Skills define guardrails and workflows — not just reference docs. Never skip because "I already know it."
 - **Skills recall rate** — Bias to load more skills on doubt. Unused skill costs seconds; missed skill violates guardrails and costs user.
 - **Bash output is internal** — Goes to the agent, never the user. Don't truncate (`| head`, `| tail`, `2>/dev/null`); the harness already saves large output and previews the head.
+- **Parallel tool calls** — Batch ONLY independent calls; keep width ≤4. Never batch calls with data dependencies: every call's arguments freeze before any result returns, so a call needing a prior call's output can't see it. One failure cancels the whole batch → cascade. Profit is fewer round-trips (latency), not concurrency — Bash executes serially regardless; never worth freezing args before a needed result exists.
 - **Tables auto-render** — Skip alignment padding; escape literal `|` in cells.
 - **Prior responses collapse** — User sees only the last final response. Each response must be self-contained.
 

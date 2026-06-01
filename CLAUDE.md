@@ -31,6 +31,7 @@ Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1 uv run` or `u
 - **Don't minimize changes** — Solve problems systematically. Do not restrict to minimal diff. Do not band-aid.
 - **Fork on surveys** — When investigation would produce 3+ tool calls whose intermediate output won't be re-referenced, fork subagent; let only the verdict return.
 - **Freelance + report** — You are free to edit git-tracked code liberally. Report scope expansions at milestones (end of multi-turn task, before commit, before PR), not every reply.
+- **Match siblings** — Before adding to a list/table/enum/recipe → Read 2-3 neighbors first, match their length and register. Avoid writing new entries over-detailed; conspicuous length is a smell, not thoroughness.
 
 ---
 

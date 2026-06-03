@@ -299,6 +299,22 @@ def spawn_under_scope(
         "bash", "-c", command,
     ]
 
+    # Default thread-pool envs to the declared CPU budget so libraries that
+    # otherwise spawn one thread per host core (Polars, OpenMP/LightGBM, BLAS)
+    # stay within estimated_cpu_cores — otherwise their oversubscription trips
+    # the daemon's sustained-CPU soft-kill on a many-core host. Coupled to the
+    # estimate (the sustained budget), not the 3× cgroup burst headroom. Only
+    # setdefault: a user's inline `POLARS_MAX_THREADS=8 cmd` prefix still wins
+    # at exec, and an exported value in the daemon env is preserved.
+    env = _systemd_env()
+    if estimated_cpu_cores:
+        n_threads = str(max(1, int(round(estimated_cpu_cores))))
+        for _var in (
+            "POLARS_MAX_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+            "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS",
+        ):
+            env.setdefault(_var, n_threads)
+
     log_path.parent.mkdir(parents=True, exist_ok=True)
     fp = open(log_path, "ab", buffering=0)
     proc = subprocess.Popen(
@@ -307,7 +323,7 @@ def spawn_under_scope(
         stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
         start_new_session=True,
-        env=_systemd_env(),
+        env=env,
         close_fds=True,
         cwd=cwd,
         preexec_fn=lambda: os.nice(10),  # demote task vs monitor

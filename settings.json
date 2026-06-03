@@ -19,6 +19,9 @@
     "AUDIT_CODEX_EFFORT": "medium",
     "AUDIT_CLAUDE_MODEL": "haiku",
     "AUDIT_CLAUDE_EFFORT": "high",
+    "ADVISOR_CODEX": "1",
+    "ADVISOR_CODEX_MODEL": "gpt-5.5",
+    "ADVISOR_CODEX_EFFORT": "high",
     "CAVEMAN_DEFAULT_MODE": "ultra"
   },
   "permissions": {
@@ -504,5 +507,6 @@
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "advisorModel": "opus"
 }

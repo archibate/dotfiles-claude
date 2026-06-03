@@ -1449,6 +1449,18 @@ for cmd in "sudo babysit status" "git status && babysit add -- foo" "bash -c 'ba
 done
 rm -rf /tmp/claude-${UID}-state/babysit-skill-loaded /tmp/claude-${UID}-state/babysit-skill-hint /tmp/claude-${UID}-state/compact-events
 
+# 10. codex-advisor skill script: deterministic, network-free paths. The live
+# gpt-5.5 consult is integration-tested in a fresh session, not here.
+cadv=~/.claude/skills/codex-advisor/scripts/consult.py
+out=$(ADVISOR_CODEX=0 "$cadv" 2>&1)
+echo "$out" | grep -q "disabled" \
+  && echo "OK:   codex-advisor honors ADVISOR_CODEX=0 kill-switch" \
+  || { echo "FAIL: codex-advisor should report disabled with ADVISOR_CODEX=0: $out"; fail=1; }
+out=$(env -u ADVISOR_CODEX CLAUDE_CODE_SESSION_ID=nonexistent-sid-xyz "$cadv" 2>&1)
+echo "$out" | grep -q "Could not locate" \
+  && echo "OK:   codex-advisor reports unresolved transcript without calling codex" \
+  || { echo "FAIL: codex-advisor should not proceed on a bogus session id: $out"; fail=1; }
+
 echo ""
 rm -f "$test_out"
 

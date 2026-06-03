@@ -40,6 +40,8 @@ babysit run --name="train-mlp" --command="uv run python -u train.py" --estimated
 
 > `--estimated_mem_bytes` accepts `4G`, `512M`, `1.5T`, raw bytes (default `4G`). `--estimated_cpu_cores` is a float (default `4`). Override explicitly for heavy ML training, big-data scans, or single-threaded scripts — the defaults are tuned for a typical 10m task. Values exceeding host total RAM / cores are rejected at `babysit run` time.
 >
+> The spawned task inherits `POLARS_MAX_THREADS` / `OMP_NUM_THREADS` / `OPENBLAS_NUM_THREADS` / `MKL_NUM_THREADS` / `NUMEXPR_NUM_THREADS` defaulted to `max(1, round(estimated_cpu_cores))`, so Polars / OpenMP / BLAS thread pools stay within the declared CPU budget instead of spawning one thread per host core (the usual cause of `estimated_cpu_exceeded` kills on many-core hosts). A value set inline in the command (`POLARS_MAX_THREADS=16 …`) still wins. Raise `--estimated_cpu_cores` to widen both the cgroup quota and the thread pools together.
+>
 > `--cwd` (existing absolute path; default current shell cwd) is the task's working directory, shown as `PROJECT` in `babysit list` / `tui`.
 >
 > Soft warn at 1× (a `{"event":"runaway_risk","dim":"mem|cpu", ...}` line on `babysit wait` stderr — sanity-check on the fly). Hard kill at 2× sustained for the monitor tolerance window (default 30s) with `kill_reason="estimated_mem_exceeded"` / `"estimated_cpu_exceeded"`.

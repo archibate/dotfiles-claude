@@ -292,10 +292,10 @@ def cmd_show(sid: str | None, context: int, color: bool) -> int:
 ALL_CATEGORIES = frozenset({
     "DOC-contradiction", "DOC-over-emphasis", "DOC-tonal-drift",
     "DOC-justifying-aside", "DOC-defensive-caveat", "DOC-hallucinated-ref",
-    "DOC-stale-reference", "DOC-duplicates-source", "DOC-audience-mismatch", "DOC-incident-leak",
+    "DOC-stale-reference", "DOC-duplicates-source", "DOC-catalog-narration", "DOC-audience-mismatch", "DOC-incident-leak",
     "DOC-style-drift", "DOC-inverted-phrasing", "DOC-patch-over-restructure",
     "DOC-positional-fit",
-    "CODE-contradiction", "CODE-comment-mismatch", "CODE-structural-drift",
+    "CODE-contradiction", "CODE-comment-mismatch", "CODE-narrative-comment", "CODE-structural-drift",
     "CODE-defensive", "CODE-bandaid",
     "CODE-hallucinated-ref",
     "CODE-style-drift", "CODE-debug-leftover",

@@ -79,7 +79,8 @@ comprehension.
 
 | Pattern | Flag When |
 |---|---|
-| **Tonal drift** | New lines diverge from siblings in length or rhetorical strength. Editorial framing ("useful for X", "critical for", "recommended for"), selling language, over-explanation. |
+| **Tonal drift** | New lines diverge from siblings in length or rhetorical strength. Editorial framing ("useful for X", "critical for", "recommended for"), selling language, over-explanation. Flag length when a new/edited row, bullet, or comment block exceeds its group's Q3 + 1.5·IQR upper fence (skip groups with <5 siblings). |
+| **Catalog narration** | An index/catalog/overview entry narrates sub-detail its target owns (rationale, param semantics, behavior) instead of a terse pointer; the why/how belongs in the referenced code or nested doc, not the catalog. |
 | **Justifying asides** | Asides that add nothing the reader needs, in any delimiter (parenthetical, em-dash, or comma-set-off); flag defenses of already-obvious claims ("obvious thing (long explanation defending it)") and citations of authorities the reader can already locate ("X rules — per X section"). Don't flag informative asides: acronym expansions, enumerated examples of the preceding term, non-obvious detail the reader would likely miss without justification ("fetch X — this requires login"), scope carve-outs ("applies here — not in X"), or refs the reader can't easily locate. |
 | **Defensive caveats** | Paragraphs warning about failure modes the reader isn't hitting. "Why not X? Because…" preemptive Q&A, "Caveats:"/"Gotchas:" anticipating hypothetical mistakes. |
 | **Audience mismatch** | Guidance shaped for a different reader than the file's actual consumer. Interactive-human cues in agent-facing docs, author-local artifacts (home paths, usernames) in public docs, low-level internals in end-user tutorials. |

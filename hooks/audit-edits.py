@@ -41,21 +41,34 @@ AUDIT_DIR = Path(f"/tmp/claude-{os.getuid()}-state/audit")
 MAX_SNAPSHOT_BYTES = 5 * 1024 * 1024  # skip files larger than 5 MB
 BINARY_SENTINEL = "\0BINARY\0"
 TOOLBIG_SENTINEL = "\0TOOBIG\0"
+# Single source of truth for the rule catalog. Both auditor wrappers carry a
+# marker the assembler splices it into, and the validator derives ALL_CATEGORIES
+# from it — a rule edit touches audit-rules.md only.
+RULES_FILE = Path(__file__).parent / "audit-rules.md"
 CODEX_PROMPT_FILE = Path(__file__).parent / "audit-fresh-eye-codex.md"
-# Source of truth for the rule catalog: the claude agent file. The codex wrapper
-# and the validator below both derive from it, so a rule edit touches one file.
-AGENT_RULES_FILE = Path(__file__).parent.parent / "agents" / "audit-fresh-eye.md"
+CLAUDE_WRAPPER_FILE = Path(__file__).parent / "audit-fresh-eye-claude.md"
 AUDIT_RULES_MARKER = "<!-- AUDIT_RULES -->"
+
+# Inline-agent metadata for the claude auditor (defined here rather than an
+# agents/ file so the catalog stays single-source; passed via `claude --agents`).
+CLAUDE_AGENT_DESCRIPTION = "Audit with a fresh eye."
+CLAUDE_AGENT_TOOLS = [
+    "Read", "Grep", "Glob", "WebFetch", "WebSearch",
+    "Agent(Explore, claude-code-guide)",
+    "Bash(exa:*)", "Bash(file:*)", "Bash(which:*)", "Bash(command -v:*)",
+    "Bash(type:*)", "Bash(fd:*)", "Bash(jq:*)",
+    "Bash(* --help)", "Bash(* --help *)",
+]
 
 
 def _load_catalog() -> str:
-    """Extract the canonical DOC + CODE category sections from the agent file.
+    """Extract the canonical DOC + CODE category sections from the catalog file.
 
     Captures from '## DOC categories' through the end of '## CODE categories',
-    stopping at the first following section heading. Empty string if the file
-    is unreadable (callers degrade rather than crash the hook)."""
+    stopping at the first following section heading (tolerates the file's header
+    comment). Empty string if unreadable (callers degrade rather than crash)."""
     try:
-        lines = AGENT_RULES_FILE.read_text().splitlines(keepends=True)
+        lines = RULES_FILE.read_text().splitlines(keepends=True)
     except OSError:
         return ""
     out: list[str] = []
@@ -69,6 +82,11 @@ def _load_catalog() -> str:
         if capturing:
             out.append(ln)
     return "".join(out).strip()
+
+
+def _assemble_prompt(wrapper_file: Path) -> str:
+    """Read a wrapper and splice the canonical catalog into its marker."""
+    return wrapper_file.read_text().replace(AUDIT_RULES_MARKER, _load_catalog())
 
 
 def should_skip_audit_path(abs_path: str, cwd: str) -> bool:
@@ -553,7 +571,22 @@ def _spawn_audit_claude(
     }
     model = os.environ.get("AUDIT_CLAUDE_MODEL", "sonnet")
     effort = os.environ.get("AUDIT_CLAUDE_EFFORT")
+    try:
+        agent_def = {
+            "audit-fresh-eye": {
+                "description": CLAUDE_AGENT_DESCRIPTION,
+                "prompt": _assemble_prompt(CLAUDE_WRAPPER_FILE),
+                "tools": CLAUDE_AGENT_TOOLS,
+                "model": model,
+                "permissionMode": "dontAsk",
+                "maxTurns": 50,
+            }
+        }
+    except OSError as e:
+        _stop_log(sid, f"claude wrapper unreadable: {e}")
+        return None, None
     cmd = ["claude", "-p", diff,
+           "--agents", json.dumps(agent_def),
            "--agent", "audit-fresh-eye",
            "--model", model,
            "--permission-mode", "dontAsk",
@@ -660,12 +693,10 @@ def _spawn_audit_codex(diff: str, cwd: str, sid: str) -> str | None:
     """Spawn `codex exec` as a fresh-eye auditor. Returns the raw verdict
     text (e.g. "CLEAN" or "FIXES\\n...") or None on failure."""
     try:
-        prompt_body = CODEX_PROMPT_FILE.read_text()
+        prompt_body = _assemble_prompt(CODEX_PROMPT_FILE)
     except OSError as e:
         _stop_log(sid, f"codex prompt file unreadable: {e}")
         return None
-    # Splice the canonical rule catalog into the wrapper's marker.
-    prompt_body = prompt_body.replace(AUDIT_RULES_MARKER, _load_catalog())
 
     out_file = AUDIT_DIR / f"{sid}.codex.out"
     out_file.unlink(missing_ok=True)

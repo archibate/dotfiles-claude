@@ -94,6 +94,27 @@ else
     git clone "$REPO" "$TARGET"
 fi
 
+# Pre-accept the workspace-trust dialog for the whole home tree. Without trust,
+# Claude Code skips StatusLine and hook execution on first launch (and /doctor
+# flags a statusline setup issue) until the user clicks through the prompt in
+# every new directory. The trust check walks up the directory tree, so marking
+# $HOME accepted once makes every current and future subdirectory inherit it —
+# no per-project stamping needed. The flag lives in ~/.claude.json under
+# projects[<dir>]; create the file/entry if a fresh machine hasn't written it
+# yet. Atomic temp-file swap so a crash mid-write can't corrupt the config.
+CLAUDE_JSON="$HOME/.claude.json"
+[ -f "$CLAUDE_JSON" ] || echo '{}' > "$CLAUDE_JSON"
+tmp_json="${CLAUDE_JSON}.tmp.$$"
+if jq --arg dir "$HOME" \
+    '.projects[$dir].hasTrustDialogAccepted = true' \
+    "$CLAUDE_JSON" > "$tmp_json"; then
+    mv "$tmp_json" "$CLAUDE_JSON"
+    echo "${GREEN}  ✓ workspace trust pre-accepted for ${HOME} (inherited by all subdirs)${RESET}"
+else
+    rm -f "$tmp_json"
+    echo "${YELLOW}  ⚠ could not pre-accept workspace trust; accept it in-app on first launch${RESET}" >&2
+fi
+
 # Install plugins declared as enabled in settings.json. `enabledPlugins: true`
 # only flips the on/off bit for already-installed plugins — it never triggers
 # a download. So on a fresh machine we have to issue `claude plugin install`

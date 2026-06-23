@@ -29,6 +29,7 @@
       "/tmp"
     ]
   },
+  "model": "claude-opus-4-6[1m]",
   "enableAllProjectMcpServers": true,
   "skillOverrides": {
     "cache-hygiene": "name-only",
@@ -457,7 +458,9 @@
     "typescript-lsp@claude-plugins-official": false,
     "lua-lsp@claude-plugins-official": false,
     "caveman@caveman": false,
-    "superpowers@claude-plugins-official": false
+    "superpowers@claude-plugins-official": false,
+    "remember@claude-plugins-official": true,
+    "playground@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
@@ -497,8 +500,8 @@
   "awaySummaryEnabled": true,
   "showClearContextOnPlanAccept": true,
   "tui": "fullscreen",
-  "autoMemoryEnabled": false,
-  "autoDreamEnabled": false,
+  "autoMemoryEnabled": true,
+  "autoDreamEnabled": true,
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",

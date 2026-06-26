@@ -15,19 +15,29 @@ void forEach(std::span<int> data, Func f) { for (auto x : data) f(x); }
 void forEach(std::span<int> data, auto f);
 
 // Stored / runtime-selected: type-erased, flexible, small-object-optimized.
-class Widget { std::function<void(Event)> handler; };
+struct Widget { std::function<void(Event)> handler; };
 ```
 
 - **Template `Func` / `auto` param** — when the callable is known at the call
   site and performance matters. No allocation, fully inlinable.
 - **`std::function`** — when the callback is *stored* or *chosen at runtime*. It
   has small-object optimization, so small/stateless closures avoid the heap.
-- **Virtual interface** — only when the callback is one method of a larger object
-  with its own identity and several related operations. For a bare callback,
+- **Virtual interface** — when the callback is one method of a larger object with
+  its own identity and several related operations. For a bare callback,
   `std::function` beats `unique_ptr<AbstractCallback>` (which always heap-allocates).
+- **Hand-rolled type erasure** — when you need *several* operations
+  (`speak` + `load` + `clone`) over **unrelated value types you don't own and
+  can't make inherit**. A `Wrapper<T> : Base` template supplies the vtable from
+  outside; the wrapped types stay plain data. This is the mechanism behind
+  `std::function` / `std::any` — reach for it only when one `std::function`
+  signature isn't enough and a shared base isn't possible.
 
-So: don't reach for an abstract class to pass a single function. That's what
-functors are for.
+So: don't reach for an abstract class to pass a single function — that's what
+functors are for. Reach for it (or type erasure) when behavior has *identity* and
+*multiple operations*. Two refinements when you do roll your own erasure: extend
+a type you don't own by adding a **free-function overload** the wrapper calls
+(open/closed, non-intrusive), and give the wrapper a `virtual clone()` — you
+cannot copy through an abstract base, so the wrapper regenerates the per-type copy.
 
 ## Lambdas over `std::bind`
 
@@ -71,6 +81,28 @@ struct __Lambda { int x; int operator()() const { return x; } };
   is untouched.
 - For `std::thread`, pass a lambda, not `function-pointer + args` — make
   reference-vs-value capture explicit: `std::thread([&x]{ f(x); })`.
+
+## Lifetime-safe callbacks (signals / slots)
+
+When a callback is a member function of an object that may die before the emitter
+fires, don't store a raw `this` — bind through a `weak_ptr` so dead listeners
+auto-drop:
+
+```cpp
+signal.connect(weak_from_this(), &Mine::onInput);   // skipped/erased once expired
+```
+
+Two refinements:
+
+- **Let a slot self-unregister by return value** — `enum class CallbackResult :
+  std::uint8_t { Keep, Erase }` — so `emit` removes it, instead of manual disconnect
+  bookkeeping. (Tag-dispatch a one-shot / n-shot variant the same way.)
+- **Store non-copyable closures in `std::move_only_function`** (C++23) rather than
+  `std::function`, which requires the target be copyable. Select via
+  `__cpp_lib_move_only_function`.
+
+Hide the member-pointer call syntax behind `connect(obj, &Cls::method)` — callers
+should never write `((*p).*pmf)(args...)`.
 
 ## Behavior injection over enum-switch
 

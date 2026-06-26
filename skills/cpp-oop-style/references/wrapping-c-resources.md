@@ -77,8 +77,12 @@ struct Check {
 Check{} = lib_do_thing(args);
 ```
 
-(On a no-exceptions build, the same shape returns an `expected` or logs and
-returns `false` — see `error-handling.md`.)
+Throwing here fits **acquisition and setup**, where a failed C call is
+unrecoverable (per `error-handling.md`'s recoverable/unrecoverable split): the
+throw stands in for a `terminate`, and call sites read as if they always succeed.
+For a *recoverable* per-call failure, or a no-exceptions build, the same shape
+returns an `expected` or logs and returns `false` instead — value-based stays the
+default there.
 
 ## 4. `[[nodiscard]]` scope-bound bind guard
 

@@ -22,14 +22,14 @@ is loaded, it **overrides** your default C++ instincts.
 
 ## The one rule
 
-> **"Abstract class or data class. Nothing else."**
+> **"Abstract class, data class, or value type. Nothing else."**
 
-That slogan is the spirit. Precisely, every type you introduce is one of three
-sanctioned kinds — never the muddy middle:
+Every type you introduce is one of these three kinds — never the muddy middle:
 
-- **Abstract class** — *behavior only*. A pure-virtual interface. No data of its
-  own except injected collaborators. Always has `virtual ~T() = default;`. This
-  is the unit of *polymorphism and dependency injection*.
+- **Abstract class** — *behavior only*. A pure-virtual interface with no data
+  members of its own; any injected collaborators live in its concrete `…Impl`,
+  not in the interface. Always has `virtual ~T() = default;`. This is the unit of
+  *polymorphism and dependency injection*.
 - **Data class** — *data only*. A plain `struct` with public fields, built with
   designated initializers. No business logic, no getters/setters wrapping plain
   fields. This is the unit of *value passing and configuration*.
@@ -45,7 +45,7 @@ helper functions — neither a clean interface, nor plain data, nor a focused va
 type. That shape is the single biggest tell of AI-slop C++.
 
 So a concrete class with methods is allowed only when it is **(a)** the
-implementation of an abstract class (`class FooImpl final : public Foo`, defined
+implementation of an abstract class (`struct FooImpl final : Foo`, defined
 in a `.cpp`, never a header), or **(b)** a value/resource type as above.
 Everything else is behavior behind an interface, or data in a struct.
 
@@ -58,7 +58,7 @@ Everything else is behavior behind an interface, or data in a struct.
 | `Dog dog; dog.doThing(globalThing);` | Inject the collaborator: `dog.doThing(dep)` |
 | `void f(string n, int a, int p, int addr)` | `void f(FooConfig const &cfg)` (designated init) |
 | `new T` / `delete` / `new T[]` | `make_unique` / `make_shared` / `vector<T>` |
-| `int parse()` returning `-1` on failure | `optional<int> parse()` |
+| `int parseInt()` returning `-1` on failure | `optional<int> parseInt()` |
 | `enum Mode` + `switch` dispatch | inject a strategy / functor, or a state class |
 | `pair<bool, It>` / `tuple<...>` returns | named result struct |
 | `const T&`, `const T*` | East const: `T const &`, `T const *` |
@@ -75,7 +75,9 @@ refuse them:
   free helpers. Make it a class with a clear owner and inject it.
 - **Stringly-typed API** — `setParam("mode", "fast")`, sockets/params keyed by
   string. Use `enum class`, strong types, and named fields so the compiler
-  checks them.
+  checks them. Relatedly, **fetch an abstract handle once** rather than re-passing
+  a string key on every call: `auto *dev = api->getDevice("CD"); dev->play();`,
+  not `api->playDevice("CD")` then `api->stopDevice("CD")`.
 - **Sentinel returns** — `(size_t)-1`, `-1`, empty string, or null on failure.
   Use `optional` / `expected` or a result struct (see `references/error-handling.md`).
 
@@ -88,25 +90,23 @@ struct MethodConfig {
     float size{};
 };
 
-class Dep {
-public:
+struct Dep {
     virtual ~Dep() = default;
     virtual std::string someQuery() const = 0;
     virtual void someMethod(MethodConfig const &config) = 0;
 };
 
 // Animal.h
-class Animal {
-public:
+struct Animal {
     virtual ~Animal() = default;
     virtual void someInterface(Dep *dep) = 0;   // collaborator injected, not owned
 };
 
 // Dog.h — concrete impl, declared minimally, defined in .cpp
-class Dog final : public Animal {
-    int somePrivate{};
-public:
+struct Dog final : Animal {
     void someInterface(Dep *dep) override;
+private:
+    int somePrivate{};
 };
 
 // Dog.cpp
@@ -123,19 +123,36 @@ dog.someInterface(dep1.get());
 
 ## Class design
 
-**Virtual functions exist for dependency injection, not call-site dispatch.**
-If you already hold the concrete type, `virtual` buys nothing. Its only value is
-letting *one shared caller* work across subtypes it does not know:
+**Virtual functions are a backbone of this style — reach for them.** They do
+*two* distinct jobs, and both are worth an interface:
 
-```cpp
-void feed(Animal *a) { puts("feeding"); a->speak(); puts("done"); }
-```
+1. **Dispatch / dependency injection** — one shared caller works across subtypes
+   it doesn't know. Without it, every new subtype copy-pastes the shared logic
+   and one requirement change means editing N files.
 
-Without this, every new subtype copy-pastes the shared logic, and one
-requirement change means editing N files. So: **don't add `virtual` unless a
-caller genuinely varies the implementation.** Over-abstracting single-use code
-into interfaces is the opposite failure — equally wrong. Abstract where a real
-seam exists, not everywhere.
+   ```cpp
+   void feed(Animal *a) { puts("feeding"); a->speak(); puts("done"); }
+   ```
+
+2. **Implementation hiding** — the interface lives in the header, the concrete
+   `…Impl` lives in the `.cpp`. This is worthwhile *even with a single
+   implementation*: a compile firewall (member types and heavy/third-party
+   headers stay out of your public header, callers don't recompile when the impl
+   changes), a clean ABI boundary, and a ready test seam. (See
+   "single-implementation interface" below.)
+
+The only thing to avoid is the *empty* interface — a `virtual` that delivers
+neither job: you already hold the concrete type, there is exactly one
+implementation, and you gain no hiding, seam, or ABI benefit. That is pure
+overhead. Everywhere a real seam exists — polymorphism **or** build/ABI/test —
+prefer the interface.
+
+**Escalate abstraction only as far as the duplication demands.** Lift a repeated
+value to a variable, repeated logic to a function, a clump of arguments to a
+struct, shared state-plus-behavior to a class, a fixed set of variants to an
+`enum`, and an open set of behaviors to a `virtual` interface — in that order.
+Don't jump to the interface when a function would do. The real cost of copy-paste
+is not the typing — it is the typo you later make in one rarely-run branch.
 
 **One interface, one responsibility.** Never mix concerns (e.g. IO *and*
 computation) in one abstract class — it forces an N×M subclass explosion. Split
@@ -152,14 +169,21 @@ The public method owns the contract and supplies ergonomic overloads; subclasses
 override only the raw `do_xxx`. (As in `std::pmr::memory_resource`.)
 
 ```cpp
-class Converter {
-protected:
-    virtual void do_process(char const *s, size_t n) = 0;
-public:
+struct Converter {
     void process(std::string_view sv) { do_process(sv.data(), sv.size()); }
     void process(char const *s)       { do_process(s, std::strlen(s)); }
+protected:
+    virtual void do_process(char const *s, size_t n) = 0;
 };
 ```
+
+**Strategy vs Template Method — which to pick.** Many independent behaviors on one
+object → *Strategy*: hold pointers to injected strategy interfaces (a `Character`
+with separate `move` and `attack` strategies). A single behavior that needs the
+object's own members → *Template Method*: the base *is* the strategy, the
+`virtual` reads its own fields (a `Weapon` whose `attack` uses its `damage` /
+`range`). One axis of variation that owns no state → functor; several axes, or
+state-carrying behavior → strategy objects.
 
 **Thin virtual core, fat non-virtual API.** Put only primitives behind `virtual`
 (`raw_read`, `raw_write`, `raw_seek`); build the rich convenience API
@@ -174,6 +198,14 @@ public:
   composition for behavior, **never multiple inheritance.**
 - *CRTP*: auto-implement boilerplate virtuals (`clone`, `accept`) once in a
   `template <class D> struct Impl : Base` mixin instead of per subclass.
+- *Visitor / double-dispatch*: when behavior depends on two types (or you'd
+  otherwise write `getType()` / `isEatable()` and switch on it), use
+  `accept`/`visit` so the compiler picks the overload — don't query a type tag.
+- *Flyweight*: when many objects share identical heavy data (a texture, a lookup
+  table), hoist it into a separate type held by a `shared_ptr`; keep only the
+  per-instance data (position, velocity) local. 1000 bullets, one shared sprite —
+  not 1000 texture copies. The owner's method just *forwards* to the shared object
+  (`sprite->draw(position)`) — that delegation is the *proxy* idiom.
 
 **Interface/implementation split (header hygiene).** Put the pure-virtual
 interface in a small header; keep the concrete `…Impl final` entirely in the
@@ -182,7 +214,7 @@ interface in a small header; keep the concrete `…Impl final` entirely in the
 
 ```cpp
 // Foo.h
-class Foo { public: virtual ~Foo() = default; virtual void run() = 0; };
+struct Foo { virtual ~Foo() = default; virtual void run() = 0; };
 std::unique_ptr<Foo> createFoo(FooConfig const &cfg);   // factory returns the interface
 ```
 
@@ -191,10 +223,47 @@ directory and let the build system link exactly one. Swapping an implementation
 (real vendor SDK ↔ a fake for tests/replay) becomes a build-variable change, not
 a code change — the test double is just another implementation behind the seam.
 
+**A single-implementation interface is justified — for hiding, not dispatch.**
+Even when only one `…Impl` will ever exist, putting it behind a pure-virtual
+interface earns its keep: a **compile firewall** (callers don't `#include` the
+implementation's heavy or third-party headers, and don't recompile when it
+changes), **hiding** a proprietary or volatile implementation out of public
+headers, a stable **ABI boundary** across a library edge, and a ready **test
+seam** (drop in a fake without touching callers). This is the deliberate
+exception to "don't over-abstract": the payoff is the build/ABI/test boundary,
+not polymorphism. (If you want only the compile firewall and never a second
+implementation or a fake, classic PIMPL — a `unique_ptr<Impl>` member, with the
+destructor declared in the header and `= default`-ed in the `.cpp` — gives the
+same hiding without virtuals. Reach for the interface when you also want the test
+or backend seam.)
+
 **Command/callback pairs.** For a subsystem with inversion of control, define
 two interfaces: an `Api` (methods you call in) and an `Spi` (methods called back
 to you). The owner implements the `Spi` and holds the `Api`; wire with
 `api->setSpi(this)`.
+
+**Singleton — encapsulate the one instance, never a bare global.** For a genuinely
+process-wide subsystem, hide the constructor, delete copy/move, and hand out the
+instance through one accessor — define it in the `.cpp` like any other method:
+
+```cpp
+// Game.h
+struct Game {
+    void update();
+    static Game &instance();        // the sole accessor
+    Game(Game &&) = delete;
+private:
+    Game();
+};
+// Game.cpp
+Game &Game::instance() { static Game inst; return inst; }   // lazy, thread-safe (C++11)
+```
+
+A header form — a header-only util, or the generic
+`template <class T> T &singleton() { static T inst; return inst; }` — must be
+`inline`, not `static`, and gets a separate copy per Windows DLL. A singleton is
+still global state: prefer injection through the composition root, and reserve it
+for subsystems that are truly one-per-process.
 
 ## Dependency injection
 
@@ -223,6 +292,10 @@ compiler is your reviewer.
   `result.first`.
 - **`optional<T>` for nullable returns** — never a sentinel like `-1` or a
   nullable raw pointer. (Error handling: `references/error-handling.md`.)
+- **Don't default new fields to `optional<T>`**. Reserve it for data that
+  is genuinely sometimes-absent; an always-present field wrapped in `optional`
+  only sprays null-checks and weakens the invariant. For a real either/or,
+  model it with `std::variant`, dependency injection or distinct types.
 - **`enum class` for flags/states** — blocks implicit `int` conversion and
   argument-order bugs.
 - **Strong types for primitives that should not interconvert.** Wrap in a
@@ -232,8 +305,17 @@ compiler is your reviewer.
   length travels with the data, no `ptr,len` mismatch.
 - **`std::chrono` for time**, never raw integers — `time_point + time_point`
   becomes a compile error instead of a 54-year sleep.
-- **Plain data is a `struct` with public fields.** Don't wrap POD in getters and
-  setters; that ceremony adds nothing.
+- **Plain data is a `struct` with public fields**, constructed by aggregate
+  initialization — `Foo{a, b}` or designated `Foo{.x = a, .y = b}` — with no
+  hand-written constructor and no encapsulation ceremony.
+- **Getters/setters earn their place only to guard an invariant** — inside a
+  value/resource type. Independent fields stay public (a `Point`'s `.x`/`.y` need
+  no `getX`/`setX`); fields coupled by an invariant hide behind hook methods with
+  mutation banned (a `vector` exposes `size()`/`resize()` and a read-only `data()`
+  because resizing must reallocate).
+- **Name constructors by intent — use named static factories** when variants
+  differ in meaning, not signature (`Cake::makeChoco()` / `Cake::makeMoca()`,
+  not `Cake(double)` vs `Cake(int)`).
 
 ## Naming & layout
 
@@ -248,8 +330,11 @@ compiler is your reviewer.
   coupling.
 - **East const everywhere:** `T const &`, `T const *` — const binds to what
   precedes it, which reads consistently right-to-left.
-- Prefer `struct` with an explicit `private:` section over the `class` keyword;
-  public data structs stay public, encapsulation is opt-in where it earns its keep.
+- **Always `struct`, never the `class` keyword** — even for encapsulated types.
+  Open an explicit `private:` / `protected:` section when you need encapsulation
+  (`struct Game { void play(); private: Game(); };`). The keyword carries nothing
+  the access labels don't, and defaulting to `struct` keeps each type's public
+  surface first and visible.
 - In headers, share definitions with `inline`, never `static` (which silently
   duplicates per translation unit).
 
@@ -288,7 +373,10 @@ named functions — don't pile logic directly into `main`.
 This is a style for code that must live and change. Don't weaponize it:
 
 - **Don't pre-abstract.** A one-off internal helper does not need an interface.
-  Add the seam when a second implementation actually appears (or is imminent).
+  Add the *dispatch* seam when a second implementation actually appears (or is
+  imminent). This is about polymorphism only — a single-implementation interface
+  for a compile firewall, ABI boundary, or test seam is still justified (see
+  "single-implementation interface" under Class design).
 - **Hot paths prefer a template `Func` over `std::function`/virtual** for
   zero-overhead dispatch. (See `references/functors-callbacks.md`.) In a *measured*
   inner loop it is even fine to drop OOP entirely — raw intrinsics, free

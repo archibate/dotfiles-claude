@@ -22,7 +22,7 @@ Smart pointers manage a **single** object. Arrays are `vector`'s job — it carr
 `.size()` and real ownership semantics; `unique_ptr<T[]>` throws that away.
 
 Never write `shared_ptr<T>(new T())` — the `make_shared` form is the rule since
-C++14: one allocation instead of two, and exception-safe.
+C++11: one allocation instead of two, and exception-safe.
 
 ## Pointer vs pointee — the lawyer rule
 
@@ -48,6 +48,12 @@ std::optional<Student> findStudent(std::string_view name);     // nullable, owne
 - **Owned, transfer →** `unique_ptr<T>`.
 - **Owned, maybe-absent →** `optional<T>`.
 
+Cross this with cardinality — for *many* elements:
+
+- **Borrowed many →** `std::span<T>` (`span<T const>` to read).
+- **Owned many →** `std::vector<T>`, or `std::vector<std::unique_ptr<T>>` when the
+  elements are polymorphic or must keep stable addresses across reallocation.
+
 The injectee never owns its collaborators; it borrows them. Ownership lives in
 the composition root.
 
@@ -56,8 +62,9 @@ the composition root.
 Wrap any C handle so scope exit frees it — no manual `close`:
 
 ```cpp
-auto conn = std::shared_ptr<mysql_connection>(mysql_connect("..."), mysql_close);
 auto file = std::unique_ptr<FILE, decltype(&fclose)>(fopen(p, "r"), fclose);
+// same custom-deleter form on shared_ptr — but only when ownership is genuinely shared:
+auto conn = std::shared_ptr<mysql_connection>(mysql_connect("..."), mysql_close);
 ```
 
 For a process-lifetime singleton subsystem, returning a raw owning pointer that
@@ -81,6 +88,15 @@ struct Res {
 
 Better: hold the resource in a `unique_ptr`/`vector`/RAII wrapper, define **no**
 destructor, and let the compiler generate correct moves for free (rule of zero).
+
+If you *do* hand-write a move constructor, it must leave the source in a defined,
+do-nothing state — blank the handle so the moved-from destructor is a no-op,
+otherwise you double-free:
+
+```cpp
+Res(Res &&o) noexcept : h(o.h) { o.h = {}; }   // source blanked
+~Res() { if (h) lib_free(h); }                  // safe on a moved-from object
+```
 
 ## Polymorphic bases
 
@@ -106,3 +122,11 @@ std::string const &bad = identity(std::string("hi"));   // NOT extended — dang
   pointer, not a deep copy.
 - Use `optional<T>` for a member you cannot initialize at construction time
   instead of a "is-initialized" bool plus an invalid default.
+- `std::move(x)` and `std::as_const(x)` **do nothing by themselves** — they are
+  just casts to `T&&` / `T const&`. The actual move happens in the constructor or
+  assignment that consumes the result; `std::move(v);` as a bare statement leaves
+  `v` untouched.
+- Prefer choosing the right ownership type over sprinkling `std::move`: a
+  `unique_ptr` moves when you pass it, a `shared_ptr` copies freely, a
+  value-semantic type with a `shared_ptr` member + explicit `clone()` gives
+  cheap copy-on-write.

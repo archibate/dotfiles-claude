@@ -54,6 +54,11 @@ else log(r.error());
 - Never a sentinel value (`-1`, null pointer, empty string) — the caller forgets
   to check, and the sentinel collides with a real value.
 
+Two `optional` traps: `value_or(expr)` evaluates `expr` **eagerly** even when the
+value is present — use `or_else([]{ ... })` when the fallback is expensive. And
+`optional<T&>` is ill-formed; hold `optional<std::reference_wrapper<T>>` (or a
+plain `T*`) for an optional reference.
+
 For coroutine code, the monadic `co_await co_await expr` idiom (inner await
 unwraps the `expected`, outer await short-circuits the current coroutine on
 error) propagates failures without exceptions. Reserve exceptions for build-time
@@ -96,8 +101,7 @@ failures, pass a collaborator implementing an error-sink interface — the
 "abstract class" half, an `Spi`-style callback:
 
 ```cpp
-class ErrorSink {
-public:
+struct ErrorSink {
     virtual ~ErrorSink() = default;
     virtual void onError(ErrorCode code, std::string_view detail) = 0;
 };

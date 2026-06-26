@@ -237,18 +237,13 @@ directory and let the build system link exactly one. Swapping an implementation
 a code change — the test double is just another implementation behind the seam.
 
 **A single-implementation interface is justified — for hiding, not dispatch.**
-Even when only one `…Impl` will ever exist, putting it behind a pure-virtual
-interface earns its keep: a **compile firewall** (callers don't `#include` the
-implementation's heavy or third-party headers, and don't recompile when it
-changes), **hiding** a proprietary or volatile implementation out of public
-headers, a stable **ABI boundary** across a library edge, and a ready **test
-seam** (drop in a fake without touching callers). This is the deliberate
-exception to "don't over-abstract": the payoff is the build/ABI/test boundary,
-not polymorphism. (If you want only the compile firewall and never a second
-implementation or a fake, classic PIMPL — a `unique_ptr<Impl>` member, with the
-destructor declared in the header and `= default`-ed in the `.cpp` — gives the
-same hiding without virtuals. Reach for the interface when you also want the test
-or backend seam.)
+Even when only one `…Impl` will ever exist, the compile-firewall / ABI / test-seam
+payoff of point 2 still earns the interface — the deliberate exception to "don't
+over-abstract." If you want *only* the compile firewall and never a second
+implementation or a fake, classic PIMPL — a `unique_ptr<Impl>` member, destructor
+declared in the header and `= default`-ed in the `.cpp` — gives the same hiding
+without virtuals; reach for the interface when you also want the test or backend
+seam.
 
 **Command/callback pairs.** For a subsystem with inversion of control, define
 two interfaces: an `Api` (methods you call in) and an `Spi` (methods called back
@@ -305,10 +300,9 @@ compiler is your reviewer.
   `result.first`.
 - **`optional<T>` for nullable returns** — never a sentinel like `-1` or a
   nullable raw pointer. (Error handling: `references/error-handling.md`.)
-- **Don't default new fields to `optional<T>`**. Reserve it for data that
-  is genuinely sometimes-absent; an always-present field wrapped in `optional`
-  only sprays null-checks and weakens the invariant. For a real either/or,
-  model it with `std::variant`, dependency injection or distinct types.
+- **Don't reflexively wrap fields in `optional<T>`** — reserve it for genuinely
+  sometimes-absent data; on an always-present field it just sprays null-checks. A
+  real either/or is a `std::variant` or distinct types, not a nullable.
 - **`enum class` for flags/states** — blocks implicit `int` conversion and
   argument-order bugs.
 - **Strong types for primitives that should not interconvert.** Wrap in a

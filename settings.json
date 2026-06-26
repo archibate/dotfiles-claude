@@ -29,8 +29,10 @@
       "/tmp"
     ]
   },
-  "model": "claude-opus-4-6[1m]",
   "enableAllProjectMcpServers": true,
+  "attribution": {
+    "sessionUrl": false
+  },
   "skillOverrides": {
     "cache-hygiene": "name-only",
     "init": "user-invocable-only",

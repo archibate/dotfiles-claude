@@ -9,9 +9,7 @@ no vtable, no heap, no runtime branch. The governing idea:
 > time, the way a vtable does at runtime.
 
 This is the static twin of the polymorphism in `SKILL.md` — reach for it when the
-type set is *closed and known*, prefer a `virtual` interface when it is *open*. The
-same principle carries over: dispatch on type with overloads, **never** by
-switching on a type tag (`getType()` at runtime, `is_same_v` at compile time).
+type set is *closed and known*, and prefer a `virtual` interface when it is *open*.
 
 ## `if constexpr` — gate a step, don't switch on type
 
@@ -60,7 +58,7 @@ Hoist a recurring `requires` into a named `concept` (a `constexpr bool` variable
 template): a type that satisfies it *is* that concept — duck typing with a name.
 Then write **one overload per concept** and let overload resolution pick the
 most-constrained match, exactly as a vtable picks the override at runtime — but at
-compile time, with zero overhead and no type-switch:
+compile time, with zero overhead:
 
 ```cpp
 template <class It> concept Bidirectional = requires (It it) { ++it; --it; };

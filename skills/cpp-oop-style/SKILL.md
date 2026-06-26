@@ -434,7 +434,9 @@ Source material (the "why" behind these rules), all by the same author:
 <https://github.com/parallel101/cppguidebook> (`design_virtual.md`,
 `no_more_new.md`, `type_rich_api.md`, `design_functor.md`, `design_gamedev.md`,
 `error_code.md`, `cpp_lifetime.md`, `lambda.md`, `functions.md`, `auto.md`,
-`platform.md`). Real code worth reading: <https://github.com/archibate/co_async>
+`platform.md`) and the lecture repo <https://github.com/parallel101/course>
+(the `design`, `stl`, and `cmake` sessions — singleton, get/set, type erasure,
+move semantics). Real code worth reading: <https://github.com/archibate/co_async>
 (design idioms) and parallel101/opengltutor's `check_gl.hpp` (the cleanest RAII
 C-handle wrapper). Further reading: cppreference.com, hackingcpp.com,
 learncpp.com; godbolt.org / cppinsights.io / quick-bench.com to see codegen and

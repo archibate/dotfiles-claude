@@ -65,3 +65,6 @@ RTK.md
 .codex
 .claude-usage-cache.json
 .last-cleanup
+
+# Windows NTFS Zone.Identifier alternate data streams
+*:Zone.Identifier

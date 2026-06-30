@@ -45,16 +45,18 @@ Step 2 — URLs matching a known domain:
 |---|---|
 | `github.com` / `gist.github.com` | File via `raw.githubusercontent.com`; issue/PR via `gh issue view` / `gh pr view`; search via anonymous `api.github.com/search/issues` — see `references/github.md` |
 | `x.com` / `twitter.com` / `t.co` | `curl -sL https://api.fxtwitter.com/<user>/status/<id> \| jq` |
+| `bilibili.com` | `/bilibili-api` skill — fetches video title, description, comments |
 | `youtube.com` / `youtu.be` | `yt-dlp --dump-json --skip-download` for title/description/metadata; `yt-dlp --write-auto-sub --sub-lang en --skip-download` for transcript |
 | `arxiv.org` / `ssrn.com` | `/jina-ai` skill |
 | `mp.weixin.qq.com` (微信公众号) | `/scrapling` skill — `scrapling extract get <url>` works without a browser |
 | `www.cnblogs.com` (博客园) | Plain defuddle works — server-rendered HTML with the article body inline. For a user's post index: `curl -sL 'https://www.cnblogs.com/<user>/rss'` (Atom feed) |
 | `blog.csdn.net` (CSDN) | `/scrapling` skill — plain `curl` returns a JS-skeleton (content is JS-loaded) and defuddle hits 404 anti-bot. For a summary-only index: `curl -sL 'https://blog.csdn.net/<user>/rss/list'` returns RSS with 摘要 (not full bodies) |
-| `zhihu.com` / `zhuanlan.zhihu.com` (知乎) | Hard — plain `curl` returns a bot-challenge page and even scrapling's `stealthy-fetch` gets 403 with empty content. Try `/chrome-cdp` with the user's logged-in session, or ask them to paste the content |
+| `zhihu.com` / `zhuanlan.zhihu.com` (知乎) | `scripts/fetch_zhihu.py <url>` — see `references/zhihu.md` |
 | `juejin.cn` (掘金) | `/scrapling` skill — Nuxt SPA; escalate to `/chrome-cdp` if stealthy-fetch returns only shell |
 | `segmentfault.com` (思否) | `/scrapling` skill — custom HTTP 468 anti-bot; escalate to `/chrome-cdp` if stealthy-fetch fails |
 | `weibo.com` (微博) | `/scrapling` skill — JS-rendered status pages; escalate to `/chrome-cdp` if stealthy-fetch returns only chrome |
 | `xiaohongshu.com` (小红书) | `/scrapling` skill — aggressive anti-bot; escalate to `/chrome-cdp` if stealthy-fetch fails |
+| `douban.com` / `movie.douban.com` (豆瓣) | Desktop returns an anti-bot `载入中…` shell. Use the mobile host with an iPhone UA: `curl -sL -A 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' 'https://m.douban.com/movie/subject/<id>/' \| defuddle parse --markdown` — full server-rendered body (评分, 简介, 影评). Fall back to `/scrapling` if blocked |
 | `y.qq.com` (QQ 音乐) | Hard — `stealthy-fetch` returns the homepage shell instead of song data. Use `/chrome-cdp` with the user's logged-in session, or ask them to paste |
 | `music.163.com` (网易云音乐) | Plain defuddle for basic info — `<title>` has song + artist. For lyrics / comments / playlists use the community-maintained `NeteaseCloudMusicApi` (self-hosted Node proxy over the internal API) |
 | `wallstreetcn.com` (华尔街见闻) | Plain defuddle works — server-rendered with `_articleBody_…` class; no auth needed for public articles |

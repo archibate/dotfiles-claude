@@ -24,7 +24,6 @@
       "/tmp"
     ]
   },
-  "model": "haiku",
   "enableAllProjectMcpServers": true,
   "skillOverrides": {
     "cache-hygiene": "name-only",
@@ -488,5 +487,6 @@
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "model": "haiku"
 }

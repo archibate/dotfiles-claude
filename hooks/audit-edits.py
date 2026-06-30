@@ -9,7 +9,7 @@ Per-session audit of Write / Edit / MultiEdit tool calls.
 Subcommands:
   hook            PreToolUse hook. Reads payload JSON on stdin and, on the
                   first time a file is touched in the session, snapshots the
-                  current on-disk content into /tmp/claude-audit/<SID>.json.
+                  current on-disk content into /tmp/claude-<UID>-state/audit/<SID>.json.
   show [SID]      Print git-style unified diff (with surrounding context) of
                   the recorded original vs current content for every file in
                   session SID. Defaults to the most recent session.
@@ -37,11 +37,68 @@ from pathlib import Path
 if hasattr(signal, "SIGPIPE"):
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
-AUDIT_DIR = Path("/tmp/claude-audit")
+AUDIT_DIR = Path(f"/tmp/claude-{os.getuid()}-state/audit")
 MAX_SNAPSHOT_BYTES = 5 * 1024 * 1024  # skip files larger than 5 MB
 BINARY_SENTINEL = "\0BINARY\0"
 TOOLBIG_SENTINEL = "\0TOOBIG\0"
+# Single source of truth for the rule catalog. Both auditor wrappers carry a
+# marker the assembler splices it into, and the validator derives ALL_CATEGORIES
+# from it — a rule edit touches audit-rules.md only.
+RULES_FILE = Path(__file__).parent / "audit-rules.md"
 CODEX_PROMPT_FILE = Path(__file__).parent / "audit-fresh-eye-codex.md"
+CLAUDE_WRAPPER_FILE = Path(__file__).parent / "audit-fresh-eye-claude.md"
+AUDIT_RULES_MARKER = "<!-- AUDIT_RULES -->"
+
+# Inline-agent metadata for the claude auditor (defined here rather than an
+# agents/ file so the catalog stays single-source; passed via `claude --agents`).
+CLAUDE_AGENT_DESCRIPTION = "Audit with a fresh eye."
+CLAUDE_AGENT_TOOLS = [
+    "Read", "Grep", "Glob", "WebFetch", "WebSearch",
+    "Agent(Explore, claude-code-guide)",
+    "Bash(exa:*)", "Bash(file:*)", "Bash(which:*)", "Bash(command -v:*)",
+    "Bash(type:*)", "Bash(fd:*)", "Bash(jq:*)",
+    "Bash(* --help)", "Bash(* --help *)",
+]
+
+
+def _load_catalog() -> str:
+    """Extract the canonical DOC + CODE category sections from the catalog file.
+
+    Captures from '## DOC categories' through the end of '## CODE categories',
+    stopping at the first following section heading (tolerates the file's header
+    comment). Empty string if unreadable (callers degrade rather than crash)."""
+    try:
+        lines = RULES_FILE.read_text().splitlines(keepends=True)
+    except OSError:
+        return ""
+    out: list[str] = []
+    capturing = False
+    for ln in lines:
+        if ln.startswith("## "):
+            if ln[3:].strip() in ("DOC categories", "CODE categories"):
+                capturing = True
+            elif capturing:
+                break
+        if capturing:
+            out.append(ln)
+    return "".join(out).strip()
+
+
+def _assemble_prompt(wrapper_file: Path) -> str:
+    """Read a wrapper and splice the canonical catalog into its marker."""
+    return wrapper_file.read_text().replace(AUDIT_RULES_MARKER, _load_catalog())
+
+
+def should_skip_audit_path(abs_path: str, cwd: str) -> bool:
+    if abs_path.startswith("/tmp/"):
+        return True
+    if abs_path.startswith(str(AUDIT_DIR)):
+        return True
+    try:
+        rel = Path(abs_path).resolve().relative_to(Path(cwd).resolve())
+    except (OSError, ValueError):
+        return False
+    return bool(rel.parts) and rel.parts[0] == "temp"
 
 
 # ---------- storage ----------
@@ -80,7 +137,7 @@ def git_mode_of(path: Path) -> str | None:
 
 def with_session_locked(sid: str, mutate):
     """Load session JSON under flock, call mutate(data), persist atomically."""
-    AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+    AUDIT_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     target = session_file(sid)
     lock_path = AUDIT_DIR / f"{sid}.lock"
     with open(lock_path, "w") as lock:
@@ -123,12 +180,7 @@ def cmd_hook() -> int:
     except OSError:
         abs_path = str(p)
 
-    # /tmp paths are typically one-off scripts (smoke tests, scratch files,
-    # downloaded artifacts) not worth long-term audit attention. The
-    # AUDIT_DIR exclusion below this is now subsumed but kept for clarity.
-    if abs_path.startswith("/tmp/"):
-        return 0
-    if abs_path.startswith(str(AUDIT_DIR)):
+    if should_skip_audit_path(abs_path, cwd):
         return 0
 
     sid = payload.get("session_id") or "unknown"
@@ -253,7 +305,7 @@ def cmd_show(sid: str | None, context: int, color: bool) -> int:
     if sid is None:
         sid = latest_session_id()
         if sid is None:
-            print("No audit data in /tmp/claude-audit.", file=sys.stderr)
+            print(f"No audit data in {AUDIT_DIR}.", file=sys.stderr)
             return 1
 
     f = session_file(sid)
@@ -280,21 +332,21 @@ def cmd_show(sid: str | None, context: int, color: bool) -> int:
     return 0
 
 
-# Category tag set — source of truth lives in ~/.claude/agents/audit-fresh-eye.md;
-# this set only validates that the subagent's verdict uses a known tag.
-ALL_CATEGORIES = frozenset({
-    "DOC-contradiction", "DOC-over-emphasis", "DOC-tonal-drift",
-    "DOC-justifying-aside", "DOC-defensive-caveat", "DOC-hallucinated-ref",
-    "DOC-stale-reference", "DOC-duplicates-source", "DOC-audience-mismatch", "DOC-incident-leak",
-    "DOC-style-drift", "DOC-inverted-phrasing", "DOC-patch-over-restructure",
-    "DOC-positional-fit",
-    "CODE-contradiction", "CODE-comment-mismatch", "CODE-structural-drift",
-    "CODE-defensive", "CODE-bandaid", "CODE-redundant-fallback",
-    "CODE-hallucinated-ref",
-    "CODE-scope-creep", "CODE-style-drift", "CODE-debug-leftover",
-    "CODE-patch-over-refactor", "CODE-missed-extraction", "CODE-misplacement",
-    "CODE-sync-not-updated",
-})
+# Valid tag set is derived from the agent file's catalog (single source). The
+# leading `- \`TAG\`` token of each rule bullet is the tag.
+_TAG_RE = re.compile(r"^- `([A-Z]+-[a-z-]+)`", re.M)
+_CATEGORY_FALLBACK_RE = re.compile(r"^(DOC|CODE)-[a-z-]+$")
+ALL_CATEGORIES = frozenset(_TAG_RE.findall(_load_catalog()))
+
+
+def _is_known_category(category: str) -> bool:
+    """Accept a verdict tag. Strict membership when the catalog loaded; if it
+    didn't (file unreadable → empty set), fall back to accepting any well-formed
+    DOC-/CODE- tag so a parse failure degrades the audit rather than silently
+    dropping every finding."""
+    if ALL_CATEGORIES:
+        return category in ALL_CATEGORIES
+    return bool(_CATEGORY_FALLBACK_RE.match(category))
 
 
 def render_diff_from_path(json_path: Path) -> str:
@@ -357,7 +409,7 @@ def _parse_verdict(raw: str) -> tuple[str, list[dict]]:
         if len(parts) != 3:
             continue  # skip prose, code fences, blank lines, etc.
         path, category, fix = (p.strip() for p in parts)
-        if not path or category not in ALL_CATEGORIES or not fix:
+        if not path or not _is_known_category(category) or not fix:
             continue
         issues.append({"file": path, "category": category, "fix": fix})
     return ("FIXES", issues)
@@ -386,8 +438,7 @@ def _render_fixes(issues: list[dict]) -> str:
             "or duplicate; dedup at your discretion."
         )
     preamble += (
-            " The audit feedbacks are not visible to user. Restate the "
-            " audit results before refering to them."
+            " The audit feedbacks are not visible to user."
         )
     out: list[str] = [preamble, "", "FIXES:"]
     last_file: str | None = None
@@ -401,7 +452,7 @@ def _render_fixes(issues: list[dict]) -> str:
 
 
 def _stop_log(sid: str, msg: str) -> None:
-    AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+    AUDIT_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         with open(AUDIT_DIR / f"{sid}.stop.log", "a") as f:
             f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
@@ -469,7 +520,7 @@ def _append_history(record: dict, cwd: str, sid: str) -> None:
     with sub-PIPE_BUF writes is kernel-atomic; failures are swallowed."""
     target = HISTORY_DIR / _slug(cwd or "unknown") / f"{sid or 'unknown'}.jsonl"
     try:
-        target.parent.mkdir(parents=True, exist_ok=True)
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         with target.open("a") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except OSError as e:
@@ -482,7 +533,7 @@ def _write_result(sid: str, verdict: str, claude_n: int = 0,
     statusLine renderer can call via `audit-edits.py statusline <sid>`).
     Atomic via tmp+os.replace so the renderer never reads a partial file.
     Schema is stable; readers consume .verdict / .claude_issues / .codex_issues."""
-    AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+    AUDIT_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     target = AUDIT_DIR / f"{sid}.json.audit-result"
     tmp = AUDIT_DIR / f"{sid}.json.audit-result.tmp"
     payload = {
@@ -510,12 +561,32 @@ def _spawn_audit_claude(
         **os.environ,
         "CLAUDE_AUDIT_SUBAGENT": "1",
         "CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT": "1",
+        "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS": "1",
+        "CLAUDE_CODE_DISABLE_POLICY_SKILLS": "1",
         "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+        "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
+        "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     }
     model = os.environ.get("AUDIT_CLAUDE_MODEL", "sonnet")
     effort = os.environ.get("AUDIT_CLAUDE_EFFORT")
+    try:
+        agent_def = {
+            "audit-fresh-eye": {
+                "description": CLAUDE_AGENT_DESCRIPTION,
+                "prompt": _assemble_prompt(CLAUDE_WRAPPER_FILE),
+                "tools": CLAUDE_AGENT_TOOLS,
+                "model": model,
+                "permissionMode": "dontAsk",
+                "maxTurns": 50,
+            }
+        }
+    except OSError as e:
+        _stop_log(sid, f"claude wrapper unreadable: {e}")
+        return None, None
     cmd = ["claude", "-p", diff,
+           "--agents", json.dumps(agent_def),
            "--agent", "audit-fresh-eye",
            "--model", model,
            "--permission-mode", "dontAsk",
@@ -622,7 +693,7 @@ def _spawn_audit_codex(diff: str, cwd: str, sid: str) -> str | None:
     """Spawn `codex exec` as a fresh-eye auditor. Returns the raw verdict
     text (e.g. "CLEAN" or "FIXES\\n...") or None on failure."""
     try:
-        prompt_body = CODEX_PROMPT_FILE.read_text()
+        prompt_body = _assemble_prompt(CODEX_PROMPT_FILE)
     except OSError as e:
         _stop_log(sid, f"codex prompt file unreadable: {e}")
         return None

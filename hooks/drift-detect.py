@@ -1,7 +1,4 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.10"
-# ///
+#!/usr/bin/env python3
 """Statusline component: 5-turn windowed tokens-per-grounding-event ratio.
 
 Reads the current session transcript and emits a colored `[⏚:<ratio>]`

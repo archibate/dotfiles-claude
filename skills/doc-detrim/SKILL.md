@@ -2,6 +2,7 @@
 name: doc-detrim
 description: Audit agent-facing documentation (CLAUDE.md, SKILL.md, AGENTS.md, prompt markdown, agent reference doc, memory pages) for over-description and propose trims. Use proactively after writing or editing any agent-facing doc, or when the user says "trim this doc", "audit doc bloat", "this is over-explained".
 argument-hint: "[doc files to trim]"
+disable-model-invocation: true
 ---
 
 $ARGUMENTS

@@ -23,6 +23,9 @@
     "ADVISOR_CODEX_EFFORT": "high",
     "CAVEMAN_DEFAULT_MODE": "ultra"
   },
+  "attribution": {
+    "sessionUrl": false
+  },
   "permissions": {
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
@@ -30,9 +33,6 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "attribution": {
-    "sessionUrl": false
-  },
   "skillOverrides": {
     "cache-hygiene": "name-only",
     "init": "user-invocable-only",

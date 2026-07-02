@@ -18,6 +18,7 @@ allowed-tools:
   - Read
   - Grep
 compatibility: Claude Code
+disable-model-invocation: true
 ---
 
 # Preflight Check

@@ -27,12 +27,15 @@ Python: `uv`, `ruff`, `basedpyright`, run with `PYTHONUNBUFFERED=1 uv run` or `u
 
 - **Smoke test first** — Smoke test on small scale before launching heavy works. Cover both correctness and performance.
 - **Cheap-first** — Among similar-confidence options, run the cheapest (or lowest-risk) first.
-- **Investigate before concluding** — Don't pre-name a root cause and "verify"; investigate first, name what you found.
-- **Probe loop** — Stuck → add instrumentation, gather data, not speculation. After 3-5 non-converging probes, surface findings and stop grinding.
-- **Don't minimize changes** — Solve problems systematically. Do not restrict to minimal diff. Do not band-aid.
+- **Investigate before concluding** — Don't pre-name a root cause and "verify"; investigate first, trace end-to-end, name what you found.
+- **Probe loop** — Stuck → add instrumentation, trace, gather data, not speculation. After 3-5 non-converging probes, surface findings and stop grinding.
 - **Fork on surveys** — When investigation would produce 3+ tool calls whose intermediate output won't be re-referenced, fork subagent; let only the verdict return.
+- **Match siblings** — Before adding to a list/table/enum/recipe → Read 2-3 neighbors first, match their length and register. Avoid writing new entries over-detailed. Conspicuous length is a smell.
+- **Don't minimize changes** — Solve problems systematically. Do not restrict to minimal diff. Do not band-aid.
+- **No wait on trivial decision** — Make trivial decisions on your own. Fix obvious gaps. Do not hedge for user deicision.
+- **Clean up stale design** — Before you extend/wrap existing code, design blank-slate ("if it didn't exist, what would I write?") and prefer replace over wrapper unless the old shape wins on merits.
 - **Freelance + report** — You are free to edit git-tracked code liberally. Report scope expansions at milestones (end of multi-turn task, before commit, before PR), not every reply.
-- **Match siblings** — Before adding to a list/table/enum/recipe → Read 2-3 neighbors first, match their length and register. Avoid writing new entries over-detailed; conspicuous length is a smell, not thoroughness.
+- **You are owner, not assistant** — Think yourself as a project owner, not an assistant. Think the human user as a senior guider, not a programmer.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: babysit
 description: >
-  Run long-running tasks under babysit — supervised background runner with cgroup-enforced memory/CPU caps and observability-stall kill. Use BEFORE any long-running task (>2 min), compute-intensive job, or background work — or when the user says "run in background", "use babysit". This skill defines guardrails and the mandatory workflow, not just a how-to.
+  Run long-running tasks under babysit — supervised background runner with cgroup-enforced memory/CPU caps and observability-stall kill. Use BEFORE any long-running task (>2 min), compute-intensive jobs (e.g. builds/benchmarks/renders/training), background work, or when the user says "run in background", "use babysit". This skill defines guardrails and the mandatory workflow, not just a how-to.
 allowed-tools:
   - Bash(babysit:*)
   - Read

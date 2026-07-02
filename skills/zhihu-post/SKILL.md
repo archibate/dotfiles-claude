@@ -4,6 +4,7 @@ description: >
   Write, refine, and validate a Chinese technical blog post for Zhihu (知乎). This skill
   should be used before drafting a long-form Chinese technical article — or when the user
   says "写博客", "知乎文章", "zhihu post", "write for zhihu".
+disable-model-invocation: true
 ---
 
 # Zhihu Technical Blog Post

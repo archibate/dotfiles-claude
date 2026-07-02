@@ -13,6 +13,10 @@ function ultraclaude
     claude --model 'opus[1m]' --effort max --settings '{"disableWorkflows": false, "effort": "ultracode"}'
 end
 
+function fable
+    claude --model 'claude-fable-5' $argv
+end
+
 function opus
     claude --model opus $argv
 end

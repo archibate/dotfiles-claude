@@ -16,6 +16,10 @@ ultraclaude() {
     claude --model 'opus[1m]' --effort max --settings '{"disableWorkflows": false, "effort": "ultracode"}'
 }
 
+fable() {
+    claude --model 'claude-fable-5' $argv
+}
+
 opus() {
     claude --model opus "$@"
 }

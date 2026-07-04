@@ -13,10 +13,11 @@ export const meta = {
 
 // ---- inputs ---------------------------------------------------------------
 // args: { req: string, crewSize?: number, maxRounds?: number, draftRoot?: string }
-const req       = args.req
-const N         = args.crewSize  ?? 4
-const maxRounds = args.maxRounds ?? 2          // re-polish rounds (1-2; guards mode collapse)
-const root      = args.draftRoot ?? 'drafts'
+const _args     = typeof args === 'string' ? JSON.parse(args) : (args ?? {})
+const req       = _args.req
+const N         = _args.crewSize  ?? 4
+const maxRounds = _args.maxRounds ?? 2          // re-polish rounds (1-2; guards mode collapse)
+const root      = _args.draftRoot ?? 'drafts'
 if (!req) throw new Error('args.req (the requirement) is required')
 
 // ---- schemas --------------------------------------------------------------
@@ -96,7 +97,7 @@ for (let round = 1; round <= maxRounds; round++) {
       `You are a NEUTRAL reviewer, not competing. Lens: ${lens}.\nCrew dirs: ${dirList}\n\n`
       + `Read every worktree + 'git diff main'. Rank the crew best->worst on your `
       + `lens only, with a one-line reason each. Be strict and specific.`,
-      { phase: 'Panel', label: `panel:${lens}`, schema: VERDICT }))).filter(Boolean)
+      { phase: 'Panel', label: `panel:${lens}`, schema: VERDICT })))).filter(Boolean)
 
   // consensus: Borda count across the lens rankings
   const score = {}

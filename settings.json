@@ -39,7 +39,6 @@
     "security-review": "user-invocable-only",
     "fewer-permission-prompts": "user-invocable-only",
     "claude-api": "user-invocable-only",
-    "simplify": "user-invocable-only",
     "keybindings-help": "user-invocable-only",
     "schedule": "user-invocable-only"
   },

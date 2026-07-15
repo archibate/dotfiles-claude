@@ -84,7 +84,7 @@ ignore by accident:
 struct ParseResult {
     bool ok;
     int value;          // valid only when ok
-    ErrorCode error;    // valid only when !ok
+    ErrorCode error;    // valid only when not ok
 };
 ParseResult parseInt(std::string_view s);
 

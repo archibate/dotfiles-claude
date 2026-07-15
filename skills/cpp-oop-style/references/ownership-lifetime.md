@@ -130,3 +130,8 @@ std::string const &bad = identity(std::string("hi"));   // NOT extended — dang
   `unique_ptr` moves when you pass it, a `shared_ptr` copies freely, a
   value-semantic type with a `shared_ptr` member + explicit `clone()` gives
   cheap copy-on-write.
+
+## When standard smart pointers doesn't apply
+
+- Qt: follow `QObject *` tree-managed lifetime convention
+- high-performance kernel: genuinely require page-aligned allocate (create custom RAII class for aligned buffers)

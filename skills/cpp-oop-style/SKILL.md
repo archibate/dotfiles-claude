@@ -254,9 +254,10 @@ std::unique_ptr<Widget> makeWidget(WidgetConfig const &cfg);
 struct WidgetImpl final : Widget {
     heavy::thirdparty::Object object;
 
-    WidgetImpl(WidgetConfig const &cfg) { /* ... */ }
+    explicit WidgetImpl(WidgetConfig const &cfg) { /* ... */ }
     void draw() override { /* ... */ }
 };
+
 std::unique_ptr<Widget> makeWidget(WidgetConfig const &cfg) {
     return std::make_unique<WidgetImpl>(cfg);
 }
@@ -284,7 +285,7 @@ struct PlayerApi {                       // you call in — commands
 };
 
 struct App final : PlayerSpi {           // owner: implements Spi, holds Api
-    App(PlayerApi *api) : api(api) { api->setSpi(this); }
+    explicit App(PlayerApi *api) : api(api) { api->setSpi(this); }
     void onTrackEnded() override { api->play(next()); }   // reacts to the callback
     PlayerApi *api;
 };
@@ -387,9 +388,9 @@ compiler is your reviewer.
 
 ## The `auto` idiom (AAA)
 
-- **Almost Always Auto:** `auto x = Type(...)`, never `Type x(...)`. Forces
+- **Almost Always Auto:** `auto x = Type{...}`, never `Type x(...)`. Forces
   initialization and survives return-type changes.
-- **Explicit cast over implicit:** `auto i = size_t(3);` not `auto i = 3;`.
+- **Explicit cast over implicit:** `auto i = size_t{3};` not `auto i = 3;`.
 - **In range-for: `auto const &` to read, `auto &` to modify.** Never bare
   `auto` — it copies. For maps: `for (auto const &[k, v] : m)`.
 - C++20 `auto` parameters are implicit templates: `auto square(auto const &x)`.
@@ -399,25 +400,272 @@ compiler is your reviewer.
   `if constexpr` for capability gating (`requires { … }`) and variadic recursion.
   (See `references/generics-compile-time.md`.)
 
-## Compiler hygiene
+## The `const` idiom
 
-Let the compiler enforce the style — most rules above become hard errors instead
-of review comments. Build with:
+- **Almost Always Const:** write `auto const value = makeValue();` unless the
+  binding must later be reassigned or moved from. Mutation should be deliberate
+  and visible at the declaration.
+- **Prefer new `const` variables over of reuse:** declare new local variables
+  for logically different variable instead of re-assigning existing ones. Only
+  reuse when a loop or iteration involves iterative update of a same variable.
+- **Mark every observation-only member function `const`.** A query may not
+  mutate the object's observable value; require the same qualifier on interface
+  declarations and overrides.
+- **Expose read-only access with a const view:** `T const &`, `T const *`,
+  `std::span<T const>`, or `std::string_view`. Return mutable access only when
+  mutation is an explicit part of the API contract.
+- **Leave a local non-const when ownership must move from it.** `const` blocks
+  moving from move-only values and may turn an intended move into a copy; never
+  return `T const` by value for the same reason.
+- **Reserve `mutable` only for logical constness**, such as a cache or mutex that
+  does not change the observable value. Never for hiding ordinary state changes.
 
+## Boolean expression style
+
+Prefer the C++ alternative operator tokens `not`, `and`, and `or` in
+human-written boolean expressions. They are core-language keywords with exactly
+the same semantics and precedence as `!`, `&&`, and `||`, but they are harder to
+miss while scanning:
+
+```cpp
+if (not isReady() or (isExpired() and canRetry())) {
+    return false;
+}
 ```
--Wall -Wextra -Weffc++
--Werror=return-type -Werror=uninitialized
--Werror=suggest-override          # every override marked `override`
--Wzero-as-null-pointer-constant   # `nullptr`, never `0` / `NULL`
--Wold-style-cast                  # named casts only, never `(T)x`
--Werror=vla                       # `std::vector` / `std::array`, never VLAs
--Wnon-virtual-dtor -Wdelete-non-virtual-dtor
--Wconversion -Wsign-compare       # no silent narrowing
--Werror=unused-result             # don't ignore a [[nodiscard]] result
+
+- Parenthesize mixed `and` / `or` expressions even when precedence already gives
+  the intended result.
+- Prefer a positive named predicate over a dense negation; introduce
+  `isUnavailable()` when it communicates a recurring domain concept better than
+  `not isAvailable()`.
+- Keep `!=` and bitwise operators symbolic. Do not generalize this rule to
+  uncommon spellings such as `not_eq`, `bitand`, or `xor`.
+- This rule is for boolean expressions, not rvalue references (`T &&`) or
+  declarations such as `operator&&`. Match third-party and generated code rather
+  than rewriting it solely for house style.
+
+## Prefer brace initialization
+
+Prefer direct-list initialization (`{}`) over direct initialization (`()`) when
+the two forms select the same constructor:
+
+```cpp
+struct Dog {
+    explicit Dog(std::string name, std::int32_t age);
+};
+
+auto dog = Dog{"George", 10};  // NEVER: Dog dog("George", 10);
 ```
 
-Add `-D_GLIBCXX_DEBUG` in development builds to catch iterator/bounds misuse at
-runtime (every linked translation unit must match).
+This is **list initialization**, not an "aggregate constructor." Aggregate
+initialization is only the constructor-free data-class case such as
+`Point{.x = 1, .y = 2}`. `Dog` above has a user-declared constructor and is not
+an aggregate.
+
+Use `()` when braces intentionally select an `initializer_list` overload with
+different semantics. `std::vector` is the canonical example:
+
+```cpp
+auto oneValue = std::vector<std::int32_t>{3}; // one element: {3}
+auto threeZeros = std::vector<std::int32_t>(3); // three elements: {0, 0, 0}
+
+auto twoValues = std::vector<std::int32_t>{3, 42}; // {3, 42}
+auto threeValues = std::vector<std::int32_t>(3, 42); // {42, 42, 42}
+```
+
+An implicit constructor permits copy-list initialization at a call site. This is
+not aggregate initialization either:
+
+```cpp
+struct Dog {
+    Dog(std::string const &name, int age);
+};
+
+void showDog(Dog const &dog);
+
+showDog({"George", 10});
+
+auto dogs = std::vector<Dog>();
+dogs.push_back({"George", 10});
+```
+
+## When to use `explicit` constructor
+
+- **Default to `explicit`** for every converting constructor, including
+  multi-argument constructors used through `{...}`.
+- Allow implicit conversion only when the source and destination are genuinely
+  substitutable values and the conversion is unsurprising and lossless, such as
+  a UTF-8 string literal becoming an owning `std::string`.
+- Different semantics require `explicit`: a count is not a container, a raw
+  handle is not an owning resource, and an integer is not an age merely because
+  their representation matches.
+- When construction modes differ by intent, use named factories rather than
+  constructor overloads: `Angle::fromDegrees(x)` and `Angle::fromRadians(x)`.
+
+```cpp
+struct BigInt {
+    BigInt(std::int32_t value); // exact, lossless value-domain extension
+};
+
+struct Dog {
+    explicit Dog(std::string const &name);
+};
+
+void sendMsg(std::string const &msg);
+void showBigInt(BigInt const &big);
+void showDog(Dog const &dog);
+
+void usage() {
+    sendMsg("hello");
+    showBigInt(42);
+    showDog(Dog{"George"});
+}
+```
+
+## C++ cast ladder
+
+Pick casts by the semantic conversion being requested. For arithmetic values,
+"up-cast" and "down-cast" are misleading: signedness, range, precision, and the
+runtime value all matter.
+
+- **Known-safe constant → braces.** List initialization rejects narrowing at
+  compile time: `auto channel = std::uint8_t{42};` is valid while
+  `std::uint8_t{300}` is ill-formed.
+- **Runtime integral conversion → check, then `static_cast`.** In C++20 use
+  `std::in_range`; in C++17 compare against `numeric_limits` with signedness
+  handled explicitly:
+
+  ```cpp
+  std::optional<std::size_t> toSize(std::int32_t value) {
+      if (not std::in_range<std::size_t>(value)) return std::nullopt;
+      return static_cast<std::size_t>(value);
+  }
+  ```
+
+- **Floating-point → integer → define the policy first.** Reject non-finite and
+  out-of-range values, then choose truncation, floor, ceil, or rounding before
+  the final `static_cast`. A naked cast silently bakes in truncation and is
+  undefined when the finite result is outside the destination range.
+- **Representation conversion → `std::bit_cast`** only between equally sized,
+  trivially-copyable types. In C++17 use `std::memcpy` with the same static
+  assertions. This is not numeric conversion.
+
+For a polymorphic `Dog : Animal` hierarchy:
+
+- Derived-to-base pointer/reference conversion is implicit. Returning
+  `unique_ptr<Animal>` from a factory deliberately hides `Dog`.
+- Prefer virtual dispatch over recovering the concrete type. When a boundary
+  genuinely requires checked base-to-derived conversion, `dynamic_cast<Dog *>(p)`
+  returns `nullptr` on mismatch; `dynamic_cast<Dog &>(r)` throws `std::bad_cast`.
+- Use `static_cast<Dog *>(p)` only when a nearby invariant proves the dynamic
+  type. Assert that invariant where it is established; a wrong unchecked
+  downcast has undefined behavior.
+
+Avoid `reinterpret_cast`. Its legitimate uses are narrow low-level boundaries,
+such as the implementation-required pointer/`uintptr_t` round trip. Converting
+an object pointer to `void *` is implicit; converting a byte buffer to a packed
+struct is not a safe zero-copy parser because alignment, lifetime, and aliasing
+still apply. Copy bytes with `memcpy`/`bit_cast`, then validate the fields.
+
+Avoid `const_cast`. It is tolerable only when adapting a legacy API whose
+signature incorrectly omits `const` and which is known not to write. Modifying an
+object that was originally defined `const` is undefined behavior.
+
+Ban C-style casts `(T)x`: they can silently combine `static_cast`,
+`const_cast`, and `reinterpret_cast`. Use braces, a named C++ cast, or a
+domain-specific conversion function that makes validation visible.
+
+## C++ arithmetic types
+
+Choose an integer type from the value's meaning, not from a blanket ban:
+
+- Use `std::int8_t` / `std::uint32_t` and friends when an exact width is part of
+  a wire format, file layout, ABI, SIMD lane, or hardware register. Exact-width
+  typedefs are optional on platforms that cannot provide that width.
+- Use `int` for ordinary small signed arithmetic when no exact width is part of
+  the contract. Do not serialize it or expose its layout as an ABI promise.
+- Use a container's `size_type` (usually `std::size_t`) for sizes and indices
+  that must interoperate with that container. Use `std::ptrdiff_t` for signed
+  distances and subtraction. Do not mix signed and unsigned values casually.
+- Use `std::uintptr_t` only when the implementation provides it and an integer
+  must round-trip an object pointer. It is not a generic "native integer."
+- Avoid bare `long` in portable layouts: it differs between LP64 and LLP64.
+
+Use `float`, `double`, or `long double` according to the required precision,
+range, ABI, and measured performance. Append `f` to a floating literal intended
+to be `float`, such as `3.14f`; do not rely on an implicit `double` conversion.
+
+## Add assert when you made assumption
+
+Use `static_assert` for compile-time properties and `assert` for internal runtime
+invariants. Put the check next to the assumption it protects:
+
+```cpp
+auto const b = someInt();
+auto const a = someInt();
+auto const diff = b - a;
+// Keep a future return-type change from making `diff < 0` always false.
+static_assert(std::is_signed_v<decltype(diff)>);
+if (diff < 0) {
+    return false;
+}
+```
+
+```cpp
+auto const v = internalAlgorithm();
+assert(not v.empty());
+return v.back() - v.front();
+```
+
+`assert` disappears when `NDEBUG` is defined. Never use it to validate external
+input or report a recoverable failure:
+
+```cpp
+auto const v = fetchFromInternet();
+if (v.empty()) return std::nullopt;
+return v.back() - v.front();
+```
+
+**Construction as validation:** put one invariant in a value type so downstream
+code cannot receive an invalid value. Encapsulation earns its place by making
+the illegal state unrepresentable.
+
+```cpp
+struct Age {
+    static std::optional<Age> fromYears(std::int32_t value_) noexcept {
+        if (value_ < 0 or value_ > 130) return std::nullopt;
+        return Age{value_};
+    }
+
+    std::int32_t value() const noexcept { return raw; }
+
+private:
+    explicit Age(std::int32_t raw_) noexcept : raw(raw_) {}
+    std::int32_t raw;
+};
+
+struct UserConfig {
+    Email email;
+    UserName name;
+    Age age;
+};
+
+auto const age = Age::fromYears(inputAge);
+if (not age) return false;
+registry->registerUser(UserConfig{.email = email, .name = name, .age = *age});
+return true;
+```
+
+Return C++23 `std::expected` when the caller needs an error reason. In C++20/17,
+use the project's `expected` backport, a named result struct, or `optional` when
+no error detail is needed.
+
+`UserConfig` remains an aggregate data class because each field is independently
+valid. If validity depends on a relationship among several fields, replace it
+with one composite value type and a validating named factory; a struct with a
+validating constructor is no longer the skill's "data only" data class.
+
+## Function size discipline
 
 **Function discipline.** Decompose programs into named, single-responsibility
 functions — don't pile logic into `main`, and don't fuse unrelated jobs (a `sum`
@@ -472,33 +720,62 @@ parent-owns-child idioms are deliberate and correct *for that paradigm*. Keep
 them inside Qt code; just don't carry them into value-semantic modern C++, where
 this skill's conventions apply.
 
+## Compiler hygiene
+
+Let the compiler enforce the style — most rules above become hard errors instead
+of review comments. Build with:
+
+```
+-Wall -Wextra -Weffc++
+-Werror=return-type -Werror=uninitialized
+-Werror=suggest-override          # every override marked `override`
+-Wzero-as-null-pointer-constant   # `nullptr`, never `0` / `NULL`
+-Wold-style-cast                  # named casts only, never `(T)x`
+-Werror=vla                       # `std::vector` / `std::array`, never VLAs
+-Wnon-virtual-dtor -Wdelete-non-virtual-dtor
+-Wconversion -Wsign-compare       # no silent narrowing
+-Werror=unused-result             # don't ignore a [[nodiscard]] result
+```
+
+Add `-D_GLIBCXX_DEBUG` in development builds to catch iterator/bounds misuse at
+runtime (every linked translation unit must match).
+
 ## References
 
-Load these when the task touches their area:
+You MUST proactively load these when the task touches their area:
 
 - `references/ownership-lifetime.md` — no raw `new`, smart pointers vs `vector`,
   references vs pointers, RAII for C resources, the rule of five, dangling
-  temporaries.
+  temporaries. Load me before smart pointers, or resource management design.
 - `references/functors-callbacks.md` — template `Func` vs `std::function`,
-  lambdas over `std::bind`, capture lifetime, closures as structs.
+  lambdas over `std::bind`, capture lifetime, closures as structs. Load me on
+  function-programming context.
 - `references/error-handling.md` — recoverable vs unrecoverable, `optional` /
   `expected`, `[[noreturn]]`, the result-struct / error-sink / bool+log fallbacks.
+  Load me before I/O interface, business logic, error handling, or third-party error
+  code wrapper.
 - `references/wrapping-c-resources.md` — RAII wrappers for opaque C handles:
   move-only handle template, `error_category`, check-on-assign with
-  `source_location`, builders, scope-guard binds.
+  `source_location`, builders, scope-guard binds. Load me before integrating
+  third-party libraries (e.g. OpenGL, CUDA) or manage OS resources with C handles.
 - `references/generics-compile-time.md` — compile-time dispatch via
   `concept`-constrained overloads (not type-switching), `if constexpr` capability
   gating, `std::variant` + `std::visit` closed-set polymorphism, perfect forwarding.
-
-Source material (the "why" behind these rules), all by the same author:
-<https://github.com/parallel101/cppguidebook> (`design_virtual.md`,
-`no_more_new.md`, `type_rich_api.md`, `design_functor.md`, `design_gamedev.md`,
-`error_code.md`, `cpp_lifetime.md`, `lambda.md`, `functions.md`, `auto.md`,
-`design_concept.md`, `platform.md`) and the lecture repo
-<https://github.com/parallel101/course>
-(the `design`, `stl`, and `cmake` sessions — singleton, get/set, type erasure,
-move semantics). Real code worth reading: <https://github.com/archibate/co_async>
-(design idioms) and parallel101/opengltutor's `check_gl.hpp` (the cleanest RAII
-C-handle wrapper). Further reading: cppreference.com, hackingcpp.com,
-learncpp.com; godbolt.org / cppinsights.io / quick-bench.com to see codegen and
-cost.
+  Load me when static polymorphism could surpass dynamic polymorphism.
+- `references/type-erasure.md` — subtype hiding vs non-intrusive erasure,
+  choosing standard wrappers, and a C++17-compatible interface/model wrapper.
+  Load me when wrapping type erased interface.
+- `references/text-encoding.md` — character/code-unit types, UTF-8 storage,
+  filesystem paths, and Qt/platform text boundaries. Load me when handling
+  Unicode, encodings, local paths, or text across library/platform boundaries.
+- `$cpp-hpc-optimization` — evidence-driven data-oriented layout, numerics,
+  cache/locality, SIMD, parallelism, and hot-path polymorphism. Load it before
+  designing or optimizing a high-throughput kernel or data structure; keep this
+  skill's abstract boundaries on the cold/control side and dispatch into
+  homogeneous data batches on the measured hot side. For hot closed-set
+  polymorphism, prefer dense per-concrete-type pools such as
+  `vector<Dog>` plus `vector<Cat>` over per-element base pointers or variants;
+  keep any virtual dispatch at the pool/batch boundary.
+- `references/sources.md` — original parallel101 material, exemplar code, and
+  further-study tools. Load me when verifying provenance or rationale, or when
+  looking for deeper examples behind a rule.

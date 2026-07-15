@@ -50,7 +50,7 @@ void greet(T const &dog) {
 
 A `requires (T t) { ... }` introduces compile-time-only sample variables (no
 runtime cost), and several statements all must compile:
-`requires { ++it; --it; }` ≡ `requires { ++it; } && requires { --it; }`.
+`requires { ++it; --it; }` ≡ `requires { ++it; } and requires { --it; }`.
 
 ## `concept`-constrained overloads — the static twin of virtual dispatch
 
@@ -63,7 +63,7 @@ compile time, with zero overhead:
 ```cpp
 template <class It> concept Bidirectional = requires (It it) { ++it; --it; };
 template <class It> concept RandomAccess  = Bidirectional<It>           // refines, so it subsumes
-                                          && requires (It it, int n) { it += n; };
+                                          and requires (It it, int n) { it += n; };
 
 void advance(RandomAccess auto &it, int n)  { it += n; }                // more constrained → wins
 void advance(Bidirectional auto &it, int n) { while (n-- > 0) ++it; }   // resolution dispatches

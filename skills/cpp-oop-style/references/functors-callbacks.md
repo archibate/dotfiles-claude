@@ -27,17 +27,13 @@ struct Widget { std::function<void(Event)> handler; };
   `std::function` beats `unique_ptr<AbstractCallback>` (which always heap-allocates).
 - **Hand-rolled type erasure** — when you need *several* operations
   (`speak` + `load` + `clone`) over **unrelated value types you don't own and
-  can't make inherit**. A `Wrapper<T> : Base` template supplies the vtable from
-  outside; the wrapped types stay plain data. This is the mechanism behind
-  `std::function` / `std::any` — reach for it only when one `std::function`
-  signature isn't enough and a shared base isn't possible.
+  can't make inherit**. Reach for it only when one `std::function` signature
+  isn't enough and a shared base isn't possible; load `type-erasure.md` for the
+  design and implementation.
 
 So: don't reach for an abstract class to pass a single function — that's what
 functors are for. Reach for it (or type erasure) when behavior has *identity* and
-*multiple operations*. Two refinements when you do roll your own erasure: extend
-a type you don't own by adding a **free-function overload** the wrapper calls
-(open/closed, non-intrusive), and give the wrapper a `virtual clone()` — you
-cannot copy through an abstract base, so the wrapper regenerates the per-type copy.
+*multiple operations*.
 
 ## Lambdas over `std::bind`
 

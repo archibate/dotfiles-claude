@@ -145,7 +145,7 @@ struct Stream : Handle<stream_t> {
     static Stream defaultStream() noexcept { return Stream{nullptr}; }
     static Stream perThread()     noexcept { return Stream{LIB_STREAM_PER_THREAD}; }
     ~Stream() {
-        if (*this && get() != LIB_STREAM_PER_THREAD) lib_stream_destroy(get());
+        if (*this and get() != LIB_STREAM_PER_THREAD) lib_stream_destroy(get());
     }
 };
 ```

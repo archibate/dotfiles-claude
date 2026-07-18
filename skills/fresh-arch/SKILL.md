@@ -26,4 +26,4 @@ If a current pattern survives, it survives on merit — because it is the right 
 3. **Contracts** — interfaces / message shapes between components.
 4. **Data & state** — what's stored where, consistency model, lifecycle.
 5. **Rejected alternatives** — at least one different shape you considered and why this one wins.
-6. **Critique of the current design** *(only if a codebase exists)* — judged against the design above. What the current system gets wrong, what it accidentally gets right, what is load-bearing vs. incidental. Not a migration plan; migration is a separate problem.
+6. **Critique of the current design** *(if a codebase exists)* — judged against the design above. What the current system gets wrong, what it accidentally gets right, what is load-bearing vs. incidental. Not a migration plan; migration is a separate problem.

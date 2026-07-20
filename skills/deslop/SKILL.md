@@ -1,15 +1,10 @@
 ---
 name: deslop
 description: >
-  Rewrite an AI-generated article to remove AI slop patterns — emoji infestation,
-  marketing hyperbole, forced numbered groupings, table fetish, sanitized honesty,
-  lost specificity, and boilerplate scaffolding. Restores a human voice.
-  Use when the user says "deslop", "rid the slop", "clean up this AI article",
-  "remove AI slop", "depollute", or "make this sound less AI".
-disable-model-invocation: true
+  Review an AI-generated article to detect AI slop patterns. Loads a AI slop pattern checklist. Rewrite to strip AI smell without changing meaning or losing information. Restores a human voice. Use before publishing any AI-written article to public under the name of human author.
 ---
 
-# Deslop — Strip AI Slop From an Article
+# Deslop — Strip AI Slop Smell From an Article
 
 Rewrite an AI-generated article into prose that a human author would actually publish: same information, restored voice, no decorative scaffolding.
 
@@ -28,7 +23,7 @@ This split is why the skill cannot collapse into a single voice instruction. Rem
 
 ## When to Use
 
-- User pastes or points to an article they suspect was AI-generated and wants it cleaned
+- User pastes or points to an AI-generated article and wants it cleaned
 - User wrote a draft with AI assistance and now wants a human-voice pass
 - User asks to "deslop", "remove AI slop", "make this sound human", "depollute"
 - Polishing AI-translated marketing copy, blog posts, video descriptions, READMEs
@@ -36,9 +31,8 @@ This split is why the skill cannot collapse into a single voice instruction. Rem
 ## When NOT to Use
 
 - Generating new content from scratch (use the appropriate writing skill)
-- Translating between languages (use `better-translate` for English→Chinese)
+- Translating between languages (do loseless English→Chinese translation first)
 - Polishing prose that is already in human voice — just edit directly
-- Code review or documentation review (use `review`)
 
 ## Workflow
 
@@ -168,12 +162,13 @@ If any answer is unsatisfactory, do another pass. Then deliver.
 | Emoji 🚀✨🔥 in headers/bullets | Decoration without signal | Strip |
 | 重磅 / 终极 / 革命性 / ultimate | Marketing register | Replace with concrete claim or delete |
 | "三大核心 / 四大优势" | Forced trichotomy | Drop label, let items stand |
+| "核心就三点：" / "先说结论：" | Lead with loud heading | Drop, let content lead |
 | Tables with 2 rows or duplicate columns | Table fetish | Convert to prose |
 | `**every noun phrase**` | Bold spam | At most one bold per paragraph |
 | `>` block paraphrasing previous line | Decorative quote | Delete |
 | "立即升级！敬请期待！" | Empty CTA | Delete unless actually selling |
 | "你是否还在为 X 烦恼？" | Manufactured pain point | Delete unless source raised it |
-| "性价比逆天" replacing "¥22 vs ¥122" | Lost specificity | Restore the number |
+| "性价比逆天" | Embrassive advertisement | Replace with rational data |
 | Softened critique | Sanitized honesty | Restore the bluntness from source |
 | Same shape every section | Template repetition | Vary structure |
 | `---` between every section | Filler dividers | Remove most |

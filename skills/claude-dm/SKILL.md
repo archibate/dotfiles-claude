@@ -25,6 +25,7 @@ Peer-to-peer messaging between independent Claude Code sessions that share a tmu
 ## Prerequisites
 
 - Peers must run in tmux (any socket). Default resolution: `$CLAUDE_DM_SOCKET` or `/tmp/tmux-$(id -u)/default`.
+- Peer must be spawned headful, not headless (`-p`).
 - Same Unix user (or a shared socket with group perms).
 - `claude-dm` available in `$PATH` (otherwise fallback to `bin/claude-dm` under skill dir).
 

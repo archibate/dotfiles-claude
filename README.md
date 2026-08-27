@@ -1,3 +1,5 @@
+
+
 # dotfiles-claude
 
 Personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) configuration: settings, hooks, skills, and shell integrations.
@@ -42,6 +44,7 @@ For reference, my personal configs that pair well with this setup:
 - **settings.json** — permissions, hooks, MCP plugins, environment variables
 - **hooks/** — guardrails for safe tool use (block heredocs, enforce Write tool, etc.)
 - **skills/** — 53 skill packs (browser automation, translation, shader dev, and more)
+- **memory/** — long-term memory pipeline for distilling session transcripts into curated prompts and pitfall routing tables
 - **plugins/** — installed plugins via marketplaces (`claude-hud`, `claude-plugins-official`, `openai-codex`)
 - **integration.sh / .fish** — `claude` wrapper, model shortcuts, and `commit` helper
 - **integration-providers.sh / .fish** — optional shortcuts that route claude through third-party Anthropic-compatible endpoints (glm/deepseek/qwen/ofox; see the file header for the API key each maps to).

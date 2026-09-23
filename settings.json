@@ -29,7 +29,6 @@
       "/tmp"
     ]
   },
-  "model": "opus",
   "enableAllProjectMcpServers": true,
   "skillOverrides": {
     "init": "user-invocable-only",
@@ -459,8 +458,8 @@
     }
   },
   "viewMode": "default",
-  "effortLevel": "xhigh",
-  "advisorModel": "fable",
+  "effortLevel": "high",
+  "advisorModel": "opus",
   "awaySummaryEnabled": true,
   "showClearContextOnPlanAccept": true,
   "tui": "fullscreen",
@@ -474,5 +473,10 @@
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "high"
+    }
+  }
 }

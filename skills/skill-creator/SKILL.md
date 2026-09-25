@@ -1,6 +1,7 @@
 ---
 name: skill-creator
 description: Create, edit, and benchmark agent skills — including evals with variance analysis and optimizing a skill's description for triggering accuracy.
+disable-model-invocation: true
 ---
 
 # Skill Creator

@@ -47,6 +47,7 @@
 /daemon.status.json
 /daemon/
 /jobs/
+/state/
 
 # machine specific settings
 /settings.local.json
@@ -73,6 +74,7 @@
 /skills/system-monitor
 /skills/todoist
 /skills/synced
+/skills/.trash
 
 __pycache__/
 RTK.md

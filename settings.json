@@ -37,7 +37,9 @@
     "claude-api": "user-invocable-only",
     "keybindings-help": "user-invocable-only",
     "schedule": "user-invocable-only",
-    "design": "user-invocable-only"
+    "design": "user-invocable-only",
+    "morning": "user-invocable-only",
+    "import-memory": "user-invocable-only"
   },
   "hooks": {
     "PreToolUse": [
@@ -459,6 +461,11 @@
   },
   "viewMode": "default",
   "effortLevel": "high",
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "xhigh"
+    }
+  },
   "advisorModel": "opus",
   "awaySummaryEnabled": true,
   "showClearContextOnPlanAccept": true,
@@ -473,10 +480,5 @@
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true,
-  "modelSettings": {
-    "claude-opus-5-5": {
-      "effortLevel": "high"
-    }
-  }
+  "voiceEnabled": true
 }

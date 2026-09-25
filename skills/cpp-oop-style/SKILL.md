@@ -7,9 +7,10 @@ description: >-
   C++ classes, interfaces, APIs, or libraries, or when the user mentions C++
   design, OOP, design patterns, dependency injection, RAII, or "clean / modern
   C++". Also use it for CMake-first C++ project layout, module targets, usage
-  requirements, and dependency wiring. Apply it even when the user does not
-  explicitly ask for a style: the default way models write C++ leans on free
-  functions, public mutable state,
+  requirements, third-party dependency acquisition and integration, binary ABI
+  compatibility, installation, packaging, and application deployment. Apply it
+  even when the user does not explicitly ask for a style: the default way models
+  write C++ leans on free functions, public mutable state,
   raw new/delete, sentinel return codes, and long loose parameter lists — this
   skill replaces all of that with abstract-class-or-data-class design,
   dependency injection, type-rich APIs, value-based error handling, and RAII
@@ -342,16 +343,36 @@ for subsystems that are truly one-per-process.
 - **Attach requirements to the target that owns them.** Sources, include paths,
   definitions, options, and dependencies use `target_*`; choose `PRIVATE`,
   `PUBLIC`, or `INTERFACE` from whether consumers need the requirement.
+- **Name repeated configuration profiles with CMake Presets.** When developers
+  repeatedly choose among several options, build types, or toolchains, commit a
+  `CMakePresets.json` so configure, build, and test use short named profiles with
+  separate build trees instead of reconstructed `-D...` command lines.
 - **Prefer an `OBJECT` library for an internal module folded into final products
   in one build tree.** Multiple in-tree apps, tests, or probes do not require an
   archive. Use `STATIC` or `SHARED` when the library is itself a deliberate
   archive, runtime, ABI, installation, or deployment boundary.
-- **Wire third-party code through imported targets.** Prefer
-  `find_package(... CONFIG ...)` and `Package::component`; keep machine-specific
-  package locations in configure-time cache inputs rather than project files.
+- **Normalize each third-party dependency to one CMake target.** Prefer an
+  upstream target whether its source is vendored with `add_subdirectory` or
+  discovered as an installed package. Wrap header-only trees, pkg-config data,
+  legacy variables, and raw binary SDKs behind a target instead of scattering
+  include paths and flags across consumers.
+- **Give each logical dependency one provider and version in the final graph.**
+  Resolve diamonds at the composition root; do not let two parents silently
+  embed incompatible copies of the same library.
+- **Choose the delivery contract before adding packaging machinery.** Public
+  libraries and geek-oriented CLI tools get a textbook install target and source
+  archive; end-user applications get a dedicated artifact pipeline; pybind11
+  extensions are installed into a Python wheel staging tree.
 
 Read `references/cmake-first-projects.md` before creating or restructuring a
 CMake C++ project, changing module targets, or deciding dependency visibility.
+For acquiring, building, finding, vendoring, or wrapping a third-party library,
+or for diagnosing a binary dependency ABI mismatch, read
+`references/dependencies/router.md` first.
+For any install, package, release archive, portable bundle, AppImage, native
+installer, or Python-extension distribution task, read
+`references/deployment/router.md` first. It routes further by deliverable type
+and distribution scope.
 
 ## Type-rich data classes
 
@@ -410,19 +431,55 @@ compiler is your reviewer.
 - In headers, share definitions with `inline`, never `static` (which silently
   duplicates per translation unit).
 
-## The `auto` idiom (AAA)
+## Use `auto` wisely in local variables
 
-- **Almost Always Auto:** `auto x = Type{...}`, never `Type x(...)`. Forces
-  initialization and survives return-type changes.
-- **Explicit cast over implicit:** `auto i = size_t{3};` not `auto i = 3;`.
-- **In range-for: `auto const &` to read, `auto &` to modify.** Never bare
-  `auto` — it copies. For maps: `for (auto const &[k, v] : m)`.
-- C++20 `auto` parameters are implicit templates: `auto square(auto const &x)`.
-- **Dispatch on type with `concept`-constrained overloads**, the static twin of
-  virtual dispatch — never an `if constexpr (is_same_v<…>)` chain, which is the
-  compile-time form of the `getType()` / `enum`-switch anti-pattern. Reserve
-  `if constexpr` for capability gating (`requires { … }`) and variadic recursion.
-  (See `references/generics-compile-time.md`.)
+For an ordinary local value, use one of two declaration forms (adding `const`
+according to the next section):
+
+```cpp
+auto x = rhs;       // deduced form: the type is locally evident
+Type x{rhs};        // named receiving form: the type adds missing semantics
+```
+
+Use the deduced form when the RHS names the type, the producer and its type are
+evident within the same function body, or the exact type is lengthy, unnamed, or
+deliberately an implementation detail:
+
+```cpp
+auto const i = std::size_t{1};
+auto worker = std::make_unique<Worker>(config);
+auto values = std::vector<int>(3); // `()` intentionally selects the count ctor
+```
+
+Use the named receiving form when a reader cannot recover the type from the
+current function without inspecting a callee, and the type is important to the
+meaning of the code:
+
+```cpp
+State const state{machine.state()};
+```
+
+The named form receives an existing expression. When supplying constructor
+arguments, put the constructed type on the RHS: `auto dog = Dog{"George", 10};`.
+Do not write `Type x = rhs`, `Type x(rhs)`, or an uninitialized `Type x`; those
+forms can hide conversions, misuse parentheses, or leave built-in values
+indeterminate. Braces make narrowing conversions ill-formed:
+
+```cpp
+std::size_t const count{fetchCount()};
+// int count = fetchCount();              // implicit narrowing
+// int count(fetchCount());               // implicit narrowing
+int const count{static_cast<int>(fetchCount())}; // only after a range check
+```
+
+Do not optimize for silently surviving return-type changes. A named receiving
+type should make narrowing API drift a compile error instead of an implicit
+conversion. Braces do not require exact type equality; use strong types when
+even otherwise-valid conversions must be rejected.
+
+`auto` deduction does not preserve top-level `const` or references. In
+range-for, use `auto const &` to read and `auto &` to modify; bare `auto` copies.
+For maps: `for (auto const &[key, value] : map)`.
 
 ## The `const` idiom
 
@@ -783,6 +840,14 @@ parent-owns-child idioms are deliberate and correct *for that paradigm*. Keep
 them inside Qt code; just don't carry them into value-semantic modern C++, where
 this skill's conventions apply.
 
+## Undefined behavior
+
+Establish each operation's bounds, lifetime, type, arithmetic, and synchronization
+preconditions before executing it. Validate external input in release builds;
+passing tests or running without a crash does not prove absence of UB. Classify
+behavior against the project's C++ version, distinguishing UB from unspecified
+or implementation-defined behavior and compile-time errors.
+
 ## Compiler hygiene
 
 Let the compiler enforce the style — most rules above become hard errors instead
@@ -811,9 +876,17 @@ You MUST proactively load these when the task touches their area:
   boundaries, interface seams, agent-operable harnesses, and integration gates.
   Load me before decomposing a new C++ project or multi-module architecture.
 - `references/cmake-first-projects.md` — course-derived CMake-first directory
-  layout, target kinds, usage requirements, source discovery, third-party
-  dependencies, and embeddable subprojects. Load me before creating or
-  restructuring CMake C++ targets or dependency wiring.
+  layout, target kinds, usage requirements, named configuration presets, source
+  discovery, third-party dependencies, and embeddable subprojects. Load me
+  before creating or restructuring CMake C++ targets or dependency wiring.
+- `references/dependencies/router.md` — third-party dependency router by source
+  control, package metadata, graph ownership, and ABI risk. Load me first for
+  vendoring, package discovery, manual library integration, binary SDKs,
+  dependency diamonds, or C++ ABI mismatches; then follow the matching leaf.
+- `references/deployment/router.md` — deployment router by deliverable type,
+  audience, and portability scope. Load me first for installation, packaging,
+  release archives, application artifacts, native installers, or Python wheels;
+  then follow only the matching child routes.
 - `references/debug-instrumentation.md` — discriminating state capture, mature
   logging backends, stable instrument keys, JSONL, and bounded hot-path probes.
   Load me before adding or structuring temporary diagnostic logs.
@@ -821,6 +894,11 @@ You MUST proactively load these when the task touches their area:
   durable developer surfaces, customer diagnostics, live calibration, and fast
   diagnostic builds. Load me when debugging needs controllable execution or when
   designing persistent development and support controls.
+- `references/undefined-behavior.md` — UB checklist, focused constexpr probes,
+  and integrated sanitizer checks. Load me before writing or reviewing
+  pointer/bounds/lifetime operations, type punning, arithmetic boundaries,
+  sequencing, library preconditions, or shared mutable state, and when
+  investigating suspected UB.
 - `references/ownership-lifetime.md` — no raw `new`, smart pointers vs `vector`,
   references vs pointers, RAII for C resources, the rule of five, dangling
   temporaries. Load me before smart pointers, or resource management design.

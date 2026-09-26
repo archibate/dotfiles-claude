@@ -2,6 +2,7 @@
 name: ast-grep
 description: >
   Translate natural language queries into ast-grep rules for structural code search. This skill should be used when a text-only grep would need 2+ alternations, regex capture groups, multi-line patterns, or filtering by syntactic role (call vs. import vs. definition). Also use when renaming a symbol across call sites + definitions, finding all callers of a method on a specific type, matching code shapes, or writing codemods.
+disable-model-invocation: true
 ---
 
 # ast-grep Code Search

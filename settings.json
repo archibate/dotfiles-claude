@@ -18,7 +18,8 @@
     "AUDIT_CODEX_EFFORT": "medium",
     "AUDIT_CLAUDE_MODEL": "haiku",
     "AUDIT_CLAUDE_EFFORT": "high",
-    "CAVEMAN_DEFAULT_MODE": "ultra"
+    "CAVEMAN_DEFAULT_MODE": "ultra",
+    "ENABLE_PROMPT_CACHING_1H": "1"
   },
   "attribution": {
     "sessionUrl": false

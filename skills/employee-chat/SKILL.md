@@ -3,6 +3,7 @@ name: employee-chat
 description:
   用自然、简洁、有判断力的员工口吻撰写或改写工作聊天消息。在向上级汇报、
   同事协作、客户沟通，以及用户要求工作消息少些 AI 腔、像真人员工说话时使用。
+disable-model-invocation: true
 ---
 
 # 栩栩如生的人类员工说话方式，避免像 AI

@@ -2,6 +2,7 @@
 name: minimalist
 description: >
   Use minimalist language.
+disable-model-invocation: true
 ---
 
 $ARGUMENTS

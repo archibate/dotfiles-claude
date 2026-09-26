@@ -13,6 +13,7 @@ hooks:
           command: bash ${CLAUDE_SKILL_DIR-$HOME/.claude/skills/babysit}/hooks/no-sleep-babysit.sh
           timeout: 5
 compatibilty: Claude Code
+disable-model-invocation: true
 ---
 
 # babysit — Supervised Background Task Runner

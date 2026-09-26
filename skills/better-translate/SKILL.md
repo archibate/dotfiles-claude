@@ -2,6 +2,8 @@
 name: better-translate
 description: >
   Translate English into Chinese in natural human voice. Use before writing or polishing any Chinese translation of English content.
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # English-to-Chinese Translation
